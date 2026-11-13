@@ -164,6 +164,18 @@ object OpenApiSpec {
         putJsonObject("get") { put("summary", "List relational ingredient recipes for variants, crusts, and toppings (Owner)") }
         putJsonObject("put") { put("summary", "Replace relational ingredient recipe for a variant, crust, or topping (Owner)") }
       }
+      putJsonObject("/api/v1/checkout") {
+        putJsonObject("post") { put("summary", "Create transactional order, reservations, payment attempt, and outbox event (requires Idempotency-Key)") }
+      }
+      putJsonObject("/api/v1/orders") {
+        putJsonObject("get") { put("summary", "List customer order history") }
+      }
+      putJsonObject("/api/v1/orders/{id}") {
+        putJsonObject("get") { put("summary", "Get detailed order breakdown, items, payment summary, and status history") }
+      }
+      putJsonObject("/api/v1/orders/{id}/cancel") {
+        putJsonObject("post") { put("summary", "Cancel order if allowed by OrderStateMachine with atomic stock/slot restoration and refund enqueueing") }
+      }
     }
   }
 }

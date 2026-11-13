@@ -9,7 +9,9 @@ import com.example.auth.AuthViewModel
 import com.example.cart.CartViewModel
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.checkout.CheckoutQuoteViewModel
+import com.example.checkout.CheckoutViewModel
 import com.example.navigation.PizzoraApp
+import com.example.orders.OrdersViewModel
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,11 +24,15 @@ class MainActivity : ComponentActivity() {
       val catalogViewModel: CustomerCatalogViewModel = viewModel(factory = container.customerCatalogViewModelFactory())
       val cartViewModel: CartViewModel = viewModel(factory = container.cartViewModelFactory())
       val checkoutQuoteViewModel: CheckoutQuoteViewModel = viewModel(factory = container.checkoutQuoteViewModelFactory())
+      val checkoutViewModel: CheckoutViewModel = viewModel(factory = container.checkoutViewModelFactory())
+      val ordersViewModel: OrdersViewModel = viewModel(factory = container.ordersViewModelFactory())
       PizzoraApp(
         authViewModel = authViewModel,
         catalogViewModel = catalogViewModel,
         cartViewModel = cartViewModel,
         checkoutQuoteViewModel = checkoutQuoteViewModel,
+        checkoutViewModel = checkoutViewModel,
+        ordersViewModel = ordersViewModel,
       )
     }
   }

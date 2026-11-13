@@ -73,10 +73,15 @@ import com.example.auth.RegisterScreen
 import com.example.auth.VerifyEmailScreen
 import com.example.cart.CartScreen
 import com.example.cart.CartViewModel
+import androidx.compose.runtime.mutableStateOf
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.CustomerMenuScreen
 import com.example.checkout.CheckoutQuoteViewModel
+import com.example.checkout.CheckoutScreen
+import com.example.checkout.CheckoutViewModel
 import com.example.core.security.AuthSession
+import com.example.orders.OrdersScreen
+import com.example.orders.OrdersViewModel
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
 import com.pizzora.contracts.UserRole
@@ -109,6 +114,8 @@ fun PizzoraApp(
   catalogViewModel: CustomerCatalogViewModel? = null,
   cartViewModel: CartViewModel? = null,
   checkoutQuoteViewModel: CheckoutQuoteViewModel? = null,
+  checkoutViewModel: CheckoutViewModel? = null,
+  ordersViewModel: OrdersViewModel? = null,
 ) {
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -215,6 +222,8 @@ fun PizzoraApp(
             catalogViewModel = catalogViewModel,
             cartViewModel = cartViewModel,
             checkoutQuoteViewModel = checkoutQuoteViewModel,
+            checkoutViewModel = checkoutViewModel,
+            ordersViewModel = ordersViewModel,
             onSignOut = authViewModel::logout,
           )
         }
@@ -247,6 +256,8 @@ fun CustomerRoleShell(
   catalogViewModel: CustomerCatalogViewModel? = null,
   cartViewModel: CartViewModel? = null,
   checkoutQuoteViewModel: CheckoutQuoteViewModel? = null,
+  checkoutViewModel: CheckoutViewModel? = null,
+  ordersViewModel: OrdersViewModel? = null,
   onSignOut: () -> Unit,
 ) {
   val tabs = listOf(
@@ -256,6 +267,7 @@ fun CustomerRoleShell(
     "Profile" to Icons.Filled.Person,
   )
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+  var isCheckoutOpen by rememberSaveable { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
   val cartBadgeCount = if (cartViewModel != null) {
     cartViewModel.badgeCount.collectAsStateWithLifecycle().value
@@ -267,9 +279,22 @@ fun CustomerRoleShell(
     cartViewModel?.syncOnSessionActive()
   }
 
+  LaunchedEffect(session.user.id, ordersViewModel) {
+    ordersViewModel?.loadOrders()
+  }
+
   LaunchedEffect(cartViewModel) {
     cartViewModel?.events?.collect { message ->
       snackbarHostState.showSnackbar(message)
+    }
+  }
+
+  LaunchedEffect(checkoutViewModel, ordersViewModel) {
+    checkoutViewModel?.orderCreatedEvents?.collect { createdOrder ->
+      isCheckoutOpen = false
+      selectedIndex = 2
+      ordersViewModel?.showCreatedOrder(createdOrder)
+      snackbarHostState.showSnackbar("Order ${createdOrder.orderNumber} placed!")
     }
   }
 
@@ -352,23 +377,77 @@ fun CustomerRoleShell(
               checkoutQuoteViewModel?.onCartChanged(cartState.items, cartState.subtotalPaise)
             }
 
-            CartScreen(
-              uiState = cartState,
-              onUpdateQuantity = cartViewModel::updateQuantity,
-              onRemoveItem = cartViewModel::removeItem,
-              onClearCart = cartViewModel::clearCart,
-              onValidateAndSync = cartViewModel::validateAndSyncCart,
+            if (isCheckoutOpen && checkoutViewModel != null) {
+              val checkoutState by checkoutViewModel.uiState.collectAsStateWithLifecycle()
+              LaunchedEffect(Unit) {
+                checkoutViewModel.loadAddresses()
+              }
+              CheckoutScreen(
+                uiState = checkoutState,
+                quoteState = quoteState,
+                itemCount = cartState.totalItemCount,
+                subtotalPaise = cartState.subtotalPaise,
+                onFulfillmentTypeChange = { checkoutQuoteViewModel?.onFulfillmentTypeChange(it) },
+                onSelectAddress = checkoutViewModel::selectAddress,
+                onOpenAddAddress = checkoutViewModel::openAddAddressDialog,
+                onDismissAddAddress = checkoutViewModel::dismissAddAddressDialog,
+                onSaveAddress = checkoutViewModel::saveNewAddress,
+                onSelectPaymentMethod = checkoutViewModel::selectPaymentMethod,
+                onPlaceOrder = {
+                  checkoutViewModel.placeOrder(
+                    cartItems = cartState.items,
+                    fulfillmentType = quoteState?.fulfillmentType ?: com.pizzora.contracts.FulfillmentType.DELIVERY,
+                    couponCode = quoteState?.appliedCouponCode,
+                    onCartCleared = {
+                      cartViewModel.clearCart()
+                      checkoutQuoteViewModel?.removeCoupon()
+                    },
+                  )
+                },
+                onBackToCart = { isCheckoutOpen = false },
+                modifier = Modifier.weight(1f),
+              )
+            } else {
+              CartScreen(
+                uiState = cartState,
+                onUpdateQuantity = cartViewModel::updateQuantity,
+                onRemoveItem = cartViewModel::removeItem,
+                onClearCart = cartViewModel::clearCart,
+                onValidateAndSync = cartViewModel::validateAndSyncCart,
+                onBrowseMenu = { selectedIndex = 0 },
+                modifier = Modifier.weight(1f),
+                quoteState = quoteState,
+                onFulfillmentTypeChange = { checkoutQuoteViewModel?.onFulfillmentTypeChange(it) },
+                onPincodeInputChange = { checkoutQuoteViewModel?.onPincodeInputChange(it) },
+                onCheckPincode = { checkoutQuoteViewModel?.applyPincodeCheck() },
+                onCouponInputChange = { checkoutQuoteViewModel?.onCouponInputChange(it) },
+                onApplyCoupon = { checkoutQuoteViewModel?.applyCouponCode(it) },
+                onRemoveCoupon = { checkoutQuoteViewModel?.removeCoupon() },
+                onOpenCouponPicker = { checkoutQuoteViewModel?.openCouponPicker() },
+                onDismissCouponPicker = { checkoutQuoteViewModel?.dismissCouponPicker() },
+                onProceedToCheckout = if (checkoutViewModel != null) {
+                  {
+                    isCheckoutOpen = true
+                  }
+                } else {
+                  null
+                },
+              )
+            }
+          }
+          selectedIndex == 2 && ordersViewModel != null -> {
+            val ordersState by ordersViewModel.uiState.collectAsStateWithLifecycle()
+            LaunchedEffect(Unit) {
+              ordersViewModel.loadOrders()
+            }
+            OrdersScreen(
+              uiState = ordersState,
+              onRefreshOrders = ordersViewModel::loadOrders,
+              onOpenOrder = ordersViewModel::openOrderDetail,
+              onBackToList = ordersViewModel::clearSelectedOrder,
+              onCancelOrder = ordersViewModel::cancelSelectedOrder,
               onBrowseMenu = { selectedIndex = 0 },
               modifier = Modifier.weight(1f),
-              quoteState = quoteState,
-              onFulfillmentTypeChange = { checkoutQuoteViewModel?.onFulfillmentTypeChange(it) },
-              onPincodeInputChange = { checkoutQuoteViewModel?.onPincodeInputChange(it) },
-              onCheckPincode = { checkoutQuoteViewModel?.applyPincodeCheck() },
-              onCouponInputChange = { checkoutQuoteViewModel?.onCouponInputChange(it) },
-              onApplyCoupon = { checkoutQuoteViewModel?.applyCouponCode(it) },
-              onRemoveCoupon = { checkoutQuoteViewModel?.removeCoupon() },
-              onOpenCouponPicker = { checkoutQuoteViewModel?.openCouponPicker() },
-              onDismissCouponPicker = { checkoutQuoteViewModel?.dismissCouponPicker() },
             )
           }
           else -> {

@@ -12,6 +12,8 @@ import com.pizzora.backend.catalog.CatalogService
 import com.pizzora.backend.catalog.catalogRoutes
 import com.pizzora.backend.categories.CategoriesService
 import com.pizzora.backend.categories.categoriesRoutes
+import com.pizzora.backend.checkout.CheckoutService
+import com.pizzora.backend.checkout.checkoutRoutes
 import com.pizzora.backend.core.config.AppConfig
 import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.db.PostgresJdbcProbe
@@ -36,6 +38,8 @@ import com.pizzora.backend.images.S3ObjectStorageClient
 import com.pizzora.backend.images.productImagesRoutes
 import com.pizzora.backend.inventory.InventoryService
 import com.pizzora.backend.inventory.inventoryRoutes
+import com.pizzora.backend.orders.OrderService
+import com.pizzora.backend.orders.ordersRoutes
 import com.pizzora.backend.pricing.PricingService
 import com.pizzora.backend.pricing.pricingRoutes
 import com.pizzora.backend.recipes.RecipeService
@@ -250,6 +254,18 @@ fun Application.pizzoraModule(
       val recipeService = RecipeService(
         dataSource = dataSource,
       )
+      val orderService = OrderService(
+        dataSource = dataSource,
+        inventoryService = inventoryService,
+        couponService = couponService,
+      )
+      val checkoutService = CheckoutService(
+        dataSource = dataSource,
+        couponService = couponService,
+        inventoryService = inventoryService,
+        recipeService = recipeService,
+        orderService = orderService,
+      )
 
       authRoutes(authService, wsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
@@ -261,6 +277,8 @@ fun Application.pizzoraModule(
       pricingRoutes(pricingService, authorizationService)
       inventoryRoutes(inventoryService, authorizationService)
       recipesRoutes(recipeService, authorizationService)
+      checkoutRoutes(checkoutService, authorizationService)
+      ordersRoutes(orderService, authorizationService)
     }
 
     extraRoutes()

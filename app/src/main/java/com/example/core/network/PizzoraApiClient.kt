@@ -2,12 +2,16 @@ package com.example.core.network
 
 import com.example.core.security.AuthSession
 import com.example.core.security.TokenStorage
+import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.AdjustInventoryRequest
 import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.AuthTokensResponse
 import com.pizzora.contracts.AvailableCouponsResponse
+import com.pizzora.contracts.CancelOrderRequest
 import com.pizzora.contracts.CartResponseDto
 import com.pizzora.contracts.CategoryDto
+import com.pizzora.contracts.CheckoutRequest
+import com.pizzora.contracts.CheckoutResponse
 import com.pizzora.contracts.ConfirmProductImageRequest
 import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
@@ -19,6 +23,8 @@ import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerEntryDto
 import com.pizzora.contracts.LoginRequest
 import com.pizzora.contracts.MessageResponse
+import com.pizzora.contracts.OrderDetailDto
+import com.pizzora.contracts.OrderListResponse
 import com.pizzora.contracts.PresignProductImageRequest
 import com.pizzora.contracts.PresignProductImageResponse
 import com.pizzora.contracts.PricingQuoteRequest
@@ -37,9 +43,11 @@ import com.pizzora.contracts.ResetPasswordRequest
 import com.pizzora.contracts.UpdateCategoryRequest
 import com.pizzora.contracts.UpdateCouponRequest
 import com.pizzora.contracts.UpdateProductRequest
+import com.pizzora.contracts.UpsertAddressRequest
 import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.ValidateCartRequest
 import com.pizzora.contracts.VerifyEmailRequest
+import io.ktor.client.request.header
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
@@ -422,6 +430,46 @@ class PizzoraApiClient(
 
   suspend fun putOwnerRecipe(request: PutRecipeRequest): RecipeBindingDto {
     val response = httpClient.put("/api/v1/owner/recipes") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getAddresses(): List<AddressDto> {
+    val response = httpClient.get("/api/v1/me/addresses")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createAddress(request: UpsertAddressRequest): AddressDto {
+    val response = httpClient.post("/api/v1/me/addresses") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun checkout(idempotencyKey: String, request: CheckoutRequest): CheckoutResponse {
+    val response = httpClient.post("/api/v1/checkout") {
+      header("Idempotency-Key", idempotencyKey)
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOrders(limit: Int = 50): OrderListResponse {
+    val response = httpClient.get("/api/v1/orders?limit=$limit")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOrderDetail(orderId: String): OrderDetailDto {
+    val response = httpClient.get("/api/v1/orders/$orderId")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun cancelOrder(orderId: String, request: CancelOrderRequest = CancelOrderRequest()): OrderDetailDto {
+    val response = httpClient.post("/api/v1/orders/$orderId/cancel") {
       contentType(ContentType.Application.Json)
       setBody(request)
     }

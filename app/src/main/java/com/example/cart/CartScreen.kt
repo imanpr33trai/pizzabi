@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.WarningAmber
@@ -74,6 +75,7 @@ fun CartScreen(
   onRemoveCoupon: () -> Unit = {},
   onOpenCouponPicker: () -> Unit = {},
   onDismissCouponPicker: () -> Unit = {},
+  onProceedToCheckout: (() -> Unit)? = null,
 ) {
   if (quoteState?.isCouponSheetOpen == true) {
     CouponPickerSheet(
@@ -299,6 +301,20 @@ fun CartScreen(
               Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
               Spacer(modifier = Modifier.size(6.dp))
               Text(stringResource(R.string.cart_validate_sync))
+            }
+            if (onProceedToCheckout != null) {
+              Button(
+                onClick = onProceedToCheckout,
+                enabled = !uiState.hasUnavailableItems && !uiState.isSyncing,
+                modifier = Modifier
+                  .weight(1f)
+                  .minimumInteractiveComponentSize()
+                  .testTag("proceed_to_checkout_button"),
+              ) {
+                Icon(Icons.Filled.ShoppingBag, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.size(6.dp))
+                Text(stringResource(R.string.action_proceed_checkout))
+              }
             }
           }
         }
