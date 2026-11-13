@@ -13,6 +13,10 @@ interface CartDao {
   @Query("SELECT * FROM cart_items ORDER BY updated_at_ms DESC")
   fun observeCartItemsWithToppings(): Flow<List<CartItemWithToppings>>
 
+  @Transaction
+  @Query("SELECT * FROM cart_items ORDER BY updated_at_ms DESC")
+  suspend fun getCartItemsWithToppingsOnce(): List<CartItemWithToppings>
+
   @Query("SELECT COALESCE(SUM(quantity), 0) FROM cart_items")
   fun observeCartBadgeCount(): Flow<Int>
 
@@ -37,6 +41,14 @@ interface CartDao {
     }
   }
 
+  @Transaction
+  suspend fun replaceAllItems(entries: List<Pair<CartItemEntity, List<CartItemToppingEntity>>>) {
+    clearCart()
+    entries.forEach { (item, toppings) ->
+      upsertItemWithToppings(item, toppings)
+    }
+  }
+
   @Query("UPDATE cart_items SET quantity = :quantity, updated_at_ms = :updatedAtMs WHERE id = :itemId")
   suspend fun updateQuantity(itemId: String, quantity: Int, updatedAtMs: Long = System.currentTimeMillis())
 
@@ -55,6 +67,12 @@ interface CatalogCacheDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun replaceAll(products: List<CachedProductEntity>)
 
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertMenuSnapshot(snapshot: CachedMenuSnapshotEntity)
+
+  @Query("SELECT * FROM cached_menu_snapshot WHERE id = 1")
+  suspend fun getMenuSnapshot(): CachedMenuSnapshotEntity?
+
   @Query("DELETE FROM cached_products")
   suspend fun clearAll()
 
@@ -64,6 +82,15 @@ interface CatalogCacheDao {
     if (products.isNotEmpty()) {
       replaceAll(products)
     }
+  }
+
+  @Transaction
+  suspend fun replaceCatalogWithSnapshot(
+    products: List<CachedProductEntity>,
+    snapshot: CachedMenuSnapshotEntity,
+  ) {
+    replaceCatalog(products)
+    upsertMenuSnapshot(snapshot)
   }
 }
 

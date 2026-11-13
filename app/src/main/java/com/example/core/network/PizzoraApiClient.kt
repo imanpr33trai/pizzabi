@@ -4,6 +4,7 @@ import com.example.core.security.AuthSession
 import com.example.core.security.TokenStorage
 import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.AuthTokensResponse
+import com.pizzora.contracts.CartResponseDto
 import com.pizzora.contracts.CategoryDto
 import com.pizzora.contracts.ConfirmProductImageRequest
 import com.pizzora.contracts.CreateCategoryRequest
@@ -18,11 +19,13 @@ import com.pizzora.contracts.ProductImageDto
 import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.RefreshTokenRequest
 import com.pizzora.contracts.RegisterRequest
+import com.pizzora.contracts.ReplaceCartRequest
 import com.pizzora.contracts.ResendVerificationRequest
 import com.pizzora.contracts.ResetPasswordRequest
 import com.pizzora.contracts.UpdateCategoryRequest
 import com.pizzora.contracts.UpdateProductRequest
 import com.pizzora.contracts.UserProfileDto
+import com.pizzora.contracts.ValidateCartRequest
 import com.pizzora.contracts.VerifyEmailRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
@@ -304,6 +307,27 @@ class PizzoraApiClient(
     if (!response.status.isSuccess()) {
       throwDecodedError(response)
     }
+  }
+
+  suspend fun getCart(): CartResponseDto {
+    val response = httpClient.get("/api/v1/cart")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun replaceCart(request: ReplaceCartRequest): CartResponseDto {
+    val response = httpClient.put("/api/v1/cart") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun validateCart(request: ValidateCartRequest): CartResponseDto {
+    val response = httpClient.post("/api/v1/cart/validate") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
   }
 
   private suspend inline fun <reified T> decodeOrThrow(response: HttpResponse): T {

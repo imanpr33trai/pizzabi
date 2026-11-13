@@ -6,6 +6,8 @@ import com.pizzora.backend.auth.WsTicketService
 import com.pizzora.backend.auth.authRoutes
 import com.pizzora.backend.authorization.AuthorizationService
 import com.pizzora.backend.authorization.PizzoraPrincipal
+import com.pizzora.backend.cart.CartService
+import com.pizzora.backend.cart.cartRoutes
 import com.pizzora.backend.catalog.CatalogService
 import com.pizzora.backend.catalog.catalogRoutes
 import com.pizzora.backend.categories.CategoriesService
@@ -222,12 +224,17 @@ fun Application.pizzoraModule(
         objectStorageClient = storageClient,
         cacheStore = effectiveCacheStore,
       )
+      val cartService = CartService(
+        dataSource = dataSource,
+        publicUrlResolver = storageClient::publicUrlFor,
+      )
 
       authRoutes(authService, wsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
       categoriesRoutes(categoriesService, authorizationService)
       catalogRoutes(catalogService, authorizationService)
       productImagesRoutes(productImagesService, authorizationService)
+      cartRoutes(cartService, authorizationService)
     }
 
     extraRoutes()

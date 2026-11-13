@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.auth.AuthViewModel
+import com.example.cart.CartViewModel
+import com.example.catalog.CustomerCatalogViewModel
 import com.example.navigation.PizzoraApp
 
 class MainActivity : ComponentActivity() {
@@ -16,7 +18,13 @@ class MainActivity : ComponentActivity() {
 
     setContent {
       val authViewModel: AuthViewModel = viewModel(factory = container.authViewModelFactory())
-      PizzoraApp(authViewModel = authViewModel)
+      val catalogViewModel: CustomerCatalogViewModel = viewModel(factory = container.customerCatalogViewModelFactory())
+      val cartViewModel: CartViewModel = viewModel(factory = container.cartViewModelFactory())
+      PizzoraApp(
+        authViewModel = authViewModel,
+        catalogViewModel = catalogViewModel,
+        cartViewModel = cartViewModel,
+      )
     }
   }
 }

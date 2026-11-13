@@ -133,6 +133,13 @@ object OpenApiSpec {
       putJsonObject("/api/v1/owner/products/{id}/images/confirm") {
         putJsonObject("post") { put("summary", "Verify uploaded object via S3 HEAD + magic bytes and activate image (Owner)") }
       }
+      putJsonObject("/api/v1/cart") {
+        putJsonObject("get") { put("summary", "Fetch authenticated customer relational cart with live catalog validation") }
+        putJsonObject("put") { put("summary", "Replace authenticated customer cart items and toppings") }
+      }
+      putJsonObject("/api/v1/cart/validate") {
+        putJsonObject("post") { put("summary", "Validate local offline cart items against server catalog and prices") }
+      }
     }
   }
 }

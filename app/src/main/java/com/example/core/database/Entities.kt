@@ -13,6 +13,7 @@ data class CartItemEntity(
   @PrimaryKey val id: String,
   @ColumnInfo(name = "product_id") val productId: String,
   @ColumnInfo(name = "product_name") val productName: String,
+  @ColumnInfo(name = "image_url") val imageUrl: String? = null,
   @ColumnInfo(name = "variant_id") val variantId: String,
   @ColumnInfo(name = "size_code") val sizeCode: String,
   @ColumnInfo(name = "crust_id") val crustId: String,
@@ -20,6 +21,7 @@ data class CartItemEntity(
   @ColumnInfo(name = "unit_price_paise") val unitPricePaise: Long,
   val quantity: Int,
   @ColumnInfo(name = "is_available") val isAvailable: Boolean = true,
+  @ColumnInfo(name = "unavailable_reason") val unavailableReason: String? = null,
   @ColumnInfo(name = "updated_at_ms") val updatedAtMs: Long = System.currentTimeMillis(),
 )
 
@@ -62,6 +64,13 @@ data class CachedProductEntity(
   @ColumnInfo(name = "is_veg") val isVeg: Boolean,
   @ColumnInfo(name = "image_url") val imageUrl: String?,
   @ColumnInfo(name = "min_price_paise") val minPricePaise: Long,
+  @ColumnInfo(name = "payload_json") val payloadJson: String,
+  @ColumnInfo(name = "cached_at_ms") val cachedAtMs: Long,
+)
+
+@Entity(tableName = "cached_menu_snapshot")
+data class CachedMenuSnapshotEntity(
+  @PrimaryKey val id: Int = 1,
   @ColumnInfo(name = "payload_json") val payloadJson: String,
   @ColumnInfo(name = "cached_at_ms") val cachedAtMs: Long,
 )

@@ -1,5 +1,6 @@
 package com.example.catalog
 
+import com.example.core.database.CachedMenuSnapshotEntity
 import com.example.core.database.CachedProductEntity
 import com.example.core.database.CatalogCacheDao
 import com.example.core.network.PizzoraApiClient
@@ -52,18 +53,26 @@ class NetworkCatalogRepository(
           cachedAtMs = now,
         )
       }
-      catalogCacheDao.replaceCatalog(entities)
+      val snapshotEntity = CachedMenuSnapshotEntity(
+        id = 1,
+        payloadJson = json.encodeToString(menu),
+        cachedAtMs = now,
+      )
+      catalogCacheDao.replaceCatalogWithSnapshot(entities, snapshotEntity)
       CatalogSnapshot(
         menu = menu,
         cachedProducts = menu.products,
         isFromOfflineCache = false,
       )
     } catch (t: Throwable) {
-      val offline = observeCachedProducts().first()
-      if (offline.isNotEmpty()) {
+      val cachedSnapshot = catalogCacheDao.getMenuSnapshot()?.let { entity ->
+        runCatching { json.decodeFromString<PublicMenuResponse>(entity.payloadJson) }.getOrNull()
+      }
+      val offlineProducts = cachedSnapshot?.products ?: observeCachedProducts().first()
+      if (cachedSnapshot != null || offlineProducts.isNotEmpty()) {
         CatalogSnapshot(
-          menu = null,
-          cachedProducts = offline,
+          menu = cachedSnapshot,
+          cachedProducts = offlineProducts,
           isFromOfflineCache = true,
         )
       } else {

@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
     CartItemEntity::class,
     CartItemToppingEntity::class,
     CachedProductEntity::class,
+    CachedMenuSnapshotEntity::class,
     NotificationInboxEntity::class,
   ],
-  version = 1,
+  version = 2,
   exportSchema = false,
 )
 abstract class PizzoraDatabase : RoomDatabase() {
@@ -26,6 +27,8 @@ abstract class PizzoraDatabase : RoomDatabase() {
         context.applicationContext,
         PizzoraDatabase::class.java,
         "pizzora.db",
-      ).build()
+      )
+        .fallbackToDestructiveMigration(dropAllTables = true)
+        .build()
   }
 }

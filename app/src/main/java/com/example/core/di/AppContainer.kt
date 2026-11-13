@@ -7,7 +7,11 @@ import com.example.BuildConfig
 import com.example.auth.AuthRepository
 import com.example.auth.AuthViewModel
 import com.example.auth.NetworkAuthRepository
+import com.example.cart.CartRepository
+import com.example.cart.CartViewModel
+import com.example.cart.NetworkCartRepository
 import com.example.catalog.CatalogRepository
+import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.NetworkCatalogRepository
 import com.example.core.database.PizzoraDatabase
 import com.example.core.media.ImageCompressor
@@ -48,6 +52,13 @@ class AppContainer(context: Context) {
     )
   }
 
+  val cartRepository: CartRepository by lazy {
+    NetworkCartRepository(
+      apiClient = apiClient,
+      cartDao = database.cartDao(),
+    )
+  }
+
   val imageCompressor: ImageCompressor by lazy {
     ImageCompressor()
   }
@@ -66,6 +77,26 @@ class AppContainer(context: Context) {
         "Unknown ViewModel class: ${modelClass.name}"
       }
       return AuthViewModel(authRepository) as T
+    }
+  }
+
+  fun customerCatalogViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(CustomerCatalogViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return CustomerCatalogViewModel(catalogRepository) as T
+    }
+  }
+
+  fun cartViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(CartViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return CartViewModel(cartRepository) as T
     }
   }
 }

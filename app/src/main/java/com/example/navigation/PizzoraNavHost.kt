@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +41,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -47,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,6 +71,10 @@ import com.example.auth.ForgotPasswordScreen
 import com.example.auth.LoginScreen
 import com.example.auth.RegisterScreen
 import com.example.auth.VerifyEmailScreen
+import com.example.cart.CartScreen
+import com.example.cart.CartViewModel
+import com.example.catalog.CustomerCatalogViewModel
+import com.example.catalog.CustomerMenuScreen
 import com.example.core.security.AuthSession
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
@@ -96,6 +105,8 @@ data object OwnerShellRoute
 @Composable
 fun PizzoraApp(
   authViewModel: AuthViewModel,
+  catalogViewModel: CustomerCatalogViewModel? = null,
+  cartViewModel: CartViewModel? = null,
 ) {
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -197,7 +208,12 @@ fun PizzoraApp(
 
       composable<CustomerShellRoute> {
         session?.let { active ->
-          CustomerRoleShell(session = active, onSignOut = authViewModel::logout)
+          CustomerRoleShell(
+            session = active,
+            catalogViewModel = catalogViewModel,
+            cartViewModel = cartViewModel,
+            onSignOut = authViewModel::logout,
+          )
         }
       }
 
@@ -225,6 +241,8 @@ fun PizzoraApp(
 @Composable
 fun CustomerRoleShell(
   session: AuthSession,
+  catalogViewModel: CustomerCatalogViewModel? = null,
+  cartViewModel: CartViewModel? = null,
   onSignOut: () -> Unit,
 ) {
   val tabs = listOf(
@@ -234,11 +252,24 @@ fun CustomerRoleShell(
     "Profile" to Icons.Filled.Person,
   )
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+  val snackbarHostState = remember { SnackbarHostState() }
+  val cartBadgeCount = if (cartViewModel != null) {
+    cartViewModel.badgeCount.collectAsStateWithLifecycle().value
+  } else {
+    0
+  }
+
+  LaunchedEffect(cartViewModel) {
+    cartViewModel?.events?.collect { message ->
+      snackbarHostState.showSnackbar(message)
+    }
+  }
 
   BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("customer_shell_root")) {
     val useRail = maxWidth >= 600.dp
     Scaffold(
       contentWindowInsets = WindowInsets.safeDrawing,
+      snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
       topBar = {
         TopAppBar(
           title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall) },
@@ -259,8 +290,11 @@ fun CustomerRoleShell(
               NavigationBarItem(
                 selected = selectedIndex == idx,
                 onClick = { selectedIndex = idx },
-                icon = { Icon(icon, contentDescription = label) },
+                icon = {
+                  CustomerTabIcon(label = label, icon = icon, badgeCount = if (idx == 1) cartBadgeCount else 0)
+                },
                 label = { Text(label) },
+                modifier = Modifier.testTag("customer_tab_${label.lowercase()}"),
               )
             }
           }
@@ -274,20 +308,81 @@ fun CustomerRoleShell(
               NavigationRailItem(
                 selected = selectedIndex == idx,
                 onClick = { selectedIndex = idx },
-                icon = { Icon(icon, contentDescription = label) },
+                icon = {
+                  CustomerTabIcon(label = label, icon = icon, badgeCount = if (idx == 1) cartBadgeCount else 0)
+                },
                 label = { Text(label) },
+                modifier = Modifier.testTag("customer_tab_${label.lowercase()}"),
               )
             }
           }
         }
-        RoleShellCard(
-          title = "${stringResource(R.string.role_customer_title)} • ${tabs[selectedIndex].first}",
-          subtitle = "Signed in as ${session.user.fullName} (${session.user.email})",
-          badge = "CUSTOMER",
-          modifier = Modifier.weight(1f),
-        )
+
+        when {
+          selectedIndex == 0 && catalogViewModel != null -> {
+            val menuState by catalogViewModel.uiState.collectAsStateWithLifecycle()
+            CustomerMenuScreen(
+              uiState = menuState,
+              onSearchQueryChange = catalogViewModel::onSearchQueryChange,
+              onCategorySelected = catalogViewModel::onCategorySelected,
+              onVegOnlyToggle = catalogViewModel::onVegOnlyToggle,
+              onClearFilters = catalogViewModel::clearFilters,
+              onRefreshMenu = { catalogViewModel.loadMenu(initialLoad = false) },
+              onOpenCustomizer = catalogViewModel::openCustomizer,
+              onDismissCustomizer = catalogViewModel::dismissCustomizer,
+              onAddCustomizedToCart = { prod, variant, crust, toppings, qty ->
+                cartViewModel?.addCustomizedPizza(prod, variant, crust, toppings, qty)
+              },
+              modifier = Modifier.weight(1f),
+            )
+          }
+          selectedIndex == 1 && cartViewModel != null -> {
+            val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
+            CartScreen(
+              uiState = cartState,
+              onUpdateQuantity = cartViewModel::updateQuantity,
+              onRemoveItem = cartViewModel::removeItem,
+              onClearCart = cartViewModel::clearCart,
+              onValidateAndSync = cartViewModel::validateAndSyncCart,
+              onBrowseMenu = { selectedIndex = 0 },
+              modifier = Modifier.weight(1f),
+            )
+          }
+          else -> {
+            RoleShellCard(
+              title = "${stringResource(R.string.role_customer_title)} • ${tabs[selectedIndex].first}",
+              subtitle = "Signed in as ${session.user.fullName} (${session.user.email})",
+              badge = "CUSTOMER",
+              modifier = Modifier.weight(1f),
+            )
+          }
+        }
       }
     }
+  }
+}
+
+@Composable
+private fun CustomerTabIcon(
+  label: String,
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  badgeCount: Int,
+) {
+  if (badgeCount > 0) {
+    BadgedBox(
+      badge = {
+        Badge {
+          Text(
+            text = badgeCount.toString(),
+            modifier = Modifier.testTag("cart_tab_badge"),
+          )
+        }
+      },
+    ) {
+      Icon(icon, contentDescription = label)
+    }
+  } else {
+    Icon(icon, contentDescription = label)
   }
 }
 
