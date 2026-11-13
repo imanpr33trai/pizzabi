@@ -13,6 +13,9 @@ import com.example.cart.NetworkCartRepository
 import com.example.catalog.CatalogRepository
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.NetworkCatalogRepository
+import com.example.checkout.CheckoutQuoteViewModel
+import com.example.checkout.NetworkPricingRepository
+import com.example.checkout.PricingRepository
 import com.example.core.database.PizzoraDatabase
 import com.example.core.media.ImageCompressor
 import com.example.core.media.ProductImageUploader
@@ -59,6 +62,12 @@ class AppContainer(context: Context) {
     )
   }
 
+  val pricingRepository: PricingRepository by lazy {
+    NetworkPricingRepository(
+      apiClient = apiClient,
+    )
+  }
+
   val imageCompressor: ImageCompressor by lazy {
     ImageCompressor()
   }
@@ -97,6 +106,16 @@ class AppContainer(context: Context) {
         "Unknown ViewModel class: ${modelClass.name}"
       }
       return CartViewModel(cartRepository) as T
+    }
+  }
+
+  fun checkoutQuoteViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(CheckoutQuoteViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return CheckoutQuoteViewModel(pricingRepository) as T
     }
   }
 }

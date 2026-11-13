@@ -75,6 +75,7 @@ import com.example.cart.CartScreen
 import com.example.cart.CartViewModel
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.CustomerMenuScreen
+import com.example.checkout.CheckoutQuoteViewModel
 import com.example.core.security.AuthSession
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
@@ -107,6 +108,7 @@ fun PizzoraApp(
   authViewModel: AuthViewModel,
   catalogViewModel: CustomerCatalogViewModel? = null,
   cartViewModel: CartViewModel? = null,
+  checkoutQuoteViewModel: CheckoutQuoteViewModel? = null,
 ) {
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -212,6 +214,7 @@ fun PizzoraApp(
             session = active,
             catalogViewModel = catalogViewModel,
             cartViewModel = cartViewModel,
+            checkoutQuoteViewModel = checkoutQuoteViewModel,
             onSignOut = authViewModel::logout,
           )
         }
@@ -243,6 +246,7 @@ fun CustomerRoleShell(
   session: AuthSession,
   catalogViewModel: CustomerCatalogViewModel? = null,
   cartViewModel: CartViewModel? = null,
+  checkoutQuoteViewModel: CheckoutQuoteViewModel? = null,
   onSignOut: () -> Unit,
 ) {
   val tabs = listOf(
@@ -257,6 +261,10 @@ fun CustomerRoleShell(
     cartViewModel.badgeCount.collectAsStateWithLifecycle().value
   } else {
     0
+  }
+
+  LaunchedEffect(session.user.id, cartViewModel) {
+    cartViewModel?.syncOnSessionActive()
   }
 
   LaunchedEffect(cartViewModel) {
@@ -338,6 +346,12 @@ fun CustomerRoleShell(
           }
           selectedIndex == 1 && cartViewModel != null -> {
             val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
+            val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+
+            LaunchedEffect(cartState.items, cartState.subtotalPaise, checkoutQuoteViewModel) {
+              checkoutQuoteViewModel?.onCartChanged(cartState.items, cartState.subtotalPaise)
+            }
+
             CartScreen(
               uiState = cartState,
               onUpdateQuantity = cartViewModel::updateQuantity,
@@ -346,6 +360,15 @@ fun CustomerRoleShell(
               onValidateAndSync = cartViewModel::validateAndSyncCart,
               onBrowseMenu = { selectedIndex = 0 },
               modifier = Modifier.weight(1f),
+              quoteState = quoteState,
+              onFulfillmentTypeChange = { checkoutQuoteViewModel?.onFulfillmentTypeChange(it) },
+              onPincodeInputChange = { checkoutQuoteViewModel?.onPincodeInputChange(it) },
+              onCheckPincode = { checkoutQuoteViewModel?.applyPincodeCheck() },
+              onCouponInputChange = { checkoutQuoteViewModel?.onCouponInputChange(it) },
+              onApplyCoupon = { checkoutQuoteViewModel?.applyCouponCode(it) },
+              onRemoveCoupon = { checkoutQuoteViewModel?.removeCoupon() },
+              onOpenCouponPicker = { checkoutQuoteViewModel?.openCouponPicker() },
+              onDismissCouponPicker = { checkoutQuoteViewModel?.dismissCouponPicker() },
             )
           }
           else -> {

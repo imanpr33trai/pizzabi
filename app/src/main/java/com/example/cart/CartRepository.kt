@@ -114,20 +114,29 @@ class NetworkCartRepository(
 
   override suspend fun removeItem(itemId: String): CartSyncResult {
     cartDao.deleteItemById(itemId)
-    return syncAndValidateCart(persistToServer = true)
+    return syncAndValidateCartInternal(persistToServer = true, allowEmptyReplace = true)
   }
 
   override suspend fun clearCart(): CartSyncResult {
     cartDao.clearCart()
-    return syncAndValidateCart(persistToServer = true)
+    return syncAndValidateCartInternal(persistToServer = true, allowEmptyReplace = true)
   }
 
-  override suspend fun syncAndValidateCart(persistToServer: Boolean): CartSyncResult {
+  override suspend fun syncAndValidateCart(persistToServer: Boolean): CartSyncResult =
+    syncAndValidateCartInternal(persistToServer = persistToServer, allowEmptyReplace = false)
+
+  private suspend fun syncAndValidateCartInternal(
+    persistToServer: Boolean,
+    allowEmptyReplace: Boolean,
+  ): CartSyncResult {
     val local = cartDao.getCartItemsWithToppingsOnce()
     return try {
       val serverCart: CartResponseDto = if (local.isEmpty()) {
-        if (persistToServer) apiClient.getCart()
-        else return CartSyncResult(isOffline = false, unavailableCount = 0)
+        when {
+          allowEmptyReplace && persistToServer -> apiClient.replaceCart(ReplaceCartRequest(emptyList()))
+          persistToServer -> apiClient.getCart()
+          else -> return CartSyncResult(isOffline = false, unavailableCount = 0)
+        }
       } else {
         val inputs = local.map { entry ->
           CartItemInputDto(

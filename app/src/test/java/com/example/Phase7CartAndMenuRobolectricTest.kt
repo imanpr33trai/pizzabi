@@ -24,6 +24,8 @@ import com.example.catalog.NetworkCatalogRepository
 import com.example.core.database.PizzoraDatabase
 import com.example.core.network.PizzoraApiClient
 import com.example.core.security.AuthSession
+import com.example.core.security.TokenCipher
+import com.example.core.security.TokenManager
 import com.example.core.security.TokenStorage
 import com.example.navigation.PizzoraApp
 import com.pizzora.contracts.CartItemViewDto
@@ -426,5 +428,250 @@ class Phase7CartAndMenuRobolectricTest {
     composeTestRule.onNodeWithText("Margherita Verace").assertIsDisplayed()
     composeTestRule.onNodeWithText("Toppings: Extra Basil").assertIsDisplayed()
     composeTestRule.onNodeWithTag("cart_subtotal_text").assertTextContains("₹1248.00")
+  }
+
+  @Test
+  fun `Customer sign-in hydrates server cart into Room automatically and supports quantity, sync, and clear actions`() {
+    val serverItemId = "server-cart-item-1"
+    val serverQty = java.util.concurrent.atomic.AtomicInteger(1)
+    val putCount = java.util.concurrent.atomic.AtomicInteger(0)
+    var markUnavailableOnValidate = false
+
+    val engine = MockEngine { request ->
+      when {
+        request.url.encodedPath == "/api/v1/catalog/menu" -> {
+          respond(
+            content = json.encodeToString(sampleMenu),
+            status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+          )
+        }
+        request.url.encodedPath == "/api/v1/cart" && request.method == HttpMethod.Get -> {
+          val qty = serverQty.get()
+          respond(
+            content = json.encodeToString(
+              CartResponseDto(
+                cartId = "server-cart-1",
+                items = listOf(
+                  CartItemViewDto(
+                    id = serverItemId,
+                    productId = sampleMenu.products[0].id,
+                    productName = "Margherita Verace",
+                    isVeg = true,
+                    variantId = sampleMenu.products[0].variants[0].id,
+                    sizeCode = SizeCode.REGULAR,
+                    basePricePaise = 29_900L,
+                    crustId = sampleMenu.crusts[0].id,
+                    crustName = "Hand-Tossed",
+                    crustExtraPricePaise = 0L,
+                    toppings = listOf(
+                      CartToppingViewDto(
+                        toppingId = sampleMenu.toppings[0].id,
+                        name = "Extra Basil",
+                        isVeg = true,
+                        extraPricePaise = 2_500L,
+                        isAvailable = true,
+                      ),
+                    ),
+                    quantity = qty,
+                    unitPricePaise = 32_400L,
+                    lineTotalPaise = 32_400L * qty,
+                    isAvailable = true,
+                    issues = emptyList(),
+                  ),
+                ),
+                subtotalPaise = 32_400L * qty,
+                totalItemCount = qty,
+                allAvailable = true,
+                unavailableCount = 0,
+                updatedAt = "2026-11-13T12:25:00Z",
+              ),
+            ),
+            status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+          )
+        }
+        request.url.encodedPath == "/api/v1/cart" && request.method == HttpMethod.Put -> {
+          putCount.incrementAndGet()
+          val bodyText = when (val body = request.body) {
+            is TextContent -> body.text
+            is OutgoingContent.ByteArrayContent -> body.bytes().decodeToString()
+            else -> error("Unexpected body type")
+          }
+          val req = json.decodeFromString<ReplaceCartRequest>(bodyText)
+          if (req.items.isEmpty()) {
+            serverQty.set(0)
+            respond(
+              content = json.encodeToString(
+                CartResponseDto(
+                  cartId = "server-cart-1",
+                  items = emptyList(),
+                  subtotalPaise = 0L,
+                  totalItemCount = 0,
+                  allAvailable = true,
+                  unavailableCount = 0,
+                  updatedAt = "2026-11-13T12:26:00Z",
+                ),
+              ),
+              status = HttpStatusCode.OK,
+              headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+          } else {
+            val qty = req.items.first().quantity
+            serverQty.set(qty)
+            val available = !markUnavailableOnValidate
+            respond(
+              content = json.encodeToString(
+                CartResponseDto(
+                  cartId = "server-cart-1",
+                  items = listOf(
+                    CartItemViewDto(
+                      id = serverItemId,
+                      productId = sampleMenu.products[0].id,
+                      productName = "Margherita Verace",
+                      isVeg = true,
+                      variantId = sampleMenu.products[0].variants[0].id,
+                      sizeCode = SizeCode.REGULAR,
+                      basePricePaise = 29_900L,
+                      crustId = sampleMenu.crusts[0].id,
+                      crustName = "Hand-Tossed",
+                      crustExtraPricePaise = 0L,
+                      toppings = listOf(
+                        CartToppingViewDto(
+                          toppingId = sampleMenu.toppings[0].id,
+                          name = "Extra Basil",
+                          isVeg = true,
+                          extraPricePaise = 2_500L,
+                          isAvailable = available,
+                        ),
+                      ),
+                      quantity = qty,
+                      unitPricePaise = 32_400L,
+                      lineTotalPaise = 32_400L * qty,
+                      isAvailable = available,
+                      issues = if (available) emptyList() else listOf(
+                        CartValidationIssueDto(
+                          code = CartValidationIssueCode.TOPPING_UNAVAILABLE,
+                          message = "Extra Basil ran out of stock.",
+                        ),
+                      ),
+                    ),
+                  ),
+                  subtotalPaise = if (available) 32_400L * qty else 0L,
+                  totalItemCount = qty,
+                  allAvailable = available,
+                  unavailableCount = if (available) 0 else 1,
+                  updatedAt = "2026-11-13T12:26:00Z",
+                ),
+              ),
+              status = HttpStatusCode.OK,
+              headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+          }
+        }
+        else -> error("Unexpected ${request.method.value} ${request.url}")
+      }
+    }
+
+    val apiClient = PizzoraApiClient("http://localhost:8080", InMemoryTokenStorage(customerSession), engine)
+    val catalogRepo = NetworkCatalogRepository(apiClient, db.catalogCacheDao())
+    val cartRepo = NetworkCartRepository(apiClient, db.cartDao())
+
+    val authVm = AuthViewModel(SignedInAuthRepository(customerSession))
+    val catalogVm = CustomerCatalogViewModel(catalogRepo)
+    val cartVm = CartViewModel(cartRepo)
+
+    composeTestRule.setContent {
+      PizzoraApp(
+        authViewModel = authVm,
+        catalogViewModel = catalogVm,
+        cartViewModel = cartVm,
+      )
+    }
+
+    // Automatic hydration on entering CustomerRoleShell populates badge = 1 from GET /cart
+    waitUntilMainLooper {
+      composeTestRule.onAllNodesWithTag("cart_tab_badge", useUnmergedTree = true)
+        .fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("cart_tab_badge", useUnmergedTree = true).assertTextContains("1")
+
+    composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("cart_screen").assertIsDisplayed()
+    waitUntilMainLooper {
+      composeTestRule.onAllNodesWithTag("cart_qty_value_$serverItemId").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("cart_qty_value_$serverItemId").assertTextContains("1")
+    composeTestRule.onNodeWithTag("cart_subtotal_text").assertTextContains("₹324.00")
+
+    // Increment quantity to 2 -> subtotal updates to ₹648.00
+    composeTestRule.onNodeWithTag("cart_lazy_column")
+      .performScrollToNode(hasTestTag("cart_qty_plus_$serverItemId"))
+    composeTestRule.onNodeWithTag("cart_qty_plus_$serverItemId").performClick()
+    waitUntilMainLooper {
+      serverQty.get() == 2 && cartVm.uiState.value.subtotalPaise == 64_800L && !cartVm.uiState.value.isSyncing
+    }
+    assertFalse(
+      "Expected online sync after qty increment (putCount=${putCount.get()}, msg=${cartVm.uiState.value.statusMessage}, qty=${cartVm.uiState.value.totalItemCount}, sub=${cartVm.uiState.value.subtotalPaise})",
+      cartVm.uiState.value.isOffline,
+    )
+    assertEquals(2, serverQty.get())
+    assertEquals(64_800L, cartVm.uiState.value.subtotalPaise)
+    composeTestRule.onNodeWithTag("cart_qty_value_$serverItemId").assertTextContains("2")
+    composeTestRule.onNodeWithTag("cart_subtotal_text").assertTextContains("₹648.00")
+
+    // Re-validate when topping goes out of stock -> unavailable banner + item issue appear
+    markUnavailableOnValidate = true
+    composeTestRule.onNodeWithTag("validate_cart_button").performClick()
+    waitUntilMainLooper {
+      cartVm.uiState.value.hasUnavailableItems && !cartVm.uiState.value.isSyncing
+    }
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToIndex(0)
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("cart_unavailable_banner").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("cart_lazy_column")
+      .performScrollToNode(hasTestTag("cart_item_issue_$serverItemId"))
+    composeTestRule.onNodeWithTag("cart_item_issue_$serverItemId").assertTextContains("Extra Basil ran out of stock.")
+
+    // Clear cart -> empty state displayed
+    composeTestRule.onNodeWithTag("clear_cart_button").performClick()
+    waitUntilMainLooper {
+      composeTestRule.onAllNodesWithTag("cart_empty_state").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("cart_empty_state").assertIsDisplayed()
+  }
+
+  private fun waitUntilMainLooper(timeoutMs: Long = 5_000, condition: () -> Boolean) {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (true) {
+      org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+      composeTestRule.waitForIdle()
+      if (condition()) return
+      if (System.currentTimeMillis() > deadline) {
+        throw AssertionError("Timed out after ${timeoutMs}ms waiting for async Robolectric/Compose state")
+      }
+      Thread.sleep(20)
+    }
+  }
+
+  @Test
+  fun `TokenManager awaitSession waits for cold-start DataStore hydration`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val passThroughCipher = object : TokenCipher {
+      override fun encrypt(plainText: String): String = "test:$plainText"
+      override fun decrypt(cipherText: String): String? = cipherText.removePrefix("test:")
+    }
+
+    val firstInstance = TokenManager(context, cipher = passThroughCipher)
+    firstInstance.saveSession(customerSession)
+
+    val coldStartInstance = TokenManager(context, cipher = passThroughCipher)
+    val hydrated = coldStartInstance.awaitSession()
+    assertNotNull(hydrated)
+    assertEquals(customerSession.accessToken, hydrated?.accessToken)
+    assertEquals(customerSession.user.id, hydrated?.user?.id)
+
+    coldStartInstance.clearSession()
   }
 }

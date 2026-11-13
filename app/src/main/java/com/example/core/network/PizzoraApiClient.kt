@@ -4,16 +4,21 @@ import com.example.core.security.AuthSession
 import com.example.core.security.TokenStorage
 import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.AuthTokensResponse
+import com.pizzora.contracts.AvailableCouponsResponse
 import com.pizzora.contracts.CartResponseDto
 import com.pizzora.contracts.CategoryDto
 import com.pizzora.contracts.ConfirmProductImageRequest
+import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
+import com.pizzora.contracts.CreateCouponRequest
 import com.pizzora.contracts.CreateProductRequest
 import com.pizzora.contracts.ForgotPasswordRequest
 import com.pizzora.contracts.LoginRequest
 import com.pizzora.contracts.MessageResponse
 import com.pizzora.contracts.PresignProductImageRequest
 import com.pizzora.contracts.PresignProductImageResponse
+import com.pizzora.contracts.PricingQuoteRequest
+import com.pizzora.contracts.PricingQuoteResponse
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductImageDto
 import com.pizzora.contracts.PublicMenuResponse
@@ -23,6 +28,7 @@ import com.pizzora.contracts.ReplaceCartRequest
 import com.pizzora.contracts.ResendVerificationRequest
 import com.pizzora.contracts.ResetPasswordRequest
 import com.pizzora.contracts.UpdateCategoryRequest
+import com.pizzora.contracts.UpdateCouponRequest
 import com.pizzora.contracts.UpdateProductRequest
 import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.ValidateCartRequest
@@ -89,12 +95,12 @@ class PizzoraApiClient(
     install(Auth) {
       bearer {
         loadTokens {
-          tokenStorage.currentSession()?.let { BearerTokens(it.accessToken, it.refreshToken) }
+          tokenStorage.awaitSession()?.let { BearerTokens(it.accessToken, it.refreshToken) }
         }
         refreshTokens {
           val attemptedAccessToken = oldTokens?.accessToken
           refreshMutex.withLock {
-            val latest = tokenStorage.currentSession() ?: return@withLock null
+            val latest = tokenStorage.awaitSession() ?: return@withLock null
             if (attemptedAccessToken != null && latest.accessToken != attemptedAccessToken) {
               return@withLock BearerTokens(latest.accessToken, latest.refreshToken)
             }
@@ -328,6 +334,48 @@ class PizzoraApiClient(
       setBody(request)
     }
     return decodeOrThrow(response)
+  }
+
+  suspend fun getAvailableCoupons(subtotalPaise: Long? = null): AvailableCouponsResponse {
+    val query = if (subtotalPaise != null) "?subtotal_paise=$subtotalPaise" else ""
+    val response = httpClient.get("/api/v1/coupons/available$query")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun quotePricing(request: PricingQuoteRequest): PricingQuoteResponse {
+    val response = httpClient.post("/api/v1/pricing/quote") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerCoupons(): List<CouponDto> {
+    val response = httpClient.get("/api/v1/owner/coupons")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createOwnerCoupon(request: CreateCouponRequest): CouponDto {
+    val response = httpClient.post("/api/v1/owner/coupons") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateOwnerCoupon(couponId: String, request: UpdateCouponRequest): CouponDto {
+    val response = httpClient.patch("/api/v1/owner/coupons/$couponId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun deleteOwnerCoupon(couponId: String) {
+    val response = httpClient.delete("/api/v1/owner/coupons/$couponId")
+    if (!response.status.isSuccess()) {
+      throwDecodedError(response)
+    }
   }
 
   private suspend inline fun <reified T> decodeOrThrow(response: HttpResponse): T {

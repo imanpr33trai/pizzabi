@@ -28,10 +28,14 @@ import com.pizzora.backend.core.redis.LettuceRedisStore
 import com.pizzora.backend.core.redis.ResilientRateLimiter
 import com.pizzora.backend.core.security.JwtTokenProvider
 import com.pizzora.backend.core.security.PasswordHasher
+import com.pizzora.backend.coupons.CouponService
+import com.pizzora.backend.coupons.couponsRoutes
 import com.pizzora.backend.images.ObjectStorageClient
 import com.pizzora.backend.images.ProductImagesService
 import com.pizzora.backend.images.S3ObjectStorageClient
 import com.pizzora.backend.images.productImagesRoutes
+import com.pizzora.backend.pricing.PricingService
+import com.pizzora.backend.pricing.pricingRoutes
 import com.pizzora.backend.users.UsersService
 import com.pizzora.backend.users.usersRoutes
 import com.pizzora.contracts.ApiErrorDetail
@@ -228,6 +232,14 @@ fun Application.pizzoraModule(
         dataSource = dataSource,
         publicUrlResolver = storageClient::publicUrlFor,
       )
+      val couponService = CouponService(
+        dataSource = dataSource,
+      )
+      val pricingService = PricingService(
+        dataSource = dataSource,
+        couponService = couponService,
+        publicUrlResolver = storageClient::publicUrlFor,
+      )
 
       authRoutes(authService, wsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
@@ -235,6 +247,8 @@ fun Application.pizzoraModule(
       catalogRoutes(catalogService, authorizationService)
       productImagesRoutes(productImagesService, authorizationService)
       cartRoutes(cartService, authorizationService)
+      couponsRoutes(couponService, authorizationService)
+      pricingRoutes(pricingService, authorizationService)
     }
 
     extraRoutes()

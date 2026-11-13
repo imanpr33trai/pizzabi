@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.auth.AuthViewModel
 import com.example.cart.CartViewModel
 import com.example.catalog.CustomerCatalogViewModel
+import com.example.checkout.CheckoutQuoteViewModel
 import com.example.navigation.PizzoraApp
 
 class MainActivity : ComponentActivity() {
@@ -20,10 +21,12 @@ class MainActivity : ComponentActivity() {
       val authViewModel: AuthViewModel = viewModel(factory = container.authViewModelFactory())
       val catalogViewModel: CustomerCatalogViewModel = viewModel(factory = container.customerCatalogViewModelFactory())
       val cartViewModel: CartViewModel = viewModel(factory = container.cartViewModelFactory())
+      val checkoutQuoteViewModel: CheckoutQuoteViewModel = viewModel(factory = container.checkoutQuoteViewModelFactory())
       PizzoraApp(
         authViewModel = authViewModel,
         catalogViewModel = catalogViewModel,
         cartViewModel = cartViewModel,
+        checkoutQuoteViewModel = checkoutQuoteViewModel,
       )
     }
   }

@@ -140,6 +140,16 @@ object OpenApiSpec {
       putJsonObject("/api/v1/cart/validate") {
         putJsonObject("post") { put("summary", "Validate local offline cart items against server catalog and prices") }
       }
+      putJsonObject("/api/v1/coupons/available") {
+        putJsonObject("get") { put("summary", "List active non-expired coupons with customer usage limits and eligibility") }
+      }
+      putJsonObject("/api/v1/pricing/quote") {
+        putJsonObject("post") { put("summary", "Compute authoritative integer-paise price breakdown (subtotal, discount, delivery fee, CGST/SGST, total)") }
+      }
+      putJsonObject("/api/v1/owner/coupons") {
+        putJsonObject("get") { put("summary", "List all coupons (Owner)") }
+        putJsonObject("post") { put("summary", "Create promotional coupon (Owner)") }
+      }
     }
   }
 }

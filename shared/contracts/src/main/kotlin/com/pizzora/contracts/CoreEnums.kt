@@ -143,3 +143,13 @@ enum class RefundStatus {
   @SerialName("FAILED")
   FAILED,
 }
+
+@Serializable
+enum class DiscountType {
+  @SerialName("PERCENT_BPS")
+  PERCENT_BPS,
+
+  @SerialName("FLAT_PAISE")
+  FLAT_PAISE,
+}
+

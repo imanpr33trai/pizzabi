@@ -60,7 +60,7 @@ class CartViewModel(
     )
   }.stateIn(
     scope = viewModelScope,
-    started = SharingStarted.WhileSubscribed(5_000),
+    started = SharingStarted.Eagerly,
     initialValue = CartUiState(),
   )
 
@@ -110,6 +110,24 @@ class CartViewModel(
     viewModelScope.launch {
       val result = cartRepository.clearCart()
       syncState.update { it.copy(isOffline = result.isOffline, statusMessage = null) }
+    }
+  }
+
+  fun syncOnSessionActive() {
+    viewModelScope.launch {
+      syncState.update { it.copy(isSyncing = true) }
+      val result = cartRepository.syncAndValidateCart(persistToServer = true)
+      syncState.update {
+        it.copy(
+          isSyncing = false,
+          isOffline = result.isOffline,
+          statusMessage = if (!result.isOffline && result.unavailableCount > 0) {
+            "${result.unavailableCount} cart item(s) need attention."
+          } else {
+            null
+          },
+        )
+      }
     }
   }
 

@@ -16,8 +16,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Sync
@@ -25,14 +28,17 @@ import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -41,9 +47,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.checkout.CheckoutQuoteUiState
+import com.example.checkout.CouponPickerSheet
+import com.example.checkout.PriceBreakdownCard
 import com.example.core.database.CartItemWithToppings
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
+import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.Money
 
 @Composable
@@ -55,7 +65,25 @@ fun CartScreen(
   onValidateAndSync: () -> Unit,
   onBrowseMenu: () -> Unit,
   modifier: Modifier = Modifier,
+  quoteState: CheckoutQuoteUiState? = null,
+  onFulfillmentTypeChange: (FulfillmentType) -> Unit = {},
+  onPincodeInputChange: (String) -> Unit = {},
+  onCheckPincode: () -> Unit = {},
+  onCouponInputChange: (String) -> Unit = {},
+  onApplyCoupon: (String) -> Unit = {},
+  onRemoveCoupon: () -> Unit = {},
+  onOpenCouponPicker: () -> Unit = {},
+  onDismissCouponPicker: () -> Unit = {},
 ) {
+  if (quoteState?.isCouponSheetOpen == true) {
+    CouponPickerSheet(
+      coupons = quoteState.availableCoupons,
+      isLoading = quoteState.isLoadingCoupons,
+      onSelectCoupon = onApplyCoupon,
+      onDismiss = onDismissCouponPicker,
+    )
+  }
+
   Column(
     modifier = modifier.fillMaxSize().testTag("cart_screen"),
     horizontalAlignment = Alignment.CenterHorizontally,
@@ -172,6 +200,54 @@ fun CartScreen(
             onRemove = { onRemoveItem(entry.item.id) },
           )
         }
+
+        if (quoteState != null) {
+          item(key = "fulfillment_zone_card") {
+            FulfillmentAndPincodeCard(
+              quoteState = quoteState,
+              onFulfillmentTypeChange = onFulfillmentTypeChange,
+              onPincodeInputChange = onPincodeInputChange,
+              onCheckPincode = onCheckPincode,
+            )
+          }
+
+          item(key = "promo_coupon_card") {
+            PromoCouponCard(
+              quoteState = quoteState,
+              onCouponInputChange = onCouponInputChange,
+              onApplyCoupon = onApplyCoupon,
+              onRemoveCoupon = onRemoveCoupon,
+              onOpenCouponPicker = onOpenCouponPicker,
+            )
+          }
+
+          if (!quoteState.quoteError.isNullOrBlank()) {
+            item(key = "quote_error_banner") {
+              Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth().testTag("quote_error_text"),
+              ) {
+                Text(
+                  text = quoteState.quoteError,
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onErrorContainer,
+                  modifier = Modifier.padding(12.dp),
+                )
+              }
+            }
+          }
+
+          quoteState.quote?.let { quote ->
+            item(key = "price_breakdown_card") {
+              PriceBreakdownCard(
+                breakdown = quote.breakdown,
+                appliedCouponCode = quote.appliedCoupon?.code,
+                isLoading = quoteState.isLoadingQuote,
+              )
+            }
+          }
+        }
       }
     }
 
@@ -226,6 +302,186 @@ fun CartScreen(
             }
           }
         }
+      }
+    }
+  }
+}
+
+@Composable
+private fun FulfillmentAndPincodeCard(
+  quoteState: CheckoutQuoteUiState,
+  onFulfillmentTypeChange: (FulfillmentType) -> Unit,
+  onPincodeInputChange: (String) -> Unit,
+  onCheckPincode: () -> Unit,
+) {
+  Card(
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+    modifier = Modifier.fillMaxWidth().testTag("fulfillment_card"),
+  ) {
+    Column(
+      modifier = Modifier.fillMaxWidth().padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        FilterChip(
+          selected = quoteState.fulfillmentType == FulfillmentType.DELIVERY,
+          onClick = { onFulfillmentTypeChange(FulfillmentType.DELIVERY) },
+          label = { Text(stringResource(R.string.fulfillment_delivery)) },
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("fulfillment_delivery_chip"),
+        )
+        FilterChip(
+          selected = quoteState.fulfillmentType == FulfillmentType.PICKUP,
+          onClick = { onFulfillmentTypeChange(FulfillmentType.PICKUP) },
+          label = { Text(stringResource(R.string.fulfillment_pickup)) },
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("fulfillment_pickup_chip"),
+        )
+      }
+
+      if (quoteState.fulfillmentType == FulfillmentType.DELIVERY) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          OutlinedTextField(
+            value = quoteState.pincodeInput,
+            onValueChange = onPincodeInputChange,
+            label = { Text(stringResource(R.string.pincode_label)) },
+            singleLine = true,
+            modifier = Modifier.weight(1f).testTag("delivery_pincode_input"),
+          )
+          OutlinedButton(
+            onClick = onCheckPincode,
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("check_pincode_button"),
+          ) {
+            Text(stringResource(R.string.action_check))
+          }
+        }
+        quoteState.quote?.deliveryZone?.let { zone ->
+          Text(
+            text = "${zone.areaName} (${zone.pincode}) • ETA ${zone.estimatedMins} mins",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.testTag("delivery_zone_summary_text"),
+          )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PromoCouponCard(
+  quoteState: CheckoutQuoteUiState,
+  onCouponInputChange: (String) -> Unit,
+  onApplyCoupon: (String) -> Unit,
+  onRemoveCoupon: () -> Unit,
+  onOpenCouponPicker: () -> Unit,
+) {
+  Card(
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+    modifier = Modifier.fillMaxWidth().testTag("promo_coupon_card"),
+  ) {
+    Column(
+      modifier = Modifier.fillMaxWidth().padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Filled.LocalOffer,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+          )
+          Text(stringResource(R.string.promo_code_title), style = MaterialTheme.typography.titleMedium)
+        }
+        TextButton(
+          onClick = onOpenCouponPicker,
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("open_coupon_picker_button"),
+        ) {
+          Text(stringResource(R.string.action_view_offers))
+        }
+      }
+
+      val applied = quoteState.appliedCouponCode
+      if (!applied.isNullOrBlank()) {
+        Surface(
+          color = MaterialTheme.colorScheme.secondaryContainer,
+          shape = MaterialTheme.shapes.small,
+          modifier = Modifier.fillMaxWidth().testTag("applied_coupon_banner"),
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(18.dp),
+              )
+              Text(
+                text = applied,
+                style = PizzoraMonoTitle,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.testTag("applied_coupon_code_text"),
+              )
+            }
+            IconButton(
+              onClick = onRemoveCoupon,
+              modifier = Modifier.minimumInteractiveComponentSize().testTag("remove_coupon_button"),
+            ) {
+              Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_remove))
+            }
+          }
+        }
+      } else {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          OutlinedTextField(
+            value = quoteState.couponInput,
+            onValueChange = onCouponInputChange,
+            placeholder = { Text(stringResource(R.string.promo_code_hint)) },
+            singleLine = true,
+            modifier = Modifier.weight(1f).testTag("coupon_code_input"),
+          )
+          Button(
+            onClick = { onApplyCoupon(quoteState.couponInput) },
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("apply_coupon_button"),
+          ) {
+            Text(stringResource(R.string.action_apply))
+          }
+        }
+      }
+
+      if (!quoteState.couponError.isNullOrBlank()) {
+        Text(
+          text = quoteState.couponError,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.error,
+          modifier = Modifier.testTag("coupon_error_text"),
+        )
       }
     }
   }

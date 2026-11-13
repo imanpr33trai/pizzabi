@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/pizzora_icon_foreground_1794575456263"
+        android:drawable="@drawable/pizzora_icon_foreground_1794583066130"
         android:gravity="center" />
 </layer-list>

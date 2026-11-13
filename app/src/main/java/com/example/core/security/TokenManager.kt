@@ -16,6 +16,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -92,6 +93,7 @@ class AndroidKeystoreTokenCipher(
 interface TokenStorage {
   val sessionFlow: StateFlow<AuthSession?>
   fun currentSession(): AuthSession?
+  suspend fun awaitSession(): AuthSession? = currentSession()
   suspend fun saveSession(session: AuthSession)
   suspend fun clearSession()
   fun observeKdsSoundMuted(): Flow<Boolean>
@@ -110,15 +112,28 @@ class TokenManager(
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val _session = MutableStateFlow<AuthSession?>(null)
+  private val initialLoadDone = CompletableDeferred<Unit>()
   override val sessionFlow: StateFlow<AuthSession?> = _session.asStateFlow()
 
   init {
     scope.launch {
-      _session.value = readPersistedSession()
+      try {
+        val persisted = readPersistedSession()
+        if (_session.value == null && persisted != null) {
+          _session.value = persisted
+        }
+      } finally {
+        initialLoadDone.complete(Unit)
+      }
     }
   }
 
   override fun currentSession(): AuthSession? = _session.value
+
+  override suspend fun awaitSession(): AuthSession? {
+    initialLoadDone.await()
+    return _session.value
+  }
 
   override suspend fun saveSession(session: AuthSession) {
     _session.value = session

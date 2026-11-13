@@ -49,4 +49,19 @@
     <string name="cart_browse_menu">Browse Menu</string>
     <string name="cart_validate_sync">Validate &amp; Sync</string>
     <string name="cart_item_unavailable_fallback">One or more selected options are unavailable.</string>
+    <string name="fulfillment_delivery">Delivery</string>
+    <string name="fulfillment_pickup">Pickup</string>
+    <string name="pincode_label">Delivery Pincode</string>
+    <string name="action_check">Check</string>
+    <string name="promo_code_title">Promo Coupon</string>
+    <string name="promo_code_hint">Enter coupon code</string>
+    <string name="action_apply">Apply</string>
+    <string name="action_view_offers">Browse Offers</string>
+    <string name="coupon_sheet_title">Available Offers &amp; Coupons</string>
+    <string name="coupon_sheet_empty">No active coupons right now. Check back soon!</string>
+    <string name="price_breakdown_title">Bill Breakdown</string>
+    <string name="label_subtotal">Item Subtotal</string>
+    <string name="label_coupon_discount">Coupon Discount</string>
+    <string name="label_delivery_fee">Delivery Fee</string>
+    <string name="label_payable_total">Total Payable</string>
 </resources>
