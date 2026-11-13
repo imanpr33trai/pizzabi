@@ -1,0 +1,71 @@
+package com.example.core.di
+
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import com.example.BuildConfig
+import com.example.auth.AuthRepository
+import com.example.auth.AuthViewModel
+import com.example.auth.NetworkAuthRepository
+import com.example.catalog.CatalogRepository
+import com.example.catalog.NetworkCatalogRepository
+import com.example.core.database.PizzoraDatabase
+import com.example.core.media.ImageCompressor
+import com.example.core.media.ProductImageUploader
+import com.example.core.network.PizzoraApiClient
+import com.example.core.security.TokenManager
+import com.example.core.security.TokenStorage
+
+class AppContainer(context: Context) {
+  private val appContext = context.applicationContext
+
+  val database: PizzoraDatabase by lazy {
+    PizzoraDatabase.build(appContext)
+  }
+
+  val tokenStorage: TokenStorage by lazy {
+    TokenManager(appContext)
+  }
+
+  val apiClient: PizzoraApiClient by lazy {
+    PizzoraApiClient(
+      baseUrl = BuildConfig.API_BASE_URL,
+      tokenStorage = tokenStorage,
+    )
+  }
+
+  val authRepository: AuthRepository by lazy {
+    NetworkAuthRepository(
+      apiClient = apiClient,
+      tokenStorage = tokenStorage,
+    )
+  }
+
+  val catalogRepository: CatalogRepository by lazy {
+    NetworkCatalogRepository(
+      apiClient = apiClient,
+      catalogCacheDao = database.catalogCacheDao(),
+    )
+  }
+
+  val imageCompressor: ImageCompressor by lazy {
+    ImageCompressor()
+  }
+
+  val productImageUploader: ProductImageUploader by lazy {
+    ProductImageUploader(
+      apiClient = apiClient,
+      imageCompressor = imageCompressor,
+    )
+  }
+
+  fun authViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(AuthViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return AuthViewModel(authRepository) as T
+    }
+  }
+}

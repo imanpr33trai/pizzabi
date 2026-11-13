@@ -1,0 +1,149 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pizzora-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pizzora}
+      POSTGRES_USER: ${DATABASE_USER:-pizzora}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-pizzora_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pizzora_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-pizzora} -d ${POSTGRES_DB:-pizzora}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: pizzora-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - pizzora_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-02-28T09-55-16Z
+    container_name: pizzora-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-pizzora_minio_admin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-pizzora_minio_dev_secret}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - pizzora_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-02-21T16-00-46Z
+    container_name: pizzora-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-pizzora_minio_admin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-pizzora_minio_dev_secret}
+      S3_BUCKET: ${S3_BUCKET:-pizzora-product-images}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set pizzora http://minio:9000 $$S3_ACCESS_KEY $$S3_SECRET_KEY &&
+      mc mb --ignore-existing pizzora/$$S3_BUCKET &&
+      mc anonymous set download pizzora/$$S3_BUCKET;
+      "
+
+  mailpit:
+    image: axllent/mailpit:v1.22
+    container_name: pizzora-mailpit
+    ports:
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    container_name: pizzora-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PIZZORA_ENV: ${PIZZORA_ENV:-development}
+      PORT: "8080"
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-pizzora}
+      DATABASE_USER: ${DATABASE_USER:-pizzora}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-pizzora_dev_password}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-pizzora-product-images}
+      S3_REGION: ${S3_REGION:-ap-south-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-pizzora_minio_admin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-pizzora_minio_dev_secret}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-http://localhost:9000/pizzora-product-images}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-before-production-32bytes}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health/live >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    container_name: pizzora-worker
+    command: ["java", "-cp", "/app/libs/*", "com.pizzora.backend.worker.WorkerMainKt"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PIZZORA_ENV: ${PIZZORA_ENV:-development}
+      WORKER_HEALTH_PORT: "8081"
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-pizzora}
+      DATABASE_USER: ${DATABASE_USER:-pizzora}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-pizzora_dev_password}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-pizzora-product-images}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health/worker >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  adminer:
+    image: adminer:4
+    container_name: pizzora-adminer
+    profiles: ["tools"]
+    ports:
+      - "${ADMINER_PORT:-8082}:8080"
+
+volumes:
+  pizzora_pgdata:
+  pizzora_redis:
+  pizzora_minio:

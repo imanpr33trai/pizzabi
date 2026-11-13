@@ -1,0 +1,16 @@
+FROM gradle:9.3.1-jdk17 AS builder
+WORKDIR /workspace
+
+COPY settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY gradle ./gradle
+COPY shared ./shared
+COPY backend ./backend
+
+RUN gradle :backend:installDist --no-daemon
+
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /workspace/backend/build/install/backend/lib /app/libs
+
+EXPOSE 8080 8081
+CMD ["java", "-cp", "/app/libs/*", "com.pizzora.backend.ApplicationKt"]

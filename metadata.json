@@ -1,0 +1,6 @@
+{
+  "name": "PIZZORA",
+  "description": "Artisanal pizza ordering, Kitchen Display System (KDS), and self-hosted restaurant operations platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
