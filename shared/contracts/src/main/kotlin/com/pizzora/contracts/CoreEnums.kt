@@ -153,3 +153,70 @@ enum class DiscountType {
   FLAT_PAISE,
 }
 
+@Serializable
+enum class IngredientUnit {
+  @SerialName("GRAMS")
+  GRAMS,
+
+  @SerialName("ML")
+  ML,
+
+  @SerialName("UNITS")
+  UNITS,
+}
+
+@Serializable
+enum class InventoryLedgerReason {
+  @SerialName("RESTOCK")
+  RESTOCK,
+
+  @SerialName("RESERVE")
+  RESERVE,
+
+  @SerialName("COMMIT")
+  COMMIT,
+
+  @SerialName("RELEASE")
+  RELEASE,
+
+  @SerialName("EXPIRE_RELEASE")
+  EXPIRE_RELEASE,
+
+  @SerialName("CANCEL_RESTORE")
+  CANCEL_RESTORE,
+
+  @SerialName("MANUAL_ADJUST")
+  MANUAL_ADJUST,
+}
+
+@Serializable
+enum class InventoryReservationStatus {
+  @SerialName("ACTIVE")
+  ACTIVE,
+
+  @SerialName("COMMITTED")
+  COMMITTED,
+
+  @SerialName("RELEASED")
+  RELEASED,
+
+  @SerialName("EXPIRED")
+  EXPIRED,
+
+  @SerialName("RESTORED")
+  RESTORED,
+}
+
+@Serializable
+enum class RecipeTargetType {
+  @SerialName("VARIANT")
+  VARIANT,
+
+  @SerialName("CRUST")
+  CRUST,
+
+  @SerialName("TOPPING")
+  TOPPING,
+}
+
+

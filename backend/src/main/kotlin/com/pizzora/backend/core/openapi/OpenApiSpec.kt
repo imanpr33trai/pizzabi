@@ -150,6 +150,20 @@ object OpenApiSpec {
         putJsonObject("get") { put("summary", "List all coupons (Owner)") }
         putJsonObject("post") { put("summary", "Create promotional coupon (Owner)") }
       }
+      putJsonObject("/api/v1/owner/inventory") {
+        putJsonObject("get") { put("summary", "List all ingredients with on-hand, reserved, and generated available stock (Owner)") }
+        putJsonObject("post") { put("summary", "Create ingredient with initial stock and ledger entry (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/inventory/adjust") {
+        putJsonObject("post") { put("summary", "Idempotently restock or adjust ingredient stock guarded by unique operation_id (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/inventory/ledger") {
+        putJsonObject("get") { put("summary", "List immutable append-only inventory ledger movements (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/recipes") {
+        putJsonObject("get") { put("summary", "List relational ingredient recipes for variants, crusts, and toppings (Owner)") }
+        putJsonObject("put") { put("summary", "Replace relational ingredient recipe for a variant, crust, or topping (Owner)") }
+      }
     }
   }
 }

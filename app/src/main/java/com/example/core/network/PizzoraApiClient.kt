@@ -2,6 +2,7 @@ package com.example.core.network
 
 import com.example.core.security.AuthSession
 import com.example.core.security.TokenStorage
+import com.pizzora.contracts.AdjustInventoryRequest
 import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.AuthTokensResponse
 import com.pizzora.contracts.AvailableCouponsResponse
@@ -11,8 +12,11 @@ import com.pizzora.contracts.ConfirmProductImageRequest
 import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
 import com.pizzora.contracts.CreateCouponRequest
+import com.pizzora.contracts.CreateIngredientRequest
 import com.pizzora.contracts.CreateProductRequest
 import com.pizzora.contracts.ForgotPasswordRequest
+import com.pizzora.contracts.InventoryItemDto
+import com.pizzora.contracts.InventoryLedgerEntryDto
 import com.pizzora.contracts.LoginRequest
 import com.pizzora.contracts.MessageResponse
 import com.pizzora.contracts.PresignProductImageRequest
@@ -22,6 +26,9 @@ import com.pizzora.contracts.PricingQuoteResponse
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductImageDto
 import com.pizzora.contracts.PublicMenuResponse
+import com.pizzora.contracts.PutRecipeRequest
+import com.pizzora.contracts.RecipeBindingDto
+import com.pizzora.contracts.RecipesOverviewResponse
 import com.pizzora.contracts.RefreshTokenRequest
 import com.pizzora.contracts.RegisterRequest
 import com.pizzora.contracts.ReplaceCartRequest
@@ -376,6 +383,49 @@ class PizzoraApiClient(
     if (!response.status.isSuccess()) {
       throwDecodedError(response)
     }
+  }
+
+  suspend fun getOwnerInventory(): List<InventoryItemDto> {
+    val response = httpClient.get("/api/v1/owner/inventory")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createIngredient(request: CreateIngredientRequest): InventoryItemDto {
+    val response = httpClient.post("/api/v1/owner/inventory") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun adjustInventory(request: AdjustInventoryRequest): InventoryItemDto {
+    val response = httpClient.post("/api/v1/owner/inventory/adjust") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getInventoryLedger(ingredientId: String? = null, limit: Int = 50): List<InventoryLedgerEntryDto> {
+    val params = buildList {
+      if (!ingredientId.isNullOrBlank()) add("ingredient_id=$ingredientId")
+      add("limit=$limit")
+    }.joinToString("&")
+    val response = httpClient.get("/api/v1/owner/inventory/ledger?$params")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerRecipes(): RecipesOverviewResponse {
+    val response = httpClient.get("/api/v1/owner/recipes")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun putOwnerRecipe(request: PutRecipeRequest): RecipeBindingDto {
+    val response = httpClient.put("/api/v1/owner/recipes") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
   }
 
   private suspend inline fun <reified T> decodeOrThrow(response: HttpResponse): T {

@@ -34,8 +34,12 @@ import com.pizzora.backend.images.ObjectStorageClient
 import com.pizzora.backend.images.ProductImagesService
 import com.pizzora.backend.images.S3ObjectStorageClient
 import com.pizzora.backend.images.productImagesRoutes
+import com.pizzora.backend.inventory.InventoryService
+import com.pizzora.backend.inventory.inventoryRoutes
 import com.pizzora.backend.pricing.PricingService
 import com.pizzora.backend.pricing.pricingRoutes
+import com.pizzora.backend.recipes.RecipeService
+import com.pizzora.backend.recipes.recipesRoutes
 import com.pizzora.backend.users.UsersService
 import com.pizzora.backend.users.usersRoutes
 import com.pizzora.contracts.ApiErrorDetail
@@ -240,6 +244,12 @@ fun Application.pizzoraModule(
         couponService = couponService,
         publicUrlResolver = storageClient::publicUrlFor,
       )
+      val inventoryService = InventoryService(
+        dataSource = dataSource,
+      )
+      val recipeService = RecipeService(
+        dataSource = dataSource,
+      )
 
       authRoutes(authService, wsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
@@ -249,6 +259,8 @@ fun Application.pizzoraModule(
       cartRoutes(cartService, authorizationService)
       couponsRoutes(couponService, authorizationService)
       pricingRoutes(pricingService, authorizationService)
+      inventoryRoutes(inventoryService, authorizationService)
+      recipesRoutes(recipeService, authorizationService)
     }
 
     extraRoutes()
