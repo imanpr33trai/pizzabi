@@ -21,8 +21,14 @@ import com.example.core.database.PizzoraDatabase
 import com.example.core.media.ImageCompressor
 import com.example.core.media.ProductImageUploader
 import com.example.core.network.PizzoraApiClient
+import com.example.core.network.WebSocketEventClient
 import com.example.core.security.TokenManager
 import com.example.core.security.TokenStorage
+import com.example.kds.KdsChimePlayer
+import com.example.kds.KdsRepository
+import com.example.kds.KdsViewModel
+import com.example.kds.NetworkKdsRepository
+import com.example.kds.ToneGeneratorKdsChimePlayer
 import com.example.orders.NetworkOrderRepository
 import com.example.orders.OrderRepository
 import com.example.orders.OrdersViewModel
@@ -43,6 +49,10 @@ class AppContainer(context: Context) {
       baseUrl = BuildConfig.API_BASE_URL,
       tokenStorage = tokenStorage,
     )
+  }
+
+  val webSocketEventClient: WebSocketEventClient by lazy {
+    WebSocketEventClient(apiClient = apiClient)
   }
 
   val authRepository: AuthRepository by lazy {
@@ -76,6 +86,16 @@ class AppContainer(context: Context) {
     NetworkOrderRepository(
       apiClient = apiClient,
     )
+  }
+
+  val kdsRepository: KdsRepository by lazy {
+    NetworkKdsRepository(
+      apiClient = apiClient,
+    )
+  }
+
+  val kdsChimePlayer: KdsChimePlayer by lazy {
+    ToneGeneratorKdsChimePlayer()
   }
 
   val imageCompressor: ImageCompressor by lazy {
@@ -145,7 +165,25 @@ class AppContainer(context: Context) {
       require(modelClass.isAssignableFrom(OrdersViewModel::class.java)) {
         "Unknown ViewModel class: ${modelClass.name}"
       }
-      return OrdersViewModel(orderRepository) as T
+      return OrdersViewModel(
+        orderRepository = orderRepository,
+        realtimeEventStream = webSocketEventClient,
+      ) as T
+    }
+  }
+
+  fun kdsViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(KdsViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return KdsViewModel(
+        kdsRepository = kdsRepository,
+        tokenStorage = tokenStorage,
+        chimePlayer = kdsChimePlayer,
+        realtimeEventStream = webSocketEventClient,
+      ) as T
     }
   }
 }

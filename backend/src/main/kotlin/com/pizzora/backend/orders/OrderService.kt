@@ -236,6 +236,168 @@ class OrderService(
     }
   }
 
+  suspend fun transitionOrderStatus(
+    orderId: UUID,
+    toStatus: OrderStatus,
+    actorUserId: UUID,
+    actorRole: UserRole,
+    reason: String? = null,
+    audit: AuditContext,
+    outboxEventType: String = "ORDER_STATUS_CHANGED",
+  ): OrderDetailDto {
+    if (toStatus == OrderStatus.CANCELLED) {
+      return cancelOrder(
+        orderId = orderId,
+        actorUserId = actorUserId,
+        actorRole = actorRole,
+        reason = reason,
+        audit = audit,
+      )
+    }
+
+    val cleanReason = reason?.trim()?.takeIf { it.isNotEmpty() }?.take(250)
+    return DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+      val lockedOrder = conn.prepareStatement(
+        """
+        SELECT id, customer_id, order_number, status, version, fulfillment_type
+        FROM orders
+        WHERE id = ?
+        FOR UPDATE
+        """.trimIndent(),
+      ).use { ps ->
+        ps.setObject(1, orderId)
+        ps.executeQuery().use { rs ->
+          if (!rs.next()) {
+            throw NotFoundException("ORDER_NOT_FOUND", "Order $orderId was not found.")
+          }
+          LockedOrderHeader(
+            id = rs.getObject("id", UUID::class.java),
+            customerId = rs.getObject("customer_id", UUID::class.java),
+            orderNumber = rs.getString("order_number"),
+            status = OrderStatus.valueOf(rs.getString("status")),
+            version = rs.getLong("version"),
+            fulfillmentType = FulfillmentType.valueOf(rs.getString("fulfillment_type")),
+          )
+        }
+      }
+
+      if (!OrderStateMachine.canTransition(lockedOrder.status, toStatus, lockedOrder.fulfillmentType, actorRole)) {
+        throw ConflictException(
+          "INVALID_ORDER_TRANSITION",
+          "Order ${lockedOrder.orderNumber} cannot transition from ${lockedOrder.status} to $toStatus (${lockedOrder.fulfillmentType}) by $actorRole.",
+        )
+      }
+
+      val newVersion = lockedOrder.version + 1L
+      val timestampSetClause = when (toStatus) {
+        OrderStatus.ACCEPTED -> ", accepted_at = COALESCE(accepted_at, NOW())"
+        OrderStatus.PREPARING -> ", prep_started_at = COALESCE(prep_started_at, NOW())"
+        OrderStatus.READY -> ", ready_at = COALESCE(ready_at, NOW())"
+        OrderStatus.COMPLETED -> ", completed_at = COALESCE(completed_at, NOW())"
+        else -> ""
+      }
+
+      conn.prepareStatement(
+        "UPDATE orders SET status = ?, version = ?$timestampSetClause WHERE id = ?",
+      ).use { ps ->
+        ps.setString(1, toStatus.name)
+        ps.setLong(2, newVersion)
+        ps.setObject(3, orderId)
+        ps.executeUpdate()
+      }
+
+      if (toStatus == OrderStatus.COMPLETED) {
+        val paymentRow = conn.prepareStatement(
+          "SELECT id, method, status, amount_paise FROM payments WHERE order_id = ? FOR UPDATE",
+        ).use { ps ->
+          ps.setObject(1, orderId)
+          ps.executeQuery().use { rs ->
+            if (!rs.next()) null
+            else Triple(
+              rs.getObject("id", UUID::class.java),
+              PaymentMethod.valueOf(rs.getString("method")),
+              PaymentStatus.valueOf(rs.getString("status")) to rs.getLong("amount_paise"),
+            )
+          }
+        }
+        if (paymentRow != null && paymentRow.second == PaymentMethod.COD && paymentRow.third.first == PaymentStatus.COD_PENDING) {
+          conn.prepareStatement(
+            "UPDATE payments SET status = 'COD_COLLECTED', captured_paise = ?, updated_at = NOW() WHERE id = ?",
+          ).use { ps ->
+            ps.setLong(1, paymentRow.third.second)
+            ps.setObject(2, paymentRow.first)
+            ps.executeUpdate()
+          }
+          conn.prepareStatement(
+            """
+            UPDATE payment_attempts
+            SET status = 'CAPTURED', collected_by_user_id = ?, updated_at = NOW()
+            WHERE payment_id = ? AND status = 'AWAITING_CUSTOMER_PAYMENT'
+            """.trimIndent(),
+          ).use { ps ->
+            ps.setObject(1, actorUserId)
+            ps.setObject(2, paymentRow.first)
+            ps.executeUpdate()
+          }
+        }
+      }
+
+      conn.prepareStatement(
+        """
+        INSERT INTO order_status_history (id, order_id, from_status, to_status, changed_by, reason)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """.trimIndent(),
+      ).use { ps ->
+        ps.setObject(1, UUID.randomUUID())
+        ps.setObject(2, orderId)
+        ps.setString(3, lockedOrder.status.name)
+        ps.setString(4, toStatus.name)
+        ps.setObject(5, actorUserId)
+        if (cleanReason != null) ps.setString(6, cleanReason) else ps.setNull(6, Types.VARCHAR)
+        ps.executeUpdate()
+      }
+
+      val detail = loadOrderDetail(conn, orderId)!!
+      val statusPayload = buildJsonObject {
+        put("order_id", orderId.toString())
+        put("order_number", lockedOrder.orderNumber)
+        put("customer_id", lockedOrder.customerId.toString())
+        put("fulfillment_type", lockedOrder.fulfillmentType.name)
+        put("from_status", lockedOrder.status.name)
+        put("to_status", toStatus.name)
+        put("status", toStatus.name)
+        put("is_priority", detail.isPriority)
+        put("changed_by", actorUserId.toString())
+        if (cleanReason != null) put("reason", cleanReason)
+        detail.acceptedAt?.let { put("accepted_at", it) }
+        detail.prepStartedAt?.let { put("prep_started_at", it) }
+        detail.readyAt?.let { put("ready_at", it) }
+        detail.completedAt?.let { put("completed_at", it) }
+      }.toString()
+
+      insertOutboxEvent(
+        conn = conn,
+        aggregateType = "ORDER",
+        aggregateId = orderId,
+        aggregateVersion = newVersion,
+        eventType = outboxEventType,
+        payloadJson = statusPayload,
+      )
+
+      AuditLogger.record(
+        conn = conn,
+        context = audit,
+        action = "ORDER_STATUS_CHANGED",
+        entityType = "order",
+        entityId = orderId.toString(),
+        beforeJson = "{\"status\":\"${lockedOrder.status.name}\",\"version\":${lockedOrder.version}}",
+        afterJson = "{\"status\":\"${toStatus.name}\",\"version\":$newVersion}",
+      )
+
+      detail
+    }
+  }
+
   private fun releaseScheduledSlotIfReserved(conn: Connection, orderId: UUID) {
     val slotRes = conn.prepareStatement(
       """

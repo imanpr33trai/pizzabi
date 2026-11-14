@@ -22,6 +22,7 @@ dependencies {
   implementation(libs.ktor.server.call.id)
   implementation(libs.ktor.server.default.headers)
   implementation(libs.ktor.server.auth)
+  implementation(libs.ktor.server.websockets)
   implementation(libs.ktor.serialization.kotlinx.json)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logback.classic)
@@ -39,6 +40,8 @@ dependencies {
   implementation(libs.angus.mail)
 
   testImplementation(libs.ktor.server.test.host)
+  testImplementation(libs.ktor.client.websockets)
+  testImplementation(libs.ktor.client.content.negotiation)
   testImplementation(libs.junit)
   testImplementation(libs.embedded.postgres)
 }

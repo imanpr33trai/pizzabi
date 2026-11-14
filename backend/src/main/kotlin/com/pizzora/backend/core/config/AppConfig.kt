@@ -11,6 +11,7 @@ data class AppConfig(
   val smtp: SmtpConfig,
   val auth: AuthConfig,
   val worker: WorkerConfig,
+  val razorpay: RazorpayConfig = RazorpayConfig(),
 ) {
   companion object {
     fun fromEnv(env: Map<String, String> = System.getenv()): AppConfig {
@@ -73,6 +74,13 @@ data class AppConfig(
           sequencerPollMs = env["WORKER_SEQUENCER_POLL_MS"]?.toLongOrNull() ?: 150L,
           dispatcherPollMs = env["WORKER_DISPATCHER_POLL_MS"]?.toLongOrNull() ?: 150L,
           expirySweepMs = env["WORKER_EXPIRY_SWEEP_MS"]?.toLongOrNull() ?: 15_000L,
+          reconcilerPollMs = env["WORKER_RECONCILER_POLL_MS"]?.toLongOrNull() ?: 30_000L,
+        ),
+        razorpay = RazorpayConfig(
+          keyId = env["RAZORPAY_KEY_ID"] ?: "",
+          keySecret = env["RAZORPAY_KEY_SECRET"] ?: "",
+          webhookSecret = env["RAZORPAY_WEBHOOK_SECRET"] ?: "",
+          baseUrl = (env["RAZORPAY_BASE_URL"] ?: "https://api.razorpay.com/v1").trimEnd('/'),
         ),
       )
     }
@@ -138,4 +146,12 @@ data class WorkerConfig(
   val sequencerPollMs: Long,
   val dispatcherPollMs: Long,
   val expirySweepMs: Long,
+  val reconcilerPollMs: Long = 30_000L,
+)
+
+data class RazorpayConfig(
+  val keyId: String = "",
+  val keySecret: String = "",
+  val webhookSecret: String = "",
+  val baseUrl: String = "https://api.razorpay.com/v1",
 )

@@ -48,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -80,10 +81,14 @@ import com.example.checkout.CheckoutQuoteViewModel
 import com.example.checkout.CheckoutScreen
 import com.example.checkout.CheckoutViewModel
 import com.example.core.security.AuthSession
+import com.example.kds.KdsScreen
+import com.example.kds.KdsViewModel
 import com.example.orders.OrdersScreen
 import com.example.orders.OrdersViewModel
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
+import com.pizzora.contracts.OrderStatus
+import com.pizzora.contracts.PaymentMethod
 import com.pizzora.contracts.UserRole
 import kotlinx.serialization.Serializable
 
@@ -116,6 +121,7 @@ fun PizzoraApp(
   checkoutQuoteViewModel: CheckoutQuoteViewModel? = null,
   checkoutViewModel: CheckoutViewModel? = null,
   ordersViewModel: OrdersViewModel? = null,
+  kdsViewModel: KdsViewModel? = null,
 ) {
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -233,6 +239,7 @@ fun PizzoraApp(
         session?.let { active ->
           KdsRoleShell(
             session = active,
+            kdsViewModel = kdsViewModel,
             isMuted = kdsMuted,
             onToggleMute = { authViewModel.setKdsSoundMuted(!kdsMuted) },
             onSignOut = authViewModel::logout,
@@ -242,7 +249,11 @@ fun PizzoraApp(
 
       composable<OwnerShellRoute> {
         session?.let { active ->
-          OwnerRoleShell(session = active, onSignOut = authViewModel::logout)
+          OwnerRoleShell(
+            session = active,
+            kdsViewModel = kdsViewModel,
+            onSignOut = authViewModel::logout,
+          )
         }
       }
     }
@@ -283,6 +294,13 @@ fun CustomerRoleShell(
     ordersViewModel?.loadOrders()
   }
 
+  DisposableEffect(session.user.id, ordersViewModel) {
+    ordersViewModel?.startLiveTracking(session.user.id)
+    onDispose {
+      ordersViewModel?.stopLiveTracking()
+    }
+  }
+
   LaunchedEffect(cartViewModel) {
     cartViewModel?.events?.collect { message ->
       snackbarHostState.showSnackbar(message)
@@ -293,8 +311,13 @@ fun CustomerRoleShell(
     checkoutViewModel?.orderCreatedEvents?.collect { createdOrder ->
       isCheckoutOpen = false
       selectedIndex = 2
-      ordersViewModel?.showCreatedOrder(createdOrder)
-      snackbarHostState.showSnackbar("Order ${createdOrder.orderNumber} placed!")
+      val isPendingOnline = createdOrder.status == OrderStatus.PENDING_PAYMENT &&
+        createdOrder.payment.method == PaymentMethod.RAZORPAY
+      ordersViewModel?.showCreatedOrder(createdOrder, openPaymentFlowIfPending = isPendingOnline)
+      snackbarHostState.showSnackbar(
+        if (isPendingOnline) "Order ${createdOrder.orderNumber} reserved — complete online payment."
+        else "Order ${createdOrder.orderNumber} placed!",
+      )
     }
   }
 
@@ -447,6 +470,11 @@ fun CustomerRoleShell(
               onBackToList = ordersViewModel::clearSelectedOrder,
               onCancelOrder = ordersViewModel::cancelSelectedOrder,
               onBrowseMenu = { selectedIndex = 0 },
+              onOpenPaymentSheet = ordersViewModel::openPaymentSheet,
+              onDismissPaymentSheet = ordersViewModel::dismissPaymentSheet,
+              onRetryPayment = { ordersViewModel.retryPayment() },
+              onVerifyRazorpayPayment = ordersViewModel::verifyRazorpayPayment,
+              onReportPaymentFailure = ordersViewModel::reportPaymentFailure,
               modifier = Modifier.weight(1f),
             )
           }
@@ -492,10 +520,34 @@ private fun CustomerTabIcon(
 @Composable
 fun KdsRoleShell(
   session: AuthSession,
+  kdsViewModel: KdsViewModel? = null,
   isMuted: Boolean,
   onToggleMute: () -> Unit,
   onSignOut: () -> Unit,
 ) {
+  if (kdsViewModel != null) {
+    val kdsState by kdsViewModel.uiState.collectAsStateWithLifecycle()
+    DisposableEffect(session.user.id, kdsViewModel) {
+      kdsViewModel.startBoard(session.user.id)
+      onDispose {
+        kdsViewModel.stopBoard()
+      }
+    }
+    KdsScreen(
+      uiState = kdsState,
+      operatorName = session.user.fullName,
+      onSelectFilter = kdsViewModel::setFilterTab,
+      onToggleIncludeCompleted = kdsViewModel::toggleIncludeCompleted,
+      onToggleMute = kdsViewModel::toggleMute,
+      onRefresh = { kdsViewModel.refreshTickets(silent = false) },
+      onAdvanceStage = kdsViewModel::advanceTicketStage,
+      onTogglePriority = kdsViewModel::togglePriority,
+      onSignOut = onSignOut,
+      modifier = Modifier.testTag("kds_shell_root"),
+    )
+    return
+  }
+
   Scaffold(
     modifier = Modifier.fillMaxSize().testTag("kds_shell_root"),
     contentWindowInsets = WindowInsets.safeDrawing,
@@ -548,6 +600,7 @@ fun KdsRoleShell(
 @Composable
 fun OwnerRoleShell(
   session: AuthSession,
+  kdsViewModel: KdsViewModel? = null,
   onSignOut: () -> Unit,
 ) {
   val tabs = listOf(
@@ -558,6 +611,33 @@ fun OwnerRoleShell(
     "More" to Icons.Filled.MoreHoriz,
   )
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+  var isKdsViewOpen by rememberSaveable { mutableStateOf(false) }
+
+  if (isKdsViewOpen && kdsViewModel != null) {
+    androidx.activity.compose.BackHandler {
+      isKdsViewOpen = false
+    }
+    val kdsState by kdsViewModel.uiState.collectAsStateWithLifecycle()
+    DisposableEffect(session.user.id, kdsViewModel) {
+      kdsViewModel.startBoard(session.user.id)
+      onDispose {
+        kdsViewModel.stopBoard()
+      }
+    }
+    KdsScreen(
+      uiState = kdsState,
+      operatorName = session.user.fullName,
+      onSelectFilter = kdsViewModel::setFilterTab,
+      onToggleIncludeCompleted = kdsViewModel::toggleIncludeCompleted,
+      onToggleMute = kdsViewModel::toggleMute,
+      onRefresh = { kdsViewModel.refreshTickets(silent = false) },
+      onAdvanceStage = kdsViewModel::advanceTicketStage,
+      onTogglePriority = kdsViewModel::togglePriority,
+      onBackClick = { isKdsViewOpen = false },
+      modifier = Modifier.testTag("owner_kds_overlay"),
+    )
+    return
+  }
 
   BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("owner_shell_root")) {
     val useRail = maxWidth >= 600.dp
@@ -567,6 +647,14 @@ fun OwnerRoleShell(
         TopAppBar(
           title = { Text(stringResource(R.string.role_owner_title), style = MaterialTheme.typography.headlineSmall) },
           actions = {
+            if (kdsViewModel != null) {
+              IconButton(
+                onClick = { isKdsViewOpen = true },
+                modifier = Modifier.minimumInteractiveComponentSize().testTag("owner_open_kds_button"),
+              ) {
+                Icon(Icons.Filled.Kitchen, contentDescription = stringResource(R.string.kds_open_from_owner))
+              }
+            }
             IconButton(
               onClick = onSignOut,
               modifier = Modifier.minimumInteractiveComponentSize().testTag("shell_sign_out_button"),

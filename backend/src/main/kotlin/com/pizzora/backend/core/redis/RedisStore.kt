@@ -3,6 +3,8 @@ package com.pizzora.backend.core.redis
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.api.StatefulRedisConnection
+import io.lettuce.core.pubsub.RedisPubSubAdapter
+import io.lettuce.core.pubsub.StatefulRedisPubSubConnection
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,6 +19,8 @@ interface EphemeralCacheStore {
   suspend fun getDel(key: String): String?
   suspend fun del(key: String): Boolean
   suspend fun incrementWithinWindow(key: String, windowSeconds: Long): Long?
+  suspend fun publish(channel: String, message: String): Boolean = false
+  fun subscribe(channel: String, onMessage: (String) -> Unit): AutoCloseable = AutoCloseable {}
 }
 
 class LettuceRedisStore(
@@ -99,6 +103,38 @@ class LettuceRedisStore(
     }.onFailure {
       logger.warn("Redis INCR failed key={}", key, it)
     }.getOrNull()
+  }
+
+  override suspend fun publish(channel: String, message: String): Boolean = withContext(Dispatchers.IO) {
+    runCatching {
+      val sync = getOrConnect()?.sync() ?: return@runCatching false
+      sync.publish(channel, message)
+      true
+    }.onFailure {
+      logger.warn("Redis PUBLISH failed channel={}", channel, it)
+    }.getOrDefault(false)
+  }
+
+  override fun subscribe(channel: String, onMessage: (String) -> Unit): AutoCloseable {
+    val c = client ?: return AutoCloseable {}
+    val pubSubConn: StatefulRedisPubSubConnection<String, String>? = runCatching {
+      c.connectPubSub().also { conn ->
+        conn.addListener(
+          object : RedisPubSubAdapter<String, String>() {
+            override fun message(ch: String, message: String) {
+              if (ch == channel) {
+                runCatching { onMessage(message) }
+                  .onFailure { err -> logger.warn("Redis PubSub handler error channel={}", channel, err) }
+              }
+            }
+          },
+        )
+        conn.sync().subscribe(channel)
+      }
+    }.onFailure { err ->
+      logger.warn("Redis PubSub subscribe unavailable channel={}; relying on replay polling", channel, err)
+    }.getOrNull()
+    return AutoCloseable { runCatching { pubSubConn?.close() } }
   }
 
   override fun close() {

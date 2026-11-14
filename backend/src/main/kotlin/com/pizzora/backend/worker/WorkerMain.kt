@@ -1,6 +1,14 @@
 package com.pizzora.backend.worker
 
 import com.pizzora.backend.core.config.AppConfig
+import com.pizzora.backend.core.db.DatabaseFactory
+import com.pizzora.backend.core.redis.LettuceRedisStore
+import com.pizzora.backend.coupons.CouponService
+import com.pizzora.backend.inventory.InventoryService
+import com.pizzora.backend.orders.OrderService
+import com.pizzora.backend.payments.PaymentService
+import com.pizzora.backend.razorpay.createDefaultRazorpayGateway
+import com.pizzora.backend.realtime.RedisRealtimeEventDispatcher
 import com.pizzora.contracts.DependencyHealthStatus
 import com.pizzora.contracts.HealthReadinessResponse
 import com.pizzora.contracts.ReadinessState
@@ -14,12 +22,10 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -35,16 +41,51 @@ fun main() {
     config.worker.healthPort,
   )
 
-  val heartbeatJob = supervisorScope.launch {
-    while (isActive) {
-      try {
-        delay(config.worker.expirySweepMs)
-      } catch (cancel: CancellationException) {
-        throw cancel
-      } catch (t: Throwable) {
-        logger.error("Worker supervision loop error", t)
-      }
-    }
+  val dataSource = DatabaseFactory.createDataSource(config.database)
+  val dbHandle = DatabaseFactory.migrateAndConnect(dataSource)
+  val redisStore = LettuceRedisStore(config.redis.url)
+  val razorpayGateway = createDefaultRazorpayGateway(config)
+  val inventoryService = InventoryService(dataSource)
+  val couponService = CouponService(dataSource)
+  val orderService = OrderService(dataSource, inventoryService, couponService)
+  val paymentService = PaymentService(
+    dataSource = dataSource,
+    inventoryService = inventoryService,
+    couponService = couponService,
+    orderService = orderService,
+    razorpayConfig = config.razorpay,
+    publicKeyIdProvider = { razorpayGateway.publicKeyId },
+  )
+
+  val sequencerWorker = EventSequencerWorker(dataSource = dataSource)
+  val dispatcherWorker = OutboxDispatcherWorker(
+    dataSource = dataSource,
+    razorpayGateway = razorpayGateway,
+    realtimeDispatcher = RedisRealtimeEventDispatcher(redisStore),
+  )
+  val expirySweepWorker = ExpirySweepWorker(
+    dataSource = dataSource,
+    inventoryService = inventoryService,
+    couponService = couponService,
+    orderService = orderService,
+  )
+  val reconciliationWorker = RazorpayReconciliationWorker(
+    dataSource = dataSource,
+    razorpayGateway = razorpayGateway,
+    paymentService = paymentService,
+  )
+
+  val sequencerJob = supervisorScope.launch {
+    sequencerWorker.runLoop(config.worker.sequencerPollMs)
+  }
+  val dispatcherJob = supervisorScope.launch {
+    dispatcherWorker.runLoop(config.worker.dispatcherPollMs)
+  }
+  val expiryJob = supervisorScope.launch {
+    expirySweepWorker.runLoop(config.worker.expirySweepMs)
+  }
+  val reconcilerJob = supervisorScope.launch {
+    reconciliationWorker.runLoop(config.worker.reconcilerPollMs)
   }
 
   val healthServer = embeddedServer(
@@ -57,8 +98,14 @@ fun main() {
   Runtime.getRuntime().addShutdownHook(
     Thread {
       logger.info("Shutting down PIZZORA background worker gracefully")
-      heartbeatJob.cancel()
+      sequencerJob.cancel()
+      dispatcherJob.cancel()
+      expiryJob.cancel()
+      reconcilerJob.cancel()
+      supervisorScope.cancel()
       healthServer.stop(gracePeriodMillis = 1_000L, timeoutMillis = 5_000L)
+      redisStore.close()
+      dbHandle.close()
     },
   )
 

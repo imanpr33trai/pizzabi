@@ -176,6 +176,54 @@ object OpenApiSpec {
       putJsonObject("/api/v1/orders/{id}/cancel") {
         putJsonObject("post") { put("summary", "Cancel order if allowed by OrderStateMachine with atomic stock/slot restoration and refund enqueueing") }
       }
+      putJsonObject("/api/v1/orders/{id}/payment") {
+        putJsonObject("get") { put("summary", "Poll order payment status, active gateway_order_id, retry eligibility, and refunds") }
+      }
+      putJsonObject("/api/v1/orders/{id}/payments/retry") {
+        putJsonObject("post") { put("summary", "Create a new payment attempt and enqueue PAYMENT_GATEWAY_ORDER_REQUESTED outbox event") }
+      }
+      putJsonObject("/api/v1/orders/{id}/payments/fail") {
+        putJsonObject("post") { put("summary", "Report failed Razorpay attempt while keeping PENDING_PAYMENT order retryable") }
+      }
+      putJsonObject("/api/v1/payments/razorpay/verify") {
+        putJsonObject("post") { put("summary", "Verify Razorpay HMAC-SHA256 checkout signature and capture payment atomically") }
+      }
+      putJsonObject("/api/v1/webhooks/razorpay") {
+        putJsonObject("post") { put("summary", "Handle Razorpay signed webhooks (payment.captured, payment.failed, refund.processed, refund.failed)") }
+      }
+      putJsonObject("/api/v1/owner/orders/{id}/refund") {
+        putJsonObject("post") { put("summary", "Initiate or idempotently retry full/partial Razorpay refund (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/orders/{id}/status") {
+        putJsonObject("patch") { put("summary", "Transition order lifecycle status with version increment and ORDER_STATUS_CHANGED outbox event (Owner)") }
+      }
+      putJsonObject("/api/v1/kds/tickets") {
+        putJsonObject("get") { put("summary", "List active kitchen display tickets sorted by priority and FIFO with server_now clock sync (KITCHEN_STAFF / OWNER)") }
+      }
+      putJsonObject("/api/v1/kds/orders/{id}/ack") {
+        putJsonObject("post") { put("summary", "Acknowledge placed order (PLACED -> ACCEPTED) and emit KITCHEN_ACKNOWLEDGED outbox event") }
+      }
+      putJsonObject("/api/v1/kds/orders/{id}/start-prep") {
+        putJsonObject("post") { put("summary", "Start oven preparation (ACCEPTED -> PREPARING)") }
+      }
+      putJsonObject("/api/v1/kds/orders/{id}/ready") {
+        putJsonObject("post") { put("summary", "Mark order ready for pickup or dispatch (PREPARING -> READY)") }
+      }
+      putJsonObject("/api/v1/kds/orders/{id}/dispatch") {
+        putJsonObject("post") { put("summary", "Dispatch delivery order out for delivery (READY -> OUT_FOR_DELIVERY)") }
+      }
+      putJsonObject("/api/v1/kds/orders/{id}/complete") {
+        putJsonObject("post") { put("summary", "Complete pickup/delivery order (READY/OUT_FOR_DELIVERY -> COMPLETED) and settle COD collection") }
+      }
+      putJsonObject("/api/v1/kds/orders/{id}/priority") {
+        putJsonObject("patch") { put("summary", "Toggle expedited kitchen priority flag with version bump and ORDER_PRIORITY_CHANGED event") }
+      }
+      putJsonObject("/api/v1/events/replay") {
+        putJsonObject("get") { put("summary", "Replay room-authorized sequenced realtime events since stream_seq with server_high_water_seq cursor") }
+      }
+      putJsonObject("/ws/v1/events") {
+        putJsonObject("get") { put("summary", "WebSocket event stream authenticated via single-use ws-ticket or Bearer JWT with room isolation and replay") }
+      }
     }
   }
 }

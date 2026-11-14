@@ -7,14 +7,17 @@ import com.pizzora.backend.authorization.requirePermission
 import com.pizzora.backend.core.error.UnauthorizedException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.contracts.CancelOrderRequest
+import com.pizzora.contracts.TransitionOrderStatusRequest
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.callid.callId
+import io.ktor.server.request.receive
 import io.ktor.server.request.receiveNullable
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import java.util.UUID
@@ -55,6 +58,31 @@ fun Route.ordersRoutes(
             actorUserId = principal.userId,
             actorRole = principal.role,
             reason = request?.reason,
+            audit = audit,
+          )
+          call.respond(HttpStatusCode.OK, updated)
+        }
+      }
+    }
+
+    route("/api/v1/owner/orders") {
+      requirePermission("owner:orders_manage", authorizationService) {
+        patch("/{id}/status") {
+          val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+          val orderId = parseUuid(call.parameters["id"], "order_id")
+          val body = call.receive<TransitionOrderStatusRequest>()
+          val audit = AuditContext(
+            actorUserId = principal.userId,
+            actorRole = principal.role.name,
+            correlationId = call.callId ?: UUID.randomUUID().toString(),
+            ipAddress = call.request.local.remoteAddress,
+          )
+          val updated = orderService.transitionOrderStatus(
+            orderId = orderId,
+            toStatus = body.toStatus,
+            actorUserId = principal.userId,
+            actorRole = principal.role,
+            reason = body.reason,
             audit = audit,
           )
           call.respond(HttpStatusCode.OK, updated)

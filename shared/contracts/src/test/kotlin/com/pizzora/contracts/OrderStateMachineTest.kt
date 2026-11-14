@@ -1,6 +1,8 @@
 package com.pizzora.contracts
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -86,5 +88,16 @@ class OrderStateMachineTest {
         actorRole = null,
       ),
     )
+  }
+
+  @Test
+  fun `nextKdsStatus follows linear delivery and pickup paths`() {
+    assertEquals(OrderStatus.ACCEPTED, OrderStateMachine.nextKdsStatus(OrderStatus.PLACED, FulfillmentType.DELIVERY))
+    assertEquals(OrderStatus.PREPARING, OrderStateMachine.nextKdsStatus(OrderStatus.ACCEPTED, FulfillmentType.DELIVERY))
+    assertEquals(OrderStatus.READY, OrderStateMachine.nextKdsStatus(OrderStatus.PREPARING, FulfillmentType.DELIVERY))
+    assertEquals(OrderStatus.OUT_FOR_DELIVERY, OrderStateMachine.nextKdsStatus(OrderStatus.READY, FulfillmentType.DELIVERY))
+    assertEquals(OrderStatus.COMPLETED, OrderStateMachine.nextKdsStatus(OrderStatus.READY, FulfillmentType.PICKUP))
+    assertEquals(OrderStatus.COMPLETED, OrderStateMachine.nextKdsStatus(OrderStatus.OUT_FOR_DELIVERY, FulfillmentType.DELIVERY))
+    assertNull(OrderStateMachine.nextKdsStatus(OrderStatus.COMPLETED, FulfillmentType.DELIVERY))
   }
 }

@@ -38,10 +38,20 @@ import com.pizzora.backend.images.S3ObjectStorageClient
 import com.pizzora.backend.images.productImagesRoutes
 import com.pizzora.backend.inventory.InventoryService
 import com.pizzora.backend.inventory.inventoryRoutes
+import com.pizzora.backend.kitchen.KitchenService
+import com.pizzora.backend.kitchen.kitchenRoutes
 import com.pizzora.backend.orders.OrderService
 import com.pizzora.backend.orders.ordersRoutes
+import com.pizzora.backend.payments.PaymentService
+import com.pizzora.backend.payments.paymentsRoutes
 import com.pizzora.backend.pricing.PricingService
 import com.pizzora.backend.pricing.pricingRoutes
+import com.pizzora.backend.razorpay.RazorpayGateway
+import com.pizzora.backend.razorpay.WebhookService
+import com.pizzora.backend.razorpay.createDefaultRazorpayGateway
+import com.pizzora.backend.realtime.RealtimeEventService
+import com.pizzora.backend.realtime.RealtimeHub
+import com.pizzora.backend.realtime.realtimeRoutes
 import com.pizzora.backend.recipes.RecipeService
 import com.pizzora.backend.recipes.recipesRoutes
 import com.pizzora.backend.users.UsersService
@@ -55,8 +65,12 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.AuthenticationContext
+import io.ktor.server.auth.AuthenticationFailedCause
+import io.ktor.server.auth.AuthenticationProvider
 import io.ktor.server.auth.bearer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -67,9 +81,13 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.pingPeriod
+import io.ktor.server.websocket.timeout
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -139,6 +157,8 @@ fun Application.pizzoraModule(
   cacheStore: EphemeralCacheStore? = null,
   emailDeliveryProvider: EmailDeliveryProvider? = null,
   objectStorageClient: ObjectStorageClient? = null,
+  razorpayGateway: RazorpayGateway? = null,
+  realtimeHub: RealtimeHub? = null,
   passwordHasher: PasswordHasher = PasswordHasher(),
   extraRoutes: Routing.() -> Unit = {},
 ) {
@@ -146,6 +166,7 @@ fun Application.pizzoraModule(
   val effectiveCacheStore = cacheStore ?: NoOpCacheStore
   val jwtTokenProvider = JwtTokenProvider(config.auth)
   val authorizationService = dataSource?.let { AuthorizationService(it, effectiveCacheStore) }
+  val wsTicketService = dataSource?.let { WsTicketService(it, effectiveCacheStore, config.auth) }
 
   install(DefaultHeaders) {
     header(HttpHeaders.CacheControl, "no-store")
@@ -159,6 +180,12 @@ fun Application.pizzoraModule(
         encodeDefaults = true
       },
     )
+  }
+
+  install(WebSockets) {
+    pingPeriod = 15.seconds
+    timeout = 30.seconds
+    maxFrameSize = Long.MAX_VALUE
   }
 
   installStructuredLogging()
@@ -178,6 +205,52 @@ fun Application.pizzoraModule(
           )
         }
       }
+
+      register(
+        object : AuthenticationProvider(object : Config("auth-ws") {}) {
+          override suspend fun onAuthenticate(context: AuthenticationContext) {
+            val call = context.call
+            val ticket = call.request.queryParameters["ticket"]?.trim()?.takeIf { it.isNotEmpty() }
+            val bearer = call.request.headers[HttpHeaders.Authorization]
+              ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+              ?.substring(7)
+              ?.trim()
+              ?.takeIf { it.isNotEmpty() }
+
+            val principal: PizzoraPrincipal? = when {
+              ticket != null -> wsTicketService?.consumeTicket(ticket)
+              bearer != null -> {
+                val claims = jwtTokenProvider.verifyAccessToken(bearer)
+                if (claims != null && authorizationService.isSessionActive(claims.userId, claims.sessionId)) {
+                  PizzoraPrincipal(claims.userId, claims.sessionId, claims.role)
+                } else {
+                  null
+                }
+              }
+              else -> null
+            }
+
+            if (principal != null) {
+              context.principal(principal)
+            } else {
+              context.challenge("WsAuth", AuthenticationFailedCause.InvalidCredentials) { challenge, challengeCall ->
+                challengeCall.respond(
+                  HttpStatusCode.Unauthorized,
+                  ApiErrorEnvelope(
+                    error = ApiErrorDetail(
+                      code = "UNAUTHORIZED",
+                      message = "Valid ws-ticket or Bearer access token is required to connect to /ws/v1/events.",
+                    ),
+                    correlationId = challengeCall.callId ?: UUID.randomUUID().toString(),
+                    timestamp = Instant.now().toString(),
+                  ),
+                )
+                challenge.complete()
+              }
+            }
+          }
+        },
+      )
     }
   }
 
@@ -211,7 +284,7 @@ fun Application.pizzoraModule(
         emailDeliveryProvider = emailProvider,
         authConfig = config.auth,
       )
-      val wsTicketService = WsTicketService(
+      val resolvedWsTicketService = wsTicketService ?: WsTicketService(
         dataSource = dataSource,
         cacheStore = effectiveCacheStore,
         authConfig = config.auth,
@@ -259,6 +332,10 @@ fun Application.pizzoraModule(
         inventoryService = inventoryService,
         couponService = couponService,
       )
+      val kitchenService = KitchenService(
+        dataSource = dataSource,
+        orderService = orderService,
+      )
       val checkoutService = CheckoutService(
         dataSource = dataSource,
         couponService = couponService,
@@ -266,8 +343,29 @@ fun Application.pizzoraModule(
         recipeService = recipeService,
         orderService = orderService,
       )
+      val effectiveRazorpayGateway = razorpayGateway ?: createDefaultRazorpayGateway(config)
+      val paymentService = PaymentService(
+        dataSource = dataSource,
+        inventoryService = inventoryService,
+        couponService = couponService,
+        orderService = orderService,
+        razorpayConfig = config.razorpay,
+        publicKeyIdProvider = { effectiveRazorpayGateway.publicKeyId },
+      )
+      val webhookService = WebhookService(
+        dataSource = dataSource,
+        paymentService = paymentService,
+        razorpayConfig = config.razorpay,
+      )
+      val effectiveRealtimeHub = (realtimeHub ?: RealtimeHub(effectiveCacheStore)).also {
+        it.startPubSubListenerIfConfigured()
+      }
+      monitor.subscribe(ApplicationStopped) {
+        effectiveRealtimeHub.close()
+      }
+      val realtimeEventService = RealtimeEventService(dataSource)
 
-      authRoutes(authService, wsTicketService, rateLimiter)
+      authRoutes(authService, resolvedWsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
       categoriesRoutes(categoriesService, authorizationService)
       catalogRoutes(catalogService, authorizationService)
@@ -279,6 +377,12 @@ fun Application.pizzoraModule(
       recipesRoutes(recipeService, authorizationService)
       checkoutRoutes(checkoutService, authorizationService)
       ordersRoutes(orderService, authorizationService)
+      kitchenRoutes(kitchenService, authorizationService)
+      paymentsRoutes(paymentService, webhookService, authorizationService)
+      realtimeRoutes(
+        realtimeHub = effectiveRealtimeHub,
+        realtimeEventService = realtimeEventService,
+      )
     }
 
     extraRoutes()

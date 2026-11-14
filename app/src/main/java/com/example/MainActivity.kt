@@ -10,6 +10,7 @@ import com.example.cart.CartViewModel
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.checkout.CheckoutQuoteViewModel
 import com.example.checkout.CheckoutViewModel
+import com.example.kds.KdsViewModel
 import com.example.navigation.PizzoraApp
 import com.example.orders.OrdersViewModel
 
@@ -26,6 +27,7 @@ class MainActivity : ComponentActivity() {
       val checkoutQuoteViewModel: CheckoutQuoteViewModel = viewModel(factory = container.checkoutQuoteViewModelFactory())
       val checkoutViewModel: CheckoutViewModel = viewModel(factory = container.checkoutViewModelFactory())
       val ordersViewModel: OrdersViewModel = viewModel(factory = container.ordersViewModelFactory())
+      val kdsViewModel: KdsViewModel = viewModel(factory = container.kdsViewModelFactory())
       PizzoraApp(
         authViewModel = authViewModel,
         catalogViewModel = catalogViewModel,
@@ -33,6 +35,7 @@ class MainActivity : ComponentActivity() {
         checkoutQuoteViewModel = checkoutQuoteViewModel,
         checkoutViewModel = checkoutViewModel,
         ordersViewModel = ordersViewModel,
+        kdsViewModel = kdsViewModel,
       )
     }
   }

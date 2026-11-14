@@ -18,13 +18,19 @@ import com.pizzora.contracts.CreateCategoryRequest
 import com.pizzora.contracts.CreateCouponRequest
 import com.pizzora.contracts.CreateIngredientRequest
 import com.pizzora.contracts.CreateProductRequest
+import com.pizzora.contracts.EventsReplayResponse
+import com.pizzora.contracts.FailPaymentAttemptRequest
 import com.pizzora.contracts.ForgotPasswordRequest
 import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerEntryDto
+import com.pizzora.contracts.KdsActionRequest
+import com.pizzora.contracts.KdsTicketActionResponse
+import com.pizzora.contracts.KdsTicketsResponse
 import com.pizzora.contracts.LoginRequest
 import com.pizzora.contracts.MessageResponse
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderListResponse
+import com.pizzora.contracts.OrderPaymentStatusResponse
 import com.pizzora.contracts.PresignProductImageRequest
 import com.pizzora.contracts.PresignProductImageResponse
 import com.pizzora.contracts.PricingQuoteRequest
@@ -40,13 +46,18 @@ import com.pizzora.contracts.RegisterRequest
 import com.pizzora.contracts.ReplaceCartRequest
 import com.pizzora.contracts.ResendVerificationRequest
 import com.pizzora.contracts.ResetPasswordRequest
+import com.pizzora.contracts.RetryPaymentRequest
 import com.pizzora.contracts.UpdateCategoryRequest
 import com.pizzora.contracts.UpdateCouponRequest
+import com.pizzora.contracts.UpdateOrderPriorityRequest
 import com.pizzora.contracts.UpdateProductRequest
 import com.pizzora.contracts.UpsertAddressRequest
 import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.ValidateCartRequest
 import com.pizzora.contracts.VerifyEmailRequest
+import com.pizzora.contracts.VerifyRazorpayPaymentRequest
+import com.pizzora.contracts.VerifyRazorpayPaymentResponse
+import com.pizzora.contracts.WsTicketResponse
 import io.ktor.client.request.header
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
@@ -88,10 +99,12 @@ class PizzoraApiClient(
   engine: HttpClientEngine = OkHttp.create(),
 ) {
   private val normalizedBaseUrl = baseUrl.trimEnd('/')
+  val apiBaseUrl: String get() = normalizedBaseUrl
   private val json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
   }
+  val wireJson: Json get() = json
   private val refreshMutex = Mutex()
 
   // Separate client without Auth plugin to execute /auth/refresh without recursive 401 interception
@@ -474,6 +487,120 @@ class PizzoraApiClient(
       setBody(request)
     }
     return decodeOrThrow(response)
+  }
+
+  suspend fun getOrderPaymentStatus(orderId: String): OrderPaymentStatusResponse {
+    val response = httpClient.get("/api/v1/orders/$orderId/payment")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun retryOrderPayment(
+    orderId: String,
+    idempotencyKey: String,
+    request: RetryPaymentRequest = RetryPaymentRequest(),
+  ): OrderPaymentStatusResponse {
+    val response = httpClient.post("/api/v1/orders/$orderId/payments/retry") {
+      header("Idempotency-Key", idempotencyKey)
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun reportPaymentFailure(
+    orderId: String,
+    request: FailPaymentAttemptRequest,
+  ): OrderPaymentStatusResponse {
+    val response = httpClient.post("/api/v1/orders/$orderId/payments/fail") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun verifyRazorpayPayment(request: VerifyRazorpayPaymentRequest): VerifyRazorpayPaymentResponse {
+    val response = httpClient.post("/api/v1/payments/razorpay/verify") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getKdsTickets(includeCompleted: Boolean = false): KdsTicketsResponse {
+    val response = httpClient.get("/api/v1/kds/tickets?include_completed=$includeCompleted")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun ackKdsOrder(orderId: String, reason: String? = null): KdsTicketActionResponse {
+    val response = httpClient.post("/api/v1/kds/orders/$orderId/ack") {
+      contentType(ContentType.Application.Json)
+      setBody(KdsActionRequest(reason))
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun startPrepKdsOrder(orderId: String, reason: String? = null): KdsTicketActionResponse {
+    val response = httpClient.post("/api/v1/kds/orders/$orderId/start-prep") {
+      contentType(ContentType.Application.Json)
+      setBody(KdsActionRequest(reason))
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun markReadyKdsOrder(orderId: String, reason: String? = null): KdsTicketActionResponse {
+    val response = httpClient.post("/api/v1/kds/orders/$orderId/ready") {
+      contentType(ContentType.Application.Json)
+      setBody(KdsActionRequest(reason))
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun dispatchKdsOrder(orderId: String, reason: String? = null): KdsTicketActionResponse {
+    val response = httpClient.post("/api/v1/kds/orders/$orderId/dispatch") {
+      contentType(ContentType.Application.Json)
+      setBody(KdsActionRequest(reason))
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun completeKdsOrder(orderId: String, reason: String? = null): KdsTicketActionResponse {
+    val response = httpClient.post("/api/v1/kds/orders/$orderId/complete") {
+      contentType(ContentType.Application.Json)
+      setBody(KdsActionRequest(reason))
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateKdsOrderPriority(
+    orderId: String,
+    request: UpdateOrderPriorityRequest,
+  ): KdsTicketActionResponse {
+    val response = httpClient.patch("/api/v1/kds/orders/$orderId/priority") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun mintWsTicket(): WsTicketResponse {
+    val response = httpClient.post("/api/v1/auth/ws-ticket")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun replayEvents(sinceSeq: Long, limit: Int = 100): EventsReplayResponse {
+    val response = httpClient.get("/api/v1/events/replay?since_seq=$sinceSeq&limit=$limit")
+    return decodeOrThrow(response)
+  }
+
+  fun wsEventsUrl(ticket: String, sinceSeq: Long): String {
+    val wsBase = when {
+      normalizedBaseUrl.startsWith("https://", ignoreCase = true) ->
+        "wss://" + normalizedBaseUrl.removePrefix("https://")
+      normalizedBaseUrl.startsWith("http://", ignoreCase = true) ->
+        "ws://" + normalizedBaseUrl.removePrefix("http://")
+      else -> normalizedBaseUrl
+    }
+    return "$wsBase/ws/v1/events?ticket=$ticket&since_seq=$sinceSeq"
   }
 
   private suspend inline fun <reified T> decodeOrThrow(response: HttpResponse): T {

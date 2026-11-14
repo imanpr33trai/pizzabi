@@ -48,6 +48,20 @@ object OrderStateMachine {
     }
   }
 
+  fun nextKdsStatus(status: OrderStatus, fulfillmentType: FulfillmentType): OrderStatus? =
+    when (status) {
+      OrderStatus.PLACED -> OrderStatus.ACCEPTED
+      OrderStatus.ACCEPTED -> OrderStatus.PREPARING
+      OrderStatus.PREPARING -> OrderStatus.READY
+      OrderStatus.READY -> if (fulfillmentType == FulfillmentType.DELIVERY) {
+        OrderStatus.OUT_FOR_DELIVERY
+      } else {
+        OrderStatus.COMPLETED
+      }
+      OrderStatus.OUT_FOR_DELIVERY -> OrderStatus.COMPLETED
+      else -> null
+    }
+
   private fun isKitchenOrOwner(actorRole: UserRole?): Boolean =
     actorRole == UserRole.KITCHEN_STAFF || actorRole == UserRole.OWNER
 }
