@@ -154,4 +154,23 @@
     <string name="schedule_asap">ASAP</string>
     <string name="schedule_later">Schedule Slot (IST)</string>
     <string name="checkout_no_slots_for_date">No scheduled slots configured for this date. Choose ASAP or another date.</string>
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_cd">Notifications inbox</string>
+    <string name="notifications_empty_title">All caught up</string>
+    <string name="notifications_empty_subtitle">Order status alerts and wood-fired kitchen updates will appear here.</string>
+    <string name="notifications_mark_all_read">Mark all read</string>
+    <string name="notifications_mark_read">Mark read</string>
+    <string name="notifications_filter_all">All</string>
+    <string name="notifications_filter_unread">Unread (%1$d)</string>
+    <string name="notifications_preferences_title">Alert Preferences</string>
+    <string name="notifications_pref_order_updates">Order Updates</string>
+    <string name="notifications_pref_order_updates_desc">Receive live alerts when your pizza is accepted, baking, ready, or dispatched.</string>
+    <string name="notifications_pref_promo_alerts">Promo &amp; Offer Alerts</string>
+    <string name="notifications_pref_promo_alerts_desc">Seasonal menu specials and active coupon drops.</string>
+    <string name="notifications_pref_kds_sound">KDS Audio Chimes</string>
+    <string name="notifications_pref_kds_sound_desc">Play chime alerts for incoming kitchen display tickets.</string>
+    <string name="notifications_permission_title">Enable Order Alerts</string>
+    <string name="notifications_permission_body">Allow notifications on Android 13+ so background sync can alert you when your order enters the wood-fired oven or heads out for delivery.</string>
+    <string name="notifications_permission_enable">Enable Alerts</string>
+    <string name="notifications_permission_granted">System notifications enabled</string>
 </resources>

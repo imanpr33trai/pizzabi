@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.LocalPizza
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -57,6 +58,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -83,6 +85,9 @@ import com.example.checkout.CheckoutViewModel
 import com.example.core.security.AuthSession
 import com.example.kds.KdsScreen
 import com.example.kds.KdsViewModel
+import com.example.notifications.NotificationsScreen
+import com.example.notifications.NotificationsViewModel
+import com.example.notifications.OrderSyncScheduler
 import com.example.orders.OrdersScreen
 import com.example.orders.OrdersViewModel
 import com.example.owner.OwnerCatalogScreen
@@ -133,6 +138,9 @@ fun PizzoraApp(
   kdsViewModel: KdsViewModel? = null,
   ownerViewModel: OwnerViewModel? = null,
   profileViewModel: ProfileViewModel? = null,
+  notificationsViewModel: NotificationsViewModel? = null,
+  openNotificationsRequested: Boolean = false,
+  onNotificationsRequestHandled: () -> Unit = {},
 ) {
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -242,6 +250,9 @@ fun PizzoraApp(
             checkoutViewModel = checkoutViewModel,
             ordersViewModel = ordersViewModel,
             profileViewModel = profileViewModel,
+            notificationsViewModel = notificationsViewModel,
+            openNotificationsRequested = openNotificationsRequested,
+            onNotificationsRequestHandled = onNotificationsRequestHandled,
             onSignOut = authViewModel::logout,
           )
         }
@@ -265,6 +276,9 @@ fun PizzoraApp(
             session = active,
             kdsViewModel = kdsViewModel,
             ownerViewModel = ownerViewModel,
+            notificationsViewModel = notificationsViewModel,
+            openNotificationsRequested = openNotificationsRequested,
+            onNotificationsRequestHandled = onNotificationsRequestHandled,
             onSignOut = authViewModel::logout,
           )
         }
@@ -283,8 +297,12 @@ fun CustomerRoleShell(
   checkoutViewModel: CheckoutViewModel? = null,
   ordersViewModel: OrdersViewModel? = null,
   profileViewModel: ProfileViewModel? = null,
+  notificationsViewModel: NotificationsViewModel? = null,
+  openNotificationsRequested: Boolean = false,
+  onNotificationsRequestHandled: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
+  val context = LocalContext.current
   val tabs = listOf(
     "Menu" to Icons.Filled.LocalPizza,
     "Cart" to Icons.Filled.ShoppingCart,
@@ -293,11 +311,29 @@ fun CustomerRoleShell(
   )
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
   var isCheckoutOpen by rememberSaveable { mutableStateOf(false) }
+  var isNotificationsOpen by rememberSaveable { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
   val cartBadgeCount = if (cartViewModel != null) {
     cartViewModel.badgeCount.collectAsStateWithLifecycle().value
   } else {
     0
+  }
+  val unreadNotificationsCount = if (notificationsViewModel != null) {
+    notificationsViewModel.uiState.collectAsStateWithLifecycle().value.unreadCount
+  } else {
+    0
+  }
+
+  LaunchedEffect(openNotificationsRequested) {
+    if (openNotificationsRequested) {
+      isNotificationsOpen = true
+      onNotificationsRequestHandled()
+    }
+  }
+
+  LaunchedEffect(session.user.id, notificationsViewModel) {
+    OrderSyncScheduler.schedulePeriodicSync(context)
+    notificationsViewModel?.startSessionSync(session.user.id)
   }
 
   LaunchedEffect(session.user.id, cartViewModel) {
@@ -327,6 +363,12 @@ fun CustomerRoleShell(
     }
   }
 
+  LaunchedEffect(notificationsViewModel) {
+    notificationsViewModel?.events?.collect { message ->
+      snackbarHostState.showSnackbar(message)
+    }
+  }
+
   LaunchedEffect(checkoutViewModel, ordersViewModel) {
     checkoutViewModel?.orderCreatedEvents?.collect { createdOrder ->
       isCheckoutOpen = false
@@ -334,11 +376,30 @@ fun CustomerRoleShell(
       val isPendingOnline = createdOrder.status == OrderStatus.PENDING_PAYMENT &&
         createdOrder.payment.method == PaymentMethod.RAZORPAY
       ordersViewModel?.showCreatedOrder(createdOrder, openPaymentFlowIfPending = isPendingOnline)
+      OrderSyncScheduler.triggerExpeditedSync(context)
+      notificationsViewModel?.syncInbox()
       snackbarHostState.showSnackbar(
         if (isPendingOnline) "Order ${createdOrder.orderNumber} reserved — complete online payment."
         else "Order ${createdOrder.orderNumber} placed!",
       )
     }
+  }
+
+  if (isNotificationsOpen && notificationsViewModel != null) {
+    val notifState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
+    NotificationsScreen(
+      uiState = notifState,
+      onRefresh = notificationsViewModel::refreshAll,
+      onSelectUnreadOnly = notificationsViewModel::setUnreadOnlyFilter,
+      onMarkRead = notificationsViewModel::markAsRead,
+      onMarkAllRead = notificationsViewModel::markAllAsRead,
+      onToggleOrderUpdates = { enabled -> notificationsViewModel.updatePreferences(orderUpdates = enabled) },
+      onTogglePromoAlerts = { enabled -> notificationsViewModel.updatePreferences(promoAlerts = enabled) },
+      onNotificationPermissionResult = notificationsViewModel::onPermissionResult,
+      onBackClick = { isNotificationsOpen = false },
+      modifier = Modifier.fillMaxSize(),
+    )
+    return
   }
 
   BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("customer_shell_root")) {
@@ -350,6 +411,14 @@ fun CustomerRoleShell(
         TopAppBar(
           title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall) },
           actions = {
+            if (notificationsViewModel != null) {
+              IconButton(
+                onClick = { isNotificationsOpen = true },
+                modifier = Modifier.minimumInteractiveComponentSize().testTag("customer_notifications_button"),
+              ) {
+                NotificationBellIcon(unreadCount = unreadNotificationsCount)
+              }
+            }
             IconButton(
               onClick = onSignOut,
               modifier = Modifier.minimumInteractiveComponentSize().testTag("shell_sign_out_button"),
@@ -680,8 +749,12 @@ fun OwnerRoleShell(
   session: AuthSession,
   kdsViewModel: KdsViewModel? = null,
   ownerViewModel: OwnerViewModel? = null,
+  notificationsViewModel: NotificationsViewModel? = null,
+  openNotificationsRequested: Boolean = false,
+  onNotificationsRequestHandled: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
+  val context = LocalContext.current
   val tabs = listOf(
     "Dashboard" to Icons.Filled.Dashboard,
     "Catalog" to Icons.Filled.RestaurantMenu,
@@ -691,10 +764,34 @@ fun OwnerRoleShell(
   )
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
   var isKdsViewOpen by rememberSaveable { mutableStateOf(false) }
+  var isNotificationsOpen by rememberSaveable { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
+  val unreadNotificationsCount = if (notificationsViewModel != null) {
+    notificationsViewModel.uiState.collectAsStateWithLifecycle().value.unreadCount
+  } else {
+    0
+  }
+
+  LaunchedEffect(openNotificationsRequested) {
+    if (openNotificationsRequested) {
+      isNotificationsOpen = true
+      onNotificationsRequestHandled()
+    }
+  }
+
+  LaunchedEffect(session.user.id, notificationsViewModel) {
+    OrderSyncScheduler.schedulePeriodicSync(context)
+    notificationsViewModel?.startSessionSync(session.user.id)
+  }
 
   LaunchedEffect(ownerViewModel) {
     ownerViewModel?.events?.collect { message ->
+      snackbarHostState.showSnackbar(message)
+    }
+  }
+
+  LaunchedEffect(notificationsViewModel) {
+    notificationsViewModel?.events?.collect { message ->
       snackbarHostState.showSnackbar(message)
     }
   }
@@ -708,6 +805,24 @@ fun OwnerRoleShell(
       3 -> if (vm.uiState.value.dashboard == null) vm.loadDashboard()
       4 -> vm.loadStaffAndSettings()
     }
+  }
+
+  if (isNotificationsOpen && notificationsViewModel != null) {
+    val notifState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
+    NotificationsScreen(
+      uiState = notifState,
+      onRefresh = notificationsViewModel::refreshAll,
+      onSelectUnreadOnly = notificationsViewModel::setUnreadOnlyFilter,
+      onMarkRead = notificationsViewModel::markAsRead,
+      onMarkAllRead = notificationsViewModel::markAllAsRead,
+      onToggleOrderUpdates = { enabled -> notificationsViewModel.updatePreferences(orderUpdates = enabled) },
+      onTogglePromoAlerts = { enabled -> notificationsViewModel.updatePreferences(promoAlerts = enabled) },
+      onToggleKdsSound = { enabled -> notificationsViewModel.updatePreferences(kdsSoundEnabled = enabled) },
+      onNotificationPermissionResult = notificationsViewModel::onPermissionResult,
+      onBackClick = { isNotificationsOpen = false },
+      modifier = Modifier.fillMaxSize(),
+    )
+    return
   }
 
   if (isKdsViewOpen && kdsViewModel != null) {
@@ -745,6 +860,14 @@ fun OwnerRoleShell(
         TopAppBar(
           title = { Text(stringResource(R.string.role_owner_title), style = MaterialTheme.typography.headlineSmall) },
           actions = {
+            if (notificationsViewModel != null) {
+              IconButton(
+                onClick = { isNotificationsOpen = true },
+                modifier = Modifier.minimumInteractiveComponentSize().testTag("owner_notifications_button"),
+              ) {
+                NotificationBellIcon(unreadCount = unreadNotificationsCount)
+              }
+            }
             if (kdsViewModel != null) {
               IconButton(
                 onClick = { isKdsViewOpen = true },
@@ -869,6 +992,27 @@ fun OwnerRoleShell(
         }
       }
     }
+  }
+}
+
+@Composable
+private fun NotificationBellIcon(unreadCount: Int) {
+  val cd = stringResource(R.string.notifications_cd)
+  if (unreadCount > 0) {
+    BadgedBox(
+      badge = {
+        Badge {
+          Text(
+            text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+            modifier = Modifier.testTag("notifications_unread_badge"),
+          )
+        }
+      },
+    ) {
+      Icon(Icons.Filled.Notifications, contentDescription = cd)
+    }
+  } else {
+    Icon(Icons.Filled.Notifications, contentDescription = cd)
   }
 }
 

@@ -29,6 +29,11 @@ import com.example.kds.KdsRepository
 import com.example.kds.KdsViewModel
 import com.example.kds.NetworkKdsRepository
 import com.example.kds.ToneGeneratorKdsChimePlayer
+import com.example.notifications.NetworkNotificationRepository
+import com.example.notifications.NotificationHelper
+import com.example.notifications.NotificationRepository
+import com.example.notifications.NotificationsViewModel
+import com.example.notifications.PizzoraWorkerFactory
 import com.example.orders.NetworkOrderRepository
 import com.example.orders.OrderRepository
 import com.example.orders.OrdersViewModel
@@ -126,6 +131,25 @@ class AppContainer(context: Context) {
     NetworkProfileRepository(apiClient = apiClient)
   }
 
+  val notificationHelper: NotificationHelper by lazy {
+    NotificationHelper(appContext)
+  }
+
+  val notificationRepository: NotificationRepository by lazy {
+    NetworkNotificationRepository(
+      apiClient = apiClient,
+      notificationInboxDao = database.notificationInboxDao(),
+    )
+  }
+
+  val workerFactory: PizzoraWorkerFactory by lazy {
+    PizzoraWorkerFactory(
+      notificationRepositoryProvider = { notificationRepository },
+      tokenStorageProvider = { tokenStorage },
+      notificationPosterProvider = { notificationHelper },
+    )
+  }
+
   fun authViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -221,6 +245,21 @@ class AppContainer(context: Context) {
         "Unknown ViewModel class: ${modelClass.name}"
       }
       return ProfileViewModel(profileRepository = profileRepository) as T
+    }
+  }
+
+  fun notificationsViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(NotificationsViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return NotificationsViewModel(
+        repository = notificationRepository,
+        tokenStorage = tokenStorage,
+        realtimeEventStream = webSocketEventClient,
+        notificationPoster = notificationHelper,
+      ) as T
     }
   }
 }

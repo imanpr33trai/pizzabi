@@ -255,6 +255,19 @@ object OpenApiSpec {
         putJsonObject("get") { put("summary", "List scheduled slots with capacity usage (Owner)") }
         putJsonObject("post") { put("summary", "Create Asia/Kolkata scheduled order time slot (Owner)") }
       }
+      putJsonObject("/api/v1/notifications") {
+        putJsonObject("get") { put("summary", "List user notification inbox with optional unread=true filter and mark PENDING->SYNCED") }
+      }
+      putJsonObject("/api/v1/notifications/{id}/read") {
+        putJsonObject("post") { put("summary", "Mark a user notification as read (IDOR-enforced)") }
+      }
+      putJsonObject("/api/v1/notifications/read-all") {
+        putJsonObject("post") { put("summary", "Mark all unread notifications for the authenticated user as read") }
+      }
+      putJsonObject("/api/v1/notifications/preferences") {
+        putJsonObject("get") { put("summary", "Fetch notification preferences (order_updates, promo_alerts, kds_sound_enabled)") }
+        putJsonObject("put") { put("summary", "Update notification preferences for authenticated user") }
+      }
     }
   }
 }

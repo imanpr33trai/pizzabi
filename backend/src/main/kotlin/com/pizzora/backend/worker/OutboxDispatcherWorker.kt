@@ -3,12 +3,18 @@ package com.pizzora.backend.worker
 import com.pizzora.backend.audit.AuditContext
 import com.pizzora.backend.audit.AuditLogger
 import com.pizzora.backend.core.db.DatabaseFactory
+import com.pizzora.backend.notifications.NotificationDeliveryException
+import com.pizzora.backend.notifications.NotificationDeliveryProvider
+import com.pizzora.backend.notifications.NotificationDispatchRequest
+import com.pizzora.backend.notifications.NotificationService
+import com.pizzora.backend.notifications.WebSocketInboxNotificationDeliveryProvider
 import com.pizzora.backend.payments.PaymentService
 import com.pizzora.backend.razorpay.RazorpayGateway
 import com.pizzora.backend.razorpay.RazorpayGatewayException
 import com.pizzora.backend.realtime.DispatchedRealtimeEvent
 import com.pizzora.backend.realtime.RealtimeEventDispatcher
 import com.pizzora.backend.realtime.RealtimeEventMapper
+import com.pizzora.contracts.NotificationDeliveryStatus
 import com.pizzora.contracts.PaymentAttemptStatus
 import com.pizzora.contracts.PaymentStatus
 import com.pizzora.contracts.RefundStatus
@@ -36,6 +42,7 @@ class OutboxDispatcherWorker(
   private val maxAttempts: Int = 5,
   private val batchSize: Int = 10,
   private val realtimeDispatcher: RealtimeEventDispatcher = RealtimeEventDispatcher { false },
+  private val notificationDeliveryProvider: NotificationDeliveryProvider = WebSocketInboxNotificationDeliveryProvider(),
 ) {
   private val logger = LoggerFactory.getLogger(OutboxDispatcherWorker::class.java)
   private val json = Json { ignoreUnknownKeys = true }
@@ -720,30 +727,76 @@ class OutboxDispatcherWorker(
         continue
       }
 
-      DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
-        if (mapped.inboxNotifications.isNotEmpty()) {
-          val deliveryStatus = if (deliveredLive) "SENT_WS" else "PENDING"
-          conn.prepareStatement(
-            """
-            INSERT INTO notification_inbox (
-              id, user_id, event_id, title, body, category, reference_id, delivery_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (user_id, event_id) DO NOTHING
-            """.trimIndent(),
-          ).use { ps ->
-            for (notif in mapped.inboxNotifications) {
-              ps.setObject(1, UUID.randomUUID())
-              ps.setObject(2, notif.userId)
-              ps.setObject(3, notif.eventId)
-              ps.setString(4, notif.title)
-              ps.setString(5, notif.body)
-              ps.setString(6, notif.category)
-              if (notif.referenceId != null) ps.setObject(7, notif.referenceId) else ps.setNull(7, Types.OTHER)
-              ps.setString(8, deliveryStatus)
-              ps.addBatch()
-            }
-            ps.executeBatch()
+      val allowedInbox = if (mapped.inboxNotifications.isEmpty()) {
+        emptyList()
+      } else {
+        DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+          mapped.inboxNotifications.filter { notif ->
+            NotificationService.isCategoryAllowed(conn, notif.userId, notif.category)
           }
+        }
+      }
+
+      val deliveredStatuses = mutableListOf<Pair<com.pizzora.backend.realtime.PendingInboxNotification, NotificationDeliveryStatus>>()
+      var deliveryFailure: Throwable? = null
+      for (notif in allowedInbox) {
+        try {
+          val deliveryResult = notificationDeliveryProvider.deliver(
+            NotificationDispatchRequest(
+              userId = notif.userId,
+              eventId = notif.eventId,
+              title = notif.title,
+              body = notif.body,
+              category = notif.category,
+              referenceId = notif.referenceId,
+              deliveredViaWebSocket = deliveredLive,
+            ),
+          )
+          deliveredStatuses += notif to deliveryResult.status
+        } catch (t: Throwable) {
+          if (t is CancellationException) throw t
+          deliveryFailure = t
+          break
+        }
+      }
+
+      if (deliveryFailure != null) {
+        val msg = deliveryFailure.message ?: "Notification provider delivery failed"
+        val isTransient = (deliveryFailure as? NotificationDeliveryException)?.isTransient ?: true
+        if (isTransient && entry.base.attempts < maxAttempts) {
+          scheduleRetry(entry.base, msg)
+        } else {
+          DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+            for (notif in allowedInbox) {
+              NotificationService.insertInboxNotificationIfAllowed(
+                conn = conn,
+                userId = notif.userId,
+                eventId = notif.eventId,
+                title = notif.title,
+                body = notif.body,
+                category = notif.category,
+                referenceId = notif.referenceId,
+                deliveryStatus = NotificationDeliveryStatus.FAILED,
+              )
+            }
+          }
+          markDeadLetter(entry.base, null, msg)
+        }
+        continue
+      }
+
+      DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+        for ((notif, deliveryStatus) in deliveredStatuses) {
+          NotificationService.insertInboxNotificationIfAllowed(
+            conn = conn,
+            userId = notif.userId,
+            eventId = notif.eventId,
+            title = notif.title,
+            body = notif.body,
+            category = notif.category,
+            referenceId = notif.referenceId,
+            deliveryStatus = deliveryStatus,
+          )
         }
         markDispatchedInTx(conn, entry.base.id)
       }

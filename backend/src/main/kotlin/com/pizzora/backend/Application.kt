@@ -42,6 +42,8 @@ import com.pizzora.backend.inventory.InventoryService
 import com.pizzora.backend.inventory.inventoryRoutes
 import com.pizzora.backend.kitchen.KitchenService
 import com.pizzora.backend.kitchen.kitchenRoutes
+import com.pizzora.backend.notifications.NotificationService
+import com.pizzora.backend.notifications.notificationsRoutes
 import com.pizzora.backend.orders.OrderService
 import com.pizzora.backend.orders.ordersRoutes
 import com.pizzora.backend.owner.OwnerService
@@ -383,6 +385,7 @@ fun Application.pizzoraModule(
       )
       val deliveryZoneService = DeliveryZoneService(dataSource = dataSource)
       val scheduledSlotService = ScheduledSlotService(dataSource = dataSource)
+      val notificationService = NotificationService(dataSource = dataSource)
 
       authRoutes(authService, resolvedWsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
@@ -390,6 +393,7 @@ fun Application.pizzoraModule(
       ownerRoutes(ownerService, authorizationService)
       deliveryZoneRoutes(deliveryZoneService, authorizationService)
       scheduledSlotRoutes(scheduledSlotService, authorizationService)
+      notificationsRoutes(notificationService)
       categoriesRoutes(categoriesService, authorizationService)
       catalogRoutes(catalogService, authorizationService)
       productImagesRoutes(productImagesService, authorizationService)

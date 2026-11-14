@@ -12,10 +12,12 @@ import com.pizzora.backend.core.error.UnprocessableEntityException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.coupons.CouponService
 import com.pizzora.backend.inventory.InventoryService
+import com.pizzora.backend.notifications.NotificationService
 import com.pizzora.backend.orders.OrderService
 import com.pizzora.backend.razorpay.RazorpaySignatureVerifier
 import com.pizzora.contracts.FailPaymentAttemptRequest
 import com.pizzora.contracts.FulfillmentType
+import com.pizzora.contracts.NotificationDeliveryStatus
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderPaymentStatusResponse
 import com.pizzora.contracts.OrderStatus
@@ -1389,24 +1391,17 @@ class PaymentService(
       }
       if (ownerIds.isEmpty()) return
 
-      conn.prepareStatement(
-        """
-        INSERT INTO notification_inbox (id, user_id, event_id, title, body, category, reference_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (user_id, event_id) DO NOTHING
-        """.trimIndent(),
-      ).use { ps ->
-        for (ownerId in ownerIds) {
-          ps.setObject(1, UUID.randomUUID())
-          ps.setObject(2, ownerId)
-          ps.setObject(3, eventId)
-          ps.setString(4, title)
-          ps.setString(5, body)
-          ps.setString(6, category)
-          if (referenceId != null) ps.setObject(7, referenceId) else ps.setNull(7, Types.OTHER)
-          ps.addBatch()
-        }
-        ps.executeBatch()
+      for (ownerId in ownerIds) {
+        NotificationService.insertInboxNotificationIfAllowed(
+          conn = conn,
+          userId = ownerId,
+          eventId = eventId,
+          title = title,
+          body = body,
+          category = category,
+          referenceId = referenceId,
+          deliveryStatus = NotificationDeliveryStatus.PENDING,
+        )
       }
     }
   }

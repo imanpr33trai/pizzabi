@@ -38,7 +38,11 @@ import com.pizzora.contracts.KdsActionRequest
 import com.pizzora.contracts.KdsTicketActionResponse
 import com.pizzora.contracts.KdsTicketsResponse
 import com.pizzora.contracts.LoginRequest
+import com.pizzora.contracts.MarkAllNotificationsReadResponse
+import com.pizzora.contracts.MarkNotificationReadResponse
 import com.pizzora.contracts.MessageResponse
+import com.pizzora.contracts.NotificationInboxResponse
+import com.pizzora.contracts.NotificationPreferencesDto
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderListResponse
 import com.pizzora.contracts.OrderPaymentStatusResponse
@@ -74,6 +78,7 @@ import com.pizzora.contracts.UpdateCouponRequest
 import com.pizzora.contracts.UpdateCrustRequest
 import com.pizzora.contracts.UpdateDeliveryZoneRequest
 import com.pizzora.contracts.UpdateIngredientRequest
+import com.pizzora.contracts.UpdateNotificationPreferencesRequest
 import com.pizzora.contracts.UpdateOrderPriorityRequest
 import com.pizzora.contracts.UpdateProductRequest
 import com.pizzora.contracts.UpdateProfileRequest
@@ -852,6 +857,40 @@ class PizzoraApiClient(
     if (!response.status.isSuccess()) {
       throwDecodedError(response)
     }
+  }
+
+  suspend fun getNotifications(unreadOnly: Boolean = false, limit: Int = 50): NotificationInboxResponse {
+    val params = buildList {
+      if (unreadOnly) add("unread=true")
+      add("limit=$limit")
+    }.joinToString("&")
+    val response = httpClient.get("/api/v1/notifications?$params")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun markNotificationRead(notificationId: String): MarkNotificationReadResponse {
+    val response = httpClient.post("/api/v1/notifications/$notificationId/read")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun markAllNotificationsRead(): MarkAllNotificationsReadResponse {
+    val response = httpClient.post("/api/v1/notifications/read-all")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getNotificationPreferences(): NotificationPreferencesDto {
+    val response = httpClient.get("/api/v1/notifications/preferences")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateNotificationPreferences(
+    request: UpdateNotificationPreferencesRequest,
+  ): NotificationPreferencesDto {
+    val response = httpClient.put("/api/v1/notifications/preferences") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
   }
 
   suspend fun mintWsTicket(): WsTicketResponse {

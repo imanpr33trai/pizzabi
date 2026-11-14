@@ -5,6 +5,7 @@ import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.redis.LettuceRedisStore
 import com.pizzora.backend.coupons.CouponService
 import com.pizzora.backend.inventory.InventoryService
+import com.pizzora.backend.notifications.WebSocketInboxNotificationDeliveryProvider
 import com.pizzora.backend.orders.OrderService
 import com.pizzora.backend.payments.PaymentService
 import com.pizzora.backend.razorpay.createDefaultRazorpayGateway
@@ -62,6 +63,7 @@ fun main() {
     dataSource = dataSource,
     razorpayGateway = razorpayGateway,
     realtimeDispatcher = RedisRealtimeEventDispatcher(redisStore),
+    notificationDeliveryProvider = WebSocketInboxNotificationDeliveryProvider(),
   )
   val expirySweepWorker = ExpirySweepWorker(
     dataSource = dataSource,

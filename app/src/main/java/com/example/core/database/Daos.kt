@@ -105,8 +105,17 @@ interface NotificationInboxDao {
   @Insert(onConflict = OnConflictStrategy.IGNORE)
   suspend fun insertIgnore(items: List<NotificationInboxEntity>)
 
+  @Insert(onConflict = OnConflictStrategy.IGNORE)
+  suspend fun insertIgnoreReturningIds(items: List<NotificationInboxEntity>): List<Long>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertAll(items: List<NotificationInboxEntity>)
+
   @Query("UPDATE notification_inbox SET is_read = 1 WHERE id = :id")
   suspend fun markRead(id: String)
+
+  @Query("UPDATE notification_inbox SET is_read = 1")
+  suspend fun markAllRead()
 
   @Query("DELETE FROM notification_inbox")
   suspend fun clearAll()
