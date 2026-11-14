@@ -7,6 +7,7 @@ import com.pizzora.contracts.AdjustInventoryRequest
 import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.AuthTokensResponse
 import com.pizzora.contracts.AvailableCouponsResponse
+import com.pizzora.contracts.AvailableSlotsResponse
 import com.pizzora.contracts.CancelOrderRequest
 import com.pizzora.contracts.CartResponseDto
 import com.pizzora.contracts.CategoryDto
@@ -17,15 +18,20 @@ import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
 import com.pizzora.contracts.CreateCouponRequest
 import com.pizzora.contracts.CreateCrustRequest
+import com.pizzora.contracts.CreateDeliveryZoneRequest
 import com.pizzora.contracts.CreateIngredientRequest
 import com.pizzora.contracts.CreateProductRequest
+import com.pizzora.contracts.CreateScheduledSlotRequest
 import com.pizzora.contracts.CreateStaffRequest
 import com.pizzora.contracts.CreateToppingRequest
 import com.pizzora.contracts.CreateVariantRequest
 import com.pizzora.contracts.CrustOptionDto
+import com.pizzora.contracts.DeliveryZoneCheckResponse
+import com.pizzora.contracts.DeliveryZoneDto
 import com.pizzora.contracts.EventsReplayResponse
 import com.pizzora.contracts.FailPaymentAttemptRequest
 import com.pizzora.contracts.ForgotPasswordRequest
+import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerEntryDto
 import com.pizzora.contracts.KdsActionRequest
@@ -59,16 +65,20 @@ import com.pizzora.contracts.ResendVerificationRequest
 import com.pizzora.contracts.ResetPasswordRequest
 import com.pizzora.contracts.RestaurantSettingsDto
 import com.pizzora.contracts.RetryPaymentRequest
+import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.StaffMemberDto
 import com.pizzora.contracts.ToppingDto
 import com.pizzora.contracts.TransitionOrderStatusRequest
 import com.pizzora.contracts.UpdateCategoryRequest
 import com.pizzora.contracts.UpdateCouponRequest
 import com.pizzora.contracts.UpdateCrustRequest
+import com.pizzora.contracts.UpdateDeliveryZoneRequest
 import com.pizzora.contracts.UpdateIngredientRequest
 import com.pizzora.contracts.UpdateOrderPriorityRequest
 import com.pizzora.contracts.UpdateProductRequest
+import com.pizzora.contracts.UpdateProfileRequest
 import com.pizzora.contracts.UpdateRestaurantSettingsRequest
+import com.pizzora.contracts.UpdateScheduledSlotRequest
 import com.pizzora.contracts.UpdateStaffRequest
 import com.pizzora.contracts.UpdateToppingRequest
 import com.pizzora.contracts.UpdateVariantRequest
@@ -250,6 +260,14 @@ class PizzoraApiClient(
 
   suspend fun getMe(): UserProfileDto {
     val response = httpClient.get("/api/v1/me")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateMe(request: UpdateProfileRequest): UserProfileDto {
+    val response = httpClient.patch("/api/v1/me") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
     return decodeOrThrow(response)
   }
 
@@ -480,6 +498,35 @@ class PizzoraApiClient(
       contentType(ContentType.Application.Json)
       setBody(request)
     }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateAddress(addressId: String, request: UpsertAddressRequest): AddressDto {
+    val response = httpClient.patch("/api/v1/me/addresses/$addressId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun deleteAddress(addressId: String) {
+    val response = httpClient.delete("/api/v1/me/addresses/$addressId")
+    if (!response.status.isSuccess()) {
+      throwDecodedError(response)
+    }
+  }
+
+  suspend fun checkDeliveryZone(pincode: String): DeliveryZoneCheckResponse {
+    val response = httpClient.get("/api/v1/delivery-zones/check?pincode=${pincode.trim()}")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getAvailableSlots(type: FulfillmentType, date: String? = null): AvailableSlotsResponse {
+    val params = buildList {
+      add("type=${type.name}")
+      if (!date.isNullOrBlank()) add("date=${date.trim()}")
+    }.joinToString("&")
+    val response = httpClient.get("/api/v1/slots?$params")
     return decodeOrThrow(response)
   }
 
@@ -744,6 +791,67 @@ class PizzoraApiClient(
       setBody(request)
     }
     return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerDeliveryZones(): List<DeliveryZoneDto> {
+    val response = httpClient.get("/api/v1/owner/delivery-zones")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createOwnerDeliveryZone(request: CreateDeliveryZoneRequest): DeliveryZoneDto {
+    val response = httpClient.post("/api/v1/owner/delivery-zones") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateOwnerDeliveryZone(zoneId: String, request: UpdateDeliveryZoneRequest): DeliveryZoneDto {
+    val response = httpClient.patch("/api/v1/owner/delivery-zones/$zoneId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun deleteOwnerDeliveryZone(zoneId: String) {
+    val response = httpClient.delete("/api/v1/owner/delivery-zones/$zoneId")
+    if (!response.status.isSuccess()) {
+      throwDecodedError(response)
+    }
+  }
+
+  suspend fun getOwnerSlots(type: FulfillmentType? = null, date: String? = null): List<ScheduledSlotDto> {
+    val params = buildList {
+      if (type != null) add("type=${type.name}")
+      if (!date.isNullOrBlank()) add("date=${date.trim()}")
+    }.joinToString("&")
+    val query = if (params.isNotEmpty()) "?$params" else ""
+    val response = httpClient.get("/api/v1/owner/slots$query")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createOwnerSlot(request: CreateScheduledSlotRequest): ScheduledSlotDto {
+    val response = httpClient.post("/api/v1/owner/slots") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateOwnerSlot(slotId: String, request: UpdateScheduledSlotRequest): ScheduledSlotDto {
+    val response = httpClient.patch("/api/v1/owner/slots/$slotId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun deleteOwnerSlot(slotId: String) {
+    val response = httpClient.delete("/api/v1/owner/slots/$slotId")
+    if (!response.status.isSuccess()) {
+      throwDecodedError(response)
+    }
   }
 
   suspend fun mintWsTicket(): WsTicketResponse {

@@ -134,4 +134,24 @@
     <string name="kds_mute_chimes">Mute KDS chimes</string>
     <string name="kds_unmute_chimes">Unmute KDS chimes</string>
     <string name="kds_open_from_owner">Open KDS</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_save">Save</string>
+    <string name="action_set_default">Set as Default</string>
+    <string name="profile_loading_name">Pizzora Member</string>
+    <string name="profile_edit_title">Edit Profile</string>
+    <string name="profile_pincode_checker_title">Check Pincode Serviceability</string>
+    <string name="profile_saved_addresses_title">Saved Addresses (%1$d)</string>
+    <string name="profile_no_addresses_title">No saved addresses</string>
+    <string name="profile_no_addresses_subtitle">Save your home or work address for faster wood-fired delivery checkout.</string>
+    <string name="address_default_badge">DEFAULT</string>
+    <string name="address_edit_dialog_title">Edit Delivery Address</string>
+    <string name="address_line2_hint">Apartment / Floor (optional)</string>
+    <string name="address_landmark_hint">Landmark (optional)</string>
+    <string name="address_set_default_label">Use as default delivery address</string>
+    <string name="checkout_fulfillment_title">Fulfillment</string>
+    <string name="checkout_verify_pincode_action">Check Delivery Zone</string>
+    <string name="checkout_schedule_title">Delivery / Pickup Time</string>
+    <string name="schedule_asap">ASAP</string>
+    <string name="schedule_later">Schedule Slot (IST)</string>
+    <string name="checkout_no_slots_for_date">No scheduled slots configured for this date. Choose ASAP or another date.</string>
 </resources>

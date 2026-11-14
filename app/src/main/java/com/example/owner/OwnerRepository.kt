@@ -9,9 +9,13 @@ import com.pizzora.contracts.CategoryDto
 import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
 import com.pizzora.contracts.CreateCouponRequest
+import com.pizzora.contracts.CreateDeliveryZoneRequest
 import com.pizzora.contracts.CreateIngredientRequest
 import com.pizzora.contracts.CreateProductRequest
+import com.pizzora.contracts.CreateScheduledSlotRequest
 import com.pizzora.contracts.CreateStaffRequest
+import com.pizzora.contracts.DeliveryZoneDto
+import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerEntryDto
 import com.pizzora.contracts.OrderDetailDto
@@ -26,12 +30,15 @@ import com.pizzora.contracts.RecipeBindingDto
 import com.pizzora.contracts.RecipesOverviewResponse
 import com.pizzora.contracts.RefundDto
 import com.pizzora.contracts.RestaurantSettingsDto
+import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.StaffMemberDto
 import com.pizzora.contracts.TransitionOrderStatusRequest
 import com.pizzora.contracts.UpdateCategoryRequest
 import com.pizzora.contracts.UpdateCouponRequest
+import com.pizzora.contracts.UpdateDeliveryZoneRequest
 import com.pizzora.contracts.UpdateProductRequest
 import com.pizzora.contracts.UpdateRestaurantSettingsRequest
+import com.pizzora.contracts.UpdateScheduledSlotRequest
 import com.pizzora.contracts.UpdateStaffRequest
 
 interface OwnerRepository {
@@ -69,6 +76,16 @@ interface OwnerRepository {
   suspend fun fetchStaff(): List<StaffMemberDto>
   suspend fun createStaff(request: CreateStaffRequest): StaffMemberDto
   suspend fun updateStaff(userId: String, request: UpdateStaffRequest): StaffMemberDto
+
+  suspend fun fetchDeliveryZones(): List<DeliveryZoneDto>
+  suspend fun createDeliveryZone(request: CreateDeliveryZoneRequest): DeliveryZoneDto
+  suspend fun updateDeliveryZone(zoneId: String, request: UpdateDeliveryZoneRequest): DeliveryZoneDto
+  suspend fun deleteDeliveryZone(zoneId: String)
+
+  suspend fun fetchScheduledSlots(type: FulfillmentType? = null, date: String? = null): List<ScheduledSlotDto>
+  suspend fun createScheduledSlot(request: CreateScheduledSlotRequest): ScheduledSlotDto
+  suspend fun updateScheduledSlot(slotId: String, request: UpdateScheduledSlotRequest): ScheduledSlotDto
+  suspend fun deleteScheduledSlot(slotId: String)
 }
 
 class NetworkOwnerRepository(
@@ -161,4 +178,28 @@ class NetworkOwnerRepository(
 
   override suspend fun updateStaff(userId: String, request: UpdateStaffRequest): StaffMemberDto =
     apiClient.updateOwnerStaff(userId, request)
+
+  override suspend fun fetchDeliveryZones(): List<DeliveryZoneDto> =
+    apiClient.getOwnerDeliveryZones()
+
+  override suspend fun createDeliveryZone(request: CreateDeliveryZoneRequest): DeliveryZoneDto =
+    apiClient.createOwnerDeliveryZone(request)
+
+  override suspend fun updateDeliveryZone(zoneId: String, request: UpdateDeliveryZoneRequest): DeliveryZoneDto =
+    apiClient.updateOwnerDeliveryZone(zoneId, request)
+
+  override suspend fun deleteDeliveryZone(zoneId: String) =
+    apiClient.deleteOwnerDeliveryZone(zoneId)
+
+  override suspend fun fetchScheduledSlots(type: FulfillmentType?, date: String?): List<ScheduledSlotDto> =
+    apiClient.getOwnerSlots(type, date)
+
+  override suspend fun createScheduledSlot(request: CreateScheduledSlotRequest): ScheduledSlotDto =
+    apiClient.createOwnerSlot(request)
+
+  override suspend fun updateScheduledSlot(slotId: String, request: UpdateScheduledSlotRequest): ScheduledSlotDto =
+    apiClient.updateOwnerSlot(slotId, request)
+
+  override suspend fun deleteScheduledSlot(slotId: String) =
+    apiClient.deleteOwnerSlot(slotId)
 }

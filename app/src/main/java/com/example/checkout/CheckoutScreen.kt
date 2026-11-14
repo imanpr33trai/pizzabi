@@ -9,19 +9,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DeliveryDining
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -50,13 +55,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
 import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.PaymentMethod
+import com.pizzora.contracts.ScheduleType
+import com.pizzora.contracts.ScheduledSlotDto
+import java.time.LocalDate
+import java.time.ZoneId
 
 @Composable
 fun CheckoutScreen(
@@ -73,6 +84,20 @@ fun CheckoutScreen(
   onPlaceOrder: () -> Unit,
   onBackToCart: () -> Unit,
   modifier: Modifier = Modifier,
+  onCheckAddressZone: () -> Unit = {},
+  onScheduleTypeChange: (ScheduleType) -> Unit = {},
+  onSlotDateChange: (String) -> Unit = {},
+  onSelectSlot: (String) -> Unit = {},
+  onRefreshSlots: () -> Unit = {},
+  onSaveAddressWithDetails: ((
+    label: String,
+    line1: String,
+    line2: String?,
+    landmark: String?,
+    pincode: String,
+    city: String,
+    isDefault: Boolean,
+  ) -> Unit)? = null,
 ) {
   BackHandler(onBack = onBackToCart)
 
@@ -83,7 +108,13 @@ fun CheckoutScreen(
     AddAddressDialog(
       isSaving = uiState.isSavingAddress,
       error = uiState.addressError,
-      onSave = onSaveAddress,
+      onSave = { label, line1, line2, landmark, pincode, city, isDefault ->
+        if (onSaveAddressWithDetails != null) {
+          onSaveAddressWithDetails(label, line1, line2, landmark, pincode, city, isDefault)
+        } else {
+          onSaveAddress(label, line1, pincode, city)
+        }
+      },
       onDismiss = onDismissAddAddress,
     )
   }
@@ -116,7 +147,7 @@ fun CheckoutScreen(
       }
     }
 
-    if (uiState.isLoadingAddresses || uiState.isPlacingOrder) {
+    if (uiState.isLoadingAddresses || uiState.isPlacingOrder || uiState.isLoadingSlots) {
       LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
     }
 
@@ -156,7 +187,7 @@ fun CheckoutScreen(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
           ) {
-            Text("Fulfillment", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.checkout_fulfillment_title), style = MaterialTheme.typography.titleMedium)
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -228,10 +259,61 @@ fun CheckoutScreen(
                     onSelect = { onSelectAddress(address.id) },
                   )
                 }
+
+                if (uiState.selectedAddressId != null) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                  ) {
+                    TextButton(
+                      onClick = onCheckAddressZone,
+                      enabled = !uiState.isCheckingAddressZone,
+                      modifier = Modifier.minimumInteractiveComponentSize().testTag("check_selected_address_zone_button"),
+                    ) {
+                      Text(stringResource(R.string.checkout_verify_pincode_action))
+                    }
+                  }
+                  uiState.selectedAddressZoneCheck?.let { check ->
+                    Surface(
+                      color = if (check.isServiceable) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                      } else {
+                        MaterialTheme.colorScheme.errorContainer
+                      },
+                      shape = MaterialTheme.shapes.small,
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics(mergeDescendants = true) {}
+                        .testTag("address_zone_status_banner"),
+                    ) {
+                      Text(
+                        text = check.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (check.isServiceable) {
+                          MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                          MaterialTheme.colorScheme.onErrorContainer
+                        },
+                        modifier = Modifier.padding(10.dp),
+                      )
+                    }
+                  }
+                }
               }
             }
           }
         }
+      }
+
+      item(key = "checkout_schedule") {
+        ScheduleSelectionCard(
+          uiState = uiState,
+          onScheduleTypeChange = onScheduleTypeChange,
+          onSlotDateChange = onSlotDateChange,
+          onSelectSlot = onSelectSlot,
+          onRefreshSlots = onRefreshSlots,
+        )
       }
 
       item(key = "checkout_payment_method") {
@@ -322,6 +404,175 @@ fun CheckoutScreen(
 }
 
 @Composable
+private fun ScheduleSelectionCard(
+  uiState: CheckoutUiState,
+  onScheduleTypeChange: (ScheduleType) -> Unit,
+  onSlotDateChange: (String) -> Unit,
+  onSelectSlot: (String) -> Unit,
+  onRefreshSlots: () -> Unit,
+) {
+  val todayIst = remember { LocalDate.now(ZoneId.of("Asia/Kolkata")).toString() }
+  val tomorrowIst = remember { LocalDate.now(ZoneId.of("Asia/Kolkata")).plusDays(1).toString() }
+
+  Card(
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+    modifier = Modifier.fillMaxWidth().testTag("checkout_schedule_section"),
+  ) {
+    Column(
+      modifier = Modifier.fillMaxWidth().padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Icon(Icons.Filled.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+          Text(stringResource(R.string.checkout_schedule_title), style = MaterialTheme.typography.titleMedium)
+        }
+        if (uiState.scheduleType == ScheduleType.SCHEDULED) {
+          IconButton(
+            onClick = onRefreshSlots,
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("refresh_slots_button"),
+          ) {
+            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
+          }
+        }
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        FilterChip(
+          selected = uiState.scheduleType == ScheduleType.ASAP,
+          onClick = { onScheduleTypeChange(ScheduleType.ASAP) },
+          leadingIcon = { Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(18.dp)) },
+          label = { Text(stringResource(R.string.schedule_asap)) },
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("schedule_asap_chip"),
+        )
+        FilterChip(
+          selected = uiState.scheduleType == ScheduleType.SCHEDULED,
+          onClick = { onScheduleTypeChange(ScheduleType.SCHEDULED) },
+          leadingIcon = { Icon(Icons.Filled.Schedule, contentDescription = null, modifier = Modifier.size(18.dp)) },
+          label = { Text(stringResource(R.string.schedule_later)) },
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("schedule_scheduled_chip"),
+        )
+      }
+
+      if (uiState.scheduleType == ScheduleType.SCHEDULED) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          FilterChip(
+            selected = uiState.selectedSlotDate == todayIst,
+            onClick = { onSlotDateChange(todayIst) },
+            label = { Text("Today (IST)") },
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("slot_date_today_chip"),
+          )
+          FilterChip(
+            selected = uiState.selectedSlotDate == tomorrowIst,
+            onClick = { onSlotDateChange(tomorrowIst) },
+            label = { Text("Tomorrow (IST)") },
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("slot_date_tomorrow_chip"),
+          )
+        }
+
+        if (!uiState.slotsError.isNullOrBlank()) {
+          Text(
+            text = uiState.slotsError,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.testTag("slots_error_text"),
+          )
+        } else if (!uiState.isLoadingSlots && uiState.availableSlots.isEmpty()) {
+          Text(
+            text = stringResource(R.string.checkout_no_slots_for_date),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("no_slots_text"),
+          )
+        } else {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            uiState.availableSlots.forEach { slot ->
+              ScheduledSlotRow(
+                slot = slot,
+                selected = uiState.selectedSlotId == slot.id,
+                onSelect = { onSelectSlot(slot.id) },
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun ScheduledSlotRow(
+  slot: ScheduledSlotDto,
+  selected: Boolean,
+  onSelect: () -> Unit,
+) {
+  val containerColor = when {
+    !slot.isBookable -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+    selected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+  }
+  val borderColor = when {
+    !slot.isBookable -> MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+    selected -> MaterialTheme.colorScheme.primary
+    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+  }
+
+  Surface(
+    color = containerColor,
+    shape = MaterialTheme.shapes.medium,
+    border = BorderStroke(1.dp, borderColor),
+    modifier = Modifier
+      .fillMaxWidth()
+      .minimumInteractiveComponentSize()
+      .selectable(
+        selected = selected,
+        enabled = slot.isBookable,
+        role = Role.RadioButton,
+        onClick = onSelect,
+      )
+      .testTag("slot_card_${slot.id}"),
+  ) {
+    Row(
+      modifier = Modifier.fillMaxWidth().padding(12.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      RadioButton(selected = selected, onClick = null, enabled = slot.isBookable)
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = "${slot.startTimeIst} - ${slot.endTimeIst} IST",
+          style = PizzoraMonoBody,
+          color = if (slot.isBookable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+          text = if (slot.isBookable) {
+            "${slot.remainingCapacity} of ${slot.maxCapacity} slots left"
+          } else {
+            slot.unavailableReason ?: "Unavailable"
+          },
+          style = MaterialTheme.typography.bodySmall,
+          color = if (slot.isBookable) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+        )
+      }
+    }
+  }
+}
+
+@Composable
 private fun AddressOptionRow(
   address: AddressDto,
   selected: Boolean,
@@ -348,8 +599,14 @@ private fun AddressOptionRow(
       RadioButton(selected = selected, onClick = null)
       Column(modifier = Modifier.weight(1f)) {
         Text(text = "${address.label} • ${address.pincode}", style = MaterialTheme.typography.titleSmall)
+        val details = buildString {
+          append(address.line1)
+          if (!address.line2.isNullOrBlank()) append(", ${address.line2}")
+          if (!address.landmark.isNullOrBlank()) append(" (${address.landmark})")
+          append(", ${address.city}")
+        }
         Text(
-          text = "${address.line1}, ${address.city}",
+          text = details,
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -399,19 +656,33 @@ private fun PaymentOptionRow(
 private fun AddAddressDialog(
   isSaving: Boolean,
   error: String?,
-  onSave: (label: String, line1: String, pincode: String, city: String) -> Unit,
+  onSave: (
+    label: String,
+    line1: String,
+    line2: String?,
+    landmark: String?,
+    pincode: String,
+    city: String,
+    isDefault: Boolean,
+  ) -> Unit,
   onDismiss: () -> Unit,
 ) {
   var label by remember { mutableStateOf("Home") }
   var line1 by remember { mutableStateOf("") }
+  var line2 by remember { mutableStateOf("") }
+  var landmark by remember { mutableStateOf("") }
   var pincode by remember { mutableStateOf("") }
   var city by remember { mutableStateOf("Bengaluru") }
+  var isDefault by remember { mutableStateOf(false) }
 
   AlertDialog(
     onDismissRequest = onDismiss,
     title = { Text(stringResource(R.string.address_dialog_title)) },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
         if (!error.isNullOrBlank()) {
           Text(
             text = error,
@@ -435,6 +706,20 @@ private fun AddAddressDialog(
           modifier = Modifier.fillMaxWidth().testTag("address_line1_input"),
         )
         OutlinedTextField(
+          value = line2,
+          onValueChange = { line2 = it },
+          label = { Text(stringResource(R.string.address_line2_hint)) },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth().testTag("address_line2_input"),
+        )
+        OutlinedTextField(
+          value = landmark,
+          onValueChange = { landmark = it },
+          label = { Text(stringResource(R.string.address_landmark_hint)) },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth().testTag("address_landmark_input"),
+        )
+        OutlinedTextField(
           value = pincode,
           onValueChange = { v -> pincode = v.filter { it.isDigit() }.take(6) },
           label = { Text(stringResource(R.string.address_pincode_hint)) },
@@ -448,11 +733,23 @@ private fun AddAddressDialog(
           singleLine = true,
           modifier = Modifier.fillMaxWidth().testTag("address_city_input"),
         )
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(stringResource(R.string.address_set_default_label), style = MaterialTheme.typography.bodyMedium)
+          Switch(
+            checked = isDefault,
+            onCheckedChange = { isDefault = it },
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("address_default_switch"),
+          )
+        }
       }
     },
     confirmButton = {
       Button(
-        onClick = { onSave(label, line1, pincode, city) },
+        onClick = { onSave(label, line1, line2, landmark, pincode, city, isDefault) },
         enabled = !isSaving,
         modifier = Modifier.minimumInteractiveComponentSize().testTag("save_address_button"),
       ) {

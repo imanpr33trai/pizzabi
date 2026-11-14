@@ -6,6 +6,7 @@ import com.example.core.database.CartItemWithToppings
 import com.example.core.network.PizzoraApiException
 import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CustomerCouponDto
+import com.pizzora.contracts.DeliveryZoneCheckResponse
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.PricingQuoteRequest
 import com.pizzora.contracts.PricingQuoteResponse
@@ -20,6 +21,8 @@ data class CheckoutQuoteUiState(
   val fulfillmentType: FulfillmentType = FulfillmentType.DELIVERY,
   val pincodeInput: String = "",
   val checkedPincode: String? = null,
+  val zoneCheckResult: DeliveryZoneCheckResponse? = null,
+  val isCheckingZone: Boolean = false,
   val couponInput: String = "",
   val appliedCouponCode: String? = null,
   val quote: PricingQuoteResponse? = null,
@@ -81,14 +84,71 @@ class CheckoutQuoteViewModel(
 
   fun onPincodeInputChange(value: String) {
     val sanitized = value.filter { it.isDigit() }.take(6)
-    _uiState.update { it.copy(pincodeInput = sanitized, quoteError = null) }
+    _uiState.update {
+      it.copy(
+        pincodeInput = sanitized,
+        zoneCheckResult = if (sanitized == it.zoneCheckResult?.pincode) it.zoneCheckResult else null,
+        quoteError = null,
+      )
+    }
   }
 
   fun applyPincodeCheck() {
     val pin = _uiState.value.pincodeInput.trim().takeIf { it.isNotEmpty() }
-    _uiState.update { it.copy(checkedPincode = pin, quoteError = null) }
-    if (latestCartItems.isNotEmpty()) {
-      requestQuote(overridePincode = pin, clearPincodeOnZoneError = true)
+    if (pin == null) {
+      _uiState.update { it.copy(checkedPincode = null, zoneCheckResult = null, quoteError = null) }
+      if (latestCartItems.isNotEmpty()) {
+        requestQuote(overridePincode = null, clearPincodeOnZoneError = true)
+      }
+      return
+    }
+    if (!pin.matches(Regex("^[1-9][0-9]{5}$"))) {
+      _uiState.update {
+        it.copy(
+          checkedPincode = null,
+          zoneCheckResult = null,
+          quoteError = "Enter a valid 6-digit Indian pincode.",
+        )
+      }
+      return
+    }
+
+    viewModelScope.launch {
+      _uiState.update { it.copy(isCheckingZone = true, checkedPincode = pin, quoteError = null) }
+      val zoneResult = pricingRepository.checkDeliveryZone(pin)
+      zoneResult
+        .onSuccess { check ->
+          _uiState.update {
+            it.copy(
+              isCheckingZone = false,
+              zoneCheckResult = check,
+              checkedPincode = if (check.isServiceable) pin else null,
+              quoteError = if (!check.isServiceable) check.message else null,
+            )
+          }
+          if (check.isServiceable && latestCartItems.isNotEmpty()) {
+            requestQuote(overridePincode = pin, clearPincodeOnZoneError = true)
+          }
+        }
+        .onFailure { err ->
+          val apiEx = err as? PizzoraApiException
+          if (apiEx != null) {
+            _uiState.update {
+              it.copy(
+                isCheckingZone = false,
+                zoneCheckResult = null,
+                checkedPincode = null,
+                quoteError = apiEx.message,
+              )
+            }
+          } else {
+            // Non-API fallback (e.g., offline or legacy quote-only MockEngine): defer to pricing quote
+            _uiState.update { it.copy(isCheckingZone = false, zoneCheckResult = null) }
+            if (latestCartItems.isNotEmpty()) {
+              requestQuote(overridePincode = pin, clearPincodeOnZoneError = true)
+            }
+          }
+        }
     }
   }
 

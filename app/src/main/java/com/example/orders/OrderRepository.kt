@@ -2,10 +2,13 @@ package com.example.orders
 
 import com.example.core.network.PizzoraApiClient
 import com.pizzora.contracts.AddressDto
+import com.pizzora.contracts.AvailableSlotsResponse
 import com.pizzora.contracts.CancelOrderRequest
 import com.pizzora.contracts.CheckoutRequest
 import com.pizzora.contracts.CheckoutResponse
+import com.pizzora.contracts.DeliveryZoneCheckResponse
 import com.pizzora.contracts.FailPaymentAttemptRequest
+import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderListResponse
 import com.pizzora.contracts.OrderPaymentStatusResponse
@@ -18,6 +21,10 @@ import kotlin.coroutines.cancellation.CancellationException
 interface OrderRepository {
   suspend fun getAddresses(): Result<List<AddressDto>>
   suspend fun createAddress(request: UpsertAddressRequest): Result<AddressDto>
+  suspend fun updateAddress(addressId: String, request: UpsertAddressRequest): Result<AddressDto>
+  suspend fun deleteAddress(addressId: String): Result<Unit>
+  suspend fun checkDeliveryZone(pincode: String): Result<DeliveryZoneCheckResponse>
+  suspend fun getAvailableSlots(type: FulfillmentType, date: String? = null): Result<AvailableSlotsResponse>
   suspend fun placeOrder(idempotencyKey: String, request: CheckoutRequest): Result<CheckoutResponse>
   suspend fun fetchOrders(): Result<OrderListResponse>
   suspend fun fetchOrderDetail(orderId: String): Result<OrderDetailDto>
@@ -47,6 +54,22 @@ class NetworkOrderRepository(
 
   override suspend fun createAddress(request: UpsertAddressRequest): Result<AddressDto> = runSafe {
     apiClient.createAddress(request)
+  }
+
+  override suspend fun updateAddress(addressId: String, request: UpsertAddressRequest): Result<AddressDto> = runSafe {
+    apiClient.updateAddress(addressId, request)
+  }
+
+  override suspend fun deleteAddress(addressId: String): Result<Unit> = runSafe {
+    apiClient.deleteAddress(addressId)
+  }
+
+  override suspend fun checkDeliveryZone(pincode: String): Result<DeliveryZoneCheckResponse> = runSafe {
+    apiClient.checkDeliveryZone(pincode)
+  }
+
+  override suspend fun getAvailableSlots(type: FulfillmentType, date: String?): Result<AvailableSlotsResponse> = runSafe {
+    apiClient.getAvailableSlots(type, date)
   }
 
   override suspend fun placeOrder(idempotencyKey: String, request: CheckoutRequest): Result<CheckoutResponse> = runSafe {

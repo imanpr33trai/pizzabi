@@ -9,11 +9,15 @@ import com.pizzora.contracts.CategoryDto
 import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
 import com.pizzora.contracts.CreateCouponRequest
+import com.pizzora.contracts.CreateDeliveryZoneRequest
 import com.pizzora.contracts.CreateIngredientRequest
 import com.pizzora.contracts.CreateProductRequest
+import com.pizzora.contracts.CreateScheduledSlotRequest
 import com.pizzora.contracts.CreateStaffRequest
 import com.pizzora.contracts.CreateVariantRequest
+import com.pizzora.contracts.DeliveryZoneDto
 import com.pizzora.contracts.DiscountType
+import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.IngredientUnit
 import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerEntryDto
@@ -29,15 +33,20 @@ import com.pizzora.contracts.RecipeIngredientLineRequest
 import com.pizzora.contracts.RecipeTargetType
 import com.pizzora.contracts.RecipesOverviewResponse
 import com.pizzora.contracts.RestaurantSettingsDto
+import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.SizeCode
 import com.pizzora.contracts.StaffMemberDto
 import com.pizzora.contracts.TransitionOrderStatusRequest
 import com.pizzora.contracts.UpdateCategoryRequest
 import com.pizzora.contracts.UpdateCouponRequest
+import com.pizzora.contracts.UpdateDeliveryZoneRequest
 import com.pizzora.contracts.UpdateProductRequest
 import com.pizzora.contracts.UpdateRestaurantSettingsRequest
+import com.pizzora.contracts.UpdateScheduledSlotRequest
 import com.pizzora.contracts.UpdateStaffRequest
 import com.pizzora.contracts.UserRole
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -53,6 +62,7 @@ enum class OwnerOperationsSection(val label: String) {
   INVENTORY("Inventory"),
   ORDERS("Orders & Refunds"),
   COUPONS("Coupons"),
+  ZONES_SLOTS("Zones & Slots"),
 }
 
 enum class OwnerCatalogSection(val label: String) {
@@ -65,6 +75,7 @@ data class OwnerUiState(
   val isLoadingDashboard: Boolean = false,
   val isLoadingCatalog: Boolean = false,
   val isLoadingOperations: Boolean = false,
+  val isLoadingZonesAndSlots: Boolean = false,
   val isLoadingMore: Boolean = false,
   val isSubmitting: Boolean = false,
   val uploadingProductId: String? = null,
@@ -77,6 +88,10 @@ data class OwnerUiState(
   val inventoryLedger: List<InventoryLedgerEntryDto> = emptyList(),
   val coupons: List<CouponDto> = emptyList(),
   val orders: List<OrderSummaryDto> = emptyList(),
+  val deliveryZones: List<DeliveryZoneDto> = emptyList(),
+  val scheduledSlots: List<ScheduledSlotDto> = emptyList(),
+  val slotFilterType: FulfillmentType? = null,
+  val slotFilterDate: String = LocalDate.now(ZoneId.of("Asia/Kolkata")).toString(),
   val selectedOrderDetail: OrderDetailDto? = null,
   val selectedOrderFilter: OrderStatus? = null,
   val staff: List<StaffMemberDto> = emptyList(),
@@ -105,6 +120,9 @@ class OwnerViewModel(
 
   fun setOperationsSection(section: OwnerOperationsSection) {
     _uiState.update { it.copy(operationsSection = section) }
+    if (section == OwnerOperationsSection.ZONES_SLOTS) {
+      loadZonesAndSlots()
+    }
   }
 
   fun loadDashboard() {
@@ -683,6 +701,228 @@ class OwnerViewModel(
         )
       }.onFailure { t ->
         _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Staff update failed.") }
+      }
+    }
+  }
+
+  fun loadZonesAndSlots(
+    type: FulfillmentType? = _uiState.value.slotFilterType,
+    date: String = _uiState.value.slotFilterDate,
+  ) {
+    viewModelScope.launch {
+      _uiState.update {
+        it.copy(
+          isLoadingZonesAndSlots = true,
+          slotFilterType = type,
+          slotFilterDate = date,
+          errorMessage = null,
+        )
+      }
+      runCatching {
+        val zonesDef = async { repository.fetchDeliveryZones() }
+        val slotsDef = async { repository.fetchScheduledSlots(type, date.takeIf { it.isNotBlank() }) }
+        zonesDef.await() to slotsDef.await()
+      }.onSuccess { (zones, slots) ->
+        _uiState.update {
+          it.copy(
+            isLoadingZonesAndSlots = false,
+            deliveryZones = zones,
+            scheduledSlots = slots,
+          )
+        }
+      }.onFailure { t ->
+        _uiState.update {
+          it.copy(
+            isLoadingZonesAndSlots = false,
+            errorMessage = t.message ?: "Failed to load delivery zones & slots.",
+          )
+        }
+      }
+    }
+  }
+
+  fun createDeliveryZone(
+    pincode: String,
+    areaName: String,
+    minOrderPaise: Long,
+    deliveryFeePaise: Long,
+    estimatedMins: Int,
+  ) {
+    val cleanPin = pincode.trim()
+    val cleanArea = areaName.trim()
+    if (!cleanPin.matches(Regex("^[1-9][0-9]{5}$")) || cleanArea.isEmpty()) {
+      _uiState.update { it.copy(errorMessage = "Enter a valid 6-digit Indian pincode and area name.") }
+      return
+    }
+    viewModelScope.launch {
+      _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+      runCatching {
+        repository.createDeliveryZone(
+          CreateDeliveryZoneRequest(
+            pincode = cleanPin,
+            areaName = cleanArea,
+            minOrderPaise = minOrderPaise,
+            deliveryFeePaise = deliveryFeePaise,
+            estimatedMins = estimatedMins,
+            isActive = true,
+          ),
+        )
+      }.onSuccess { created ->
+        _uiState.update { state ->
+          state.copy(
+            isSubmitting = false,
+            deliveryZones = (listOf(created) + state.deliveryZones).sortedBy { it.pincode },
+          )
+        }
+        _events.tryEmit("Zone ${created.pincode} (${created.areaName}) added")
+      }.onFailure { t ->
+        _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Could not create delivery zone.") }
+      }
+    }
+  }
+
+  fun updateDeliveryZone(zoneId: String, request: UpdateDeliveryZoneRequest) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+      runCatching {
+        repository.updateDeliveryZone(zoneId, request)
+      }.onSuccess { updated ->
+        _uiState.update { state ->
+          state.copy(
+            isSubmitting = false,
+            deliveryZones = state.deliveryZones.map { if (it.id == updated.id) updated else it },
+          )
+        }
+        _events.tryEmit("Zone ${updated.pincode} updated")
+      }.onFailure { t ->
+        _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Zone update failed.") }
+      }
+    }
+  }
+
+  fun toggleZoneActive(zone: DeliveryZoneDto) {
+    updateDeliveryZone(zone.id, UpdateDeliveryZoneRequest(isActive = !zone.isActive))
+  }
+
+  fun deleteDeliveryZone(zoneId: String) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+      runCatching {
+        repository.deleteDeliveryZone(zoneId)
+      }.onSuccess {
+        _uiState.update { state ->
+          state.copy(
+            isSubmitting = false,
+            deliveryZones = state.deliveryZones.filterNot { it.id == zoneId },
+          )
+        }
+        _events.tryEmit("Delivery zone removed")
+      }.onFailure { t ->
+        _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Could not delete zone.") }
+      }
+    }
+  }
+
+  fun createScheduledSlot(
+    slotDate: String,
+    fulfillmentType: FulfillmentType,
+    startTimeIst: String,
+    endTimeIst: String,
+    cutoffMinutesBeforeStart: Int,
+    maxCapacity: Int,
+  ) {
+    if (slotDate.isBlank() || startTimeIst.isBlank() || endTimeIst.isBlank() || maxCapacity <= 0) {
+      _uiState.update { it.copy(errorMessage = "Provide date, IST times, and positive capacity.") }
+      return
+    }
+    viewModelScope.launch {
+      _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+      runCatching {
+        repository.createScheduledSlot(
+          CreateScheduledSlotRequest(
+            slotDate = slotDate.trim(),
+            fulfillmentType = fulfillmentType,
+            startTimeIst = startTimeIst.trim(),
+            endTimeIst = endTimeIst.trim(),
+            cutoffMinutesBeforeStart = cutoffMinutesBeforeStart.coerceAtLeast(0),
+            maxCapacity = maxCapacity,
+            isActive = true,
+          ),
+        )
+      }.onSuccess { created ->
+        _uiState.update { state ->
+          val matchesDate = state.slotFilterDate.isBlank() || state.slotFilterDate == created.slotDate
+          val matchesType = state.slotFilterType == null || state.slotFilterType == created.fulfillmentType
+          val nextSlots = if (matchesDate && matchesType) {
+            (state.scheduledSlots + created).sortedBy { it.startTimeIst }
+          } else {
+            state.scheduledSlots
+          }
+          state.copy(isSubmitting = false, scheduledSlots = nextSlots)
+        }
+        _events.tryEmit("Slot ${created.startTimeIst}-${created.endTimeIst} IST added")
+      }.onFailure { t ->
+        _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Slot creation failed.") }
+      }
+    }
+  }
+
+  fun toggleSlotActive(slot: ScheduledSlotDto) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+      runCatching {
+        repository.updateScheduledSlot(slot.id, UpdateScheduledSlotRequest(isActive = !slot.isActive))
+      }.onSuccess { updated ->
+        _uiState.update { state ->
+          state.copy(
+            isSubmitting = false,
+            scheduledSlots = state.scheduledSlots.map { if (it.id == updated.id) updated else it },
+          )
+        }
+      }.onFailure { t ->
+        _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Slot update failed.") }
+      }
+    }
+  }
+
+  fun updateSlotCapacity(slotId: String, maxCapacity: Int) {
+    if (maxCapacity <= 0) {
+      _uiState.update { it.copy(errorMessage = "Capacity must be positive.") }
+      return
+    }
+    viewModelScope.launch {
+      _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+      runCatching {
+        repository.updateScheduledSlot(slotId, UpdateScheduledSlotRequest(maxCapacity = maxCapacity))
+      }.onSuccess { updated ->
+        _uiState.update { state ->
+          state.copy(
+            isSubmitting = false,
+            scheduledSlots = state.scheduledSlots.map { if (it.id == updated.id) updated else it },
+          )
+        }
+        _events.tryEmit("Slot capacity updated to ${updated.maxCapacity}")
+      }.onFailure { t ->
+        _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Slot update failed.") }
+      }
+    }
+  }
+
+  fun deleteScheduledSlot(slotId: String) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+      runCatching {
+        repository.deleteScheduledSlot(slotId)
+      }.onSuccess {
+        _uiState.update { state ->
+          state.copy(
+            isSubmitting = false,
+            scheduledSlots = state.scheduledSlots.filterNot { it.id == slotId },
+          )
+        }
+        _events.tryEmit("Scheduled slot removed")
+      }.onFailure { t ->
+        _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Could not delete slot.") }
       }
     }
   }

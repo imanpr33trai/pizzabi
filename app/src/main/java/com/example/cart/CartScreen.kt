@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.checkout.CheckoutQuoteUiState
@@ -228,7 +229,10 @@ fun CartScreen(
               Surface(
                 color = MaterialTheme.colorScheme.errorContainer,
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth().testTag("quote_error_text"),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .semantics(mergeDescendants = true) {}
+                  .testTag("quote_error_text"),
               ) {
                 Text(
                   text = quoteState.quoteError,
@@ -377,11 +381,20 @@ private fun FulfillmentAndPincodeCard(
             Text(stringResource(R.string.action_check))
           }
         }
-        quoteState.quote?.deliveryZone?.let { zone ->
+        val quoteZone = quoteState.quote?.deliveryZone
+        val zoneCheck = quoteState.zoneCheckResult
+        if (quoteZone != null) {
           Text(
-            text = "${zone.areaName} (${zone.pincode}) • ETA ${zone.estimatedMins} mins",
+            text = "${quoteZone.areaName} (${quoteZone.pincode}) • ETA ${quoteZone.estimatedMins} mins • Min ${Money.formatInr(quoteZone.minOrderPaise)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.testTag("delivery_zone_summary_text"),
+          )
+        } else if (zoneCheck != null) {
+          Text(
+            text = zoneCheck.message,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (zoneCheck.isServiceable) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
             modifier = Modifier.testTag("delivery_zone_summary_text"),
           )
         }

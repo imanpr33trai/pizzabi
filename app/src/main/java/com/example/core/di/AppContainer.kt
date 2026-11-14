@@ -35,6 +35,9 @@ import com.example.orders.OrdersViewModel
 import com.example.owner.NetworkOwnerRepository
 import com.example.owner.OwnerRepository
 import com.example.owner.OwnerViewModel
+import com.example.profile.NetworkProfileRepository
+import com.example.profile.ProfileRepository
+import com.example.profile.ProfileViewModel
 
 class AppContainer(context: Context) {
   private val appContext = context.applicationContext
@@ -117,6 +120,10 @@ class AppContainer(context: Context) {
       apiClient = apiClient,
       imageUploader = productImageUploader,
     )
+  }
+
+  val profileRepository: ProfileRepository by lazy {
+    NetworkProfileRepository(apiClient = apiClient)
   }
 
   fun authViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -204,6 +211,16 @@ class AppContainer(context: Context) {
         "Unknown ViewModel class: ${modelClass.name}"
       }
       return OwnerViewModel(repository = ownerRepository) as T
+    }
+  }
+
+  fun profileViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(ProfileViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return ProfileViewModel(profileRepository = profileRepository) as T
     }
   }
 }

@@ -9,9 +9,11 @@ import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.contracts.CreateScheduledSlotRequest
 import com.pizzora.contracts.UpdateScheduledSlotRequest
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.origin
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -42,39 +44,49 @@ fun Route.scheduledSlotRoutes(
         }
 
         post {
-          val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+          val ctx = call.auditContext()
           val body = call.receive<CreateScheduledSlotRequest>()
           val created = scheduledSlotService.createSlot(
             request = body,
-            audit = AuditContext(principal.userId, principal.role.name, call.callId),
+            audit = ctx,
           )
           call.respond(HttpStatusCode.Created, created)
         }
 
         patch("/{id}") {
-          val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+          val ctx = call.auditContext()
           val slotId = parseUuid(call.parameters["id"], "slot_id")
           val body = call.receive<UpdateScheduledSlotRequest>()
           val updated = scheduledSlotService.updateSlot(
             slotId = slotId,
             request = body,
-            audit = AuditContext(principal.userId, principal.role.name, call.callId),
+            audit = ctx,
           )
           call.respond(HttpStatusCode.OK, updated)
         }
 
         delete("/{id}") {
-          val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+          val ctx = call.auditContext()
           val slotId = parseUuid(call.parameters["id"], "slot_id")
           scheduledSlotService.deleteSlot(
             slotId = slotId,
-            audit = AuditContext(principal.userId, principal.role.name, call.callId),
+            audit = ctx,
           )
           call.respond(HttpStatusCode.NoContent)
         }
       }
     }
   }
+}
+
+private fun ApplicationCall.auditContext(): AuditContext {
+  val principal = principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+  return AuditContext(
+    actorUserId = principal.userId,
+    actorRole = principal.role.name,
+    correlationId = callId ?: UUID.randomUUID().toString(),
+    ipAddress = request.origin.remoteAddress,
+  )
 }
 
 private fun parseUuid(raw: String?, field: String): UUID =

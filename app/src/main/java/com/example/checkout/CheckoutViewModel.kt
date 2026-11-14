@@ -3,15 +3,20 @@ package com.example.checkout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.core.database.CartItemWithToppings
+import com.example.core.network.PizzoraApiException
 import com.example.orders.OrderRepository
 import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CheckoutRequest
+import com.pizzora.contracts.DeliveryZoneCheckResponse
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.PaymentMethod
 import com.pizzora.contracts.ScheduleType
+import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.UpsertAddressRequest
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +34,14 @@ data class CheckoutUiState(
   val isSavingAddress: Boolean = false,
   val isAddAddressDialogOpen: Boolean = false,
   val paymentMethod: PaymentMethod = PaymentMethod.COD,
+  val scheduleType: ScheduleType = ScheduleType.ASAP,
+  val selectedSlotDate: String = LocalDate.now(ZoneId.of("Asia/Kolkata")).toString(),
+  val availableSlots: List<ScheduledSlotDto> = emptyList(),
+  val selectedSlotId: String? = null,
+  val isLoadingSlots: Boolean = false,
+  val slotsError: String? = null,
+  val selectedAddressZoneCheck: DeliveryZoneCheckResponse? = null,
+  val isCheckingAddressZone: Boolean = false,
   val isPlacingOrder: Boolean = false,
   val checkoutError: String? = null,
   val addressError: String? = null,
@@ -75,11 +88,125 @@ class CheckoutViewModel(
   }
 
   fun selectAddress(addressId: String) {
-    _uiState.update { it.copy(selectedAddressId = addressId, checkoutError = null) }
+    _uiState.update {
+      it.copy(
+        selectedAddressId = addressId,
+        selectedAddressZoneCheck = null,
+        checkoutError = null,
+      )
+    }
+  }
+
+  fun checkSelectedAddressServiceability() {
+    val state = _uiState.value
+    val selected = state.addresses.firstOrNull { it.id == state.selectedAddressId } ?: return
+    viewModelScope.launch {
+      _uiState.update { it.copy(isCheckingAddressZone = true, checkoutError = null) }
+      orderRepository.checkDeliveryZone(selected.pincode)
+        .onSuccess { response ->
+          _uiState.update {
+            it.copy(
+              isCheckingAddressZone = false,
+              selectedAddressZoneCheck = response,
+              checkoutError = if (!response.isServiceable) response.message else null,
+            )
+          }
+        }
+        .onFailure { err ->
+          _uiState.update {
+            it.copy(
+              isCheckingAddressZone = false,
+              checkoutError = err.message ?: "Could not verify delivery zone.",
+            )
+          }
+        }
+    }
   }
 
   fun selectPaymentMethod(method: PaymentMethod) {
     _uiState.update { it.copy(paymentMethod = method, checkoutError = null) }
+  }
+
+  fun onScheduleTypeChange(type: ScheduleType, fulfillmentType: FulfillmentType) {
+    if (_uiState.value.scheduleType == type) return
+    _uiState.update {
+      it.copy(
+        scheduleType = type,
+        selectedSlotId = if (type == ScheduleType.ASAP) null else it.selectedSlotId,
+        slotsError = null,
+        checkoutError = null,
+      )
+    }
+    if (type == ScheduleType.SCHEDULED) {
+      loadAvailableSlots(fulfillmentType, _uiState.value.selectedSlotDate)
+    }
+  }
+
+  fun onSlotDateChange(date: String, fulfillmentType: FulfillmentType) {
+    _uiState.update {
+      it.copy(
+        selectedSlotDate = date,
+        selectedSlotId = null,
+        slotsError = null,
+        checkoutError = null,
+      )
+    }
+    if (_uiState.value.scheduleType == ScheduleType.SCHEDULED) {
+      loadAvailableSlots(fulfillmentType, date)
+    }
+  }
+
+  fun onFulfillmentChanged(fulfillmentType: FulfillmentType) {
+    _uiState.update {
+      it.copy(
+        selectedSlotId = null,
+        slotsError = null,
+        checkoutError = null,
+      )
+    }
+    if (_uiState.value.scheduleType == ScheduleType.SCHEDULED) {
+      loadAvailableSlots(fulfillmentType, _uiState.value.selectedSlotDate)
+    }
+  }
+
+  fun loadAvailableSlots(
+    fulfillmentType: FulfillmentType,
+    date: String = _uiState.value.selectedSlotDate,
+  ) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(isLoadingSlots = true, slotsError = null) }
+      orderRepository.getAvailableSlots(fulfillmentType, date)
+        .onSuccess { response ->
+          _uiState.update { state ->
+            val validSelected = state.selectedSlotId?.takeIf { id ->
+              response.slots.any { it.id == id && it.isBookable }
+            }
+            state.copy(
+              isLoadingSlots = false,
+              selectedSlotDate = response.date,
+              availableSlots = response.slots,
+              selectedSlotId = validSelected,
+              slotsError = null,
+            )
+          }
+        }
+        .onFailure { err ->
+          _uiState.update {
+            it.copy(
+              isLoadingSlots = false,
+              availableSlots = emptyList(),
+              selectedSlotId = null,
+              slotsError = err.message ?: "Unable to load scheduled slots.",
+            )
+          }
+        }
+    }
+  }
+
+  fun selectSlot(slotId: String) {
+    val slot = _uiState.value.availableSlots.firstOrNull { it.id == slotId } ?: return
+    if (!slot.isBookable) return
+    _uiState.update { it.copy(selectedSlotId = slotId, checkoutError = null) }
   }
 
   fun openAddAddressDialog() {
@@ -95,11 +222,16 @@ class CheckoutViewModel(
     line1: String,
     pincode: String,
     city: String,
+    line2: String? = null,
+    landmark: String? = null,
+    isDefault: Boolean? = null,
   ) {
     val cleanLabel = label.trim()
     val cleanLine1 = line1.trim()
     val cleanPin = pincode.trim()
     val cleanCity = city.trim()
+    val cleanLine2 = line2?.trim()?.takeIf { it.isNotEmpty() }
+    val cleanLandmark = landmark?.trim()?.takeIf { it.isNotEmpty() }
     if (cleanLabel.isEmpty() || cleanLine1.isEmpty() || cleanCity.isEmpty()) {
       _uiState.update { it.copy(addressError = "Label, street address, and city are required.") }
       return
@@ -115,16 +247,24 @@ class CheckoutViewModel(
         UpsertAddressRequest(
           label = cleanLabel,
           line1 = cleanLine1,
+          line2 = cleanLine2,
+          landmark = cleanLandmark,
           pincode = cleanPin,
           city = cleanCity,
-          isDefault = _uiState.value.addresses.isEmpty(),
+          isDefault = isDefault ?: _uiState.value.addresses.isEmpty(),
         ),
       )
         .onSuccess { created ->
           _uiState.update { state ->
+            val updatedExisting = if (created.isDefault) {
+              state.addresses.map { it.copy(isDefault = false) }
+            } else {
+              state.addresses
+            }
             state.copy(
-              addresses = listOf(created) + state.addresses,
+              addresses = listOf(created) + updatedExisting,
               selectedAddressId = created.id,
+              selectedAddressZoneCheck = null,
               isSavingAddress = false,
               isAddAddressDialogOpen = false,
               checkoutError = null,
@@ -162,6 +302,12 @@ class CheckoutViewModel(
       return
     }
 
+    if (state.scheduleType == ScheduleType.SCHEDULED && state.selectedSlotId.isNullOrBlank()) {
+      _uiState.update { it.copy(checkoutError = "Please select a scheduled delivery/pickup time slot.") }
+      return
+    }
+
+    val effectiveSlotId = if (state.scheduleType == ScheduleType.SCHEDULED) state.selectedSlotId else null
     val req = CheckoutRequest(
       items = available.map { entry ->
         CartItemInputDto(
@@ -175,7 +321,8 @@ class CheckoutViewModel(
         )
       },
       fulfillmentType = fulfillmentType,
-      scheduleType = ScheduleType.ASAP,
+      scheduleType = state.scheduleType,
+      scheduledSlotId = effectiveSlotId,
       addressId = selectedAddressId,
       paymentMethod = state.paymentMethod,
       couponCode = couponCode?.takeIf { it.isNotBlank() },
@@ -194,15 +341,23 @@ class CheckoutViewModel(
         .onSuccess { response ->
           currentDraftSignature = null
           currentIdempotencyKey = UUID.randomUUID().toString()
-          _uiState.update { it.copy(isPlacingOrder = false, checkoutError = null) }
+          _uiState.update {
+            it.copy(
+              isPlacingOrder = false,
+              checkoutError = null,
+              scheduleType = ScheduleType.ASAP,
+              selectedSlotId = null,
+            )
+          }
           onCartCleared()
           _orderCreatedEvents.tryEmit(response.order)
         }
         .onFailure { err ->
+          val apiMsg = (err as? PizzoraApiException)?.message ?: err.message
           _uiState.update {
             it.copy(
               isPlacingOrder = false,
-              checkoutError = err.message ?: "Unable to complete checkout. Please try again.",
+              checkoutError = apiMsg ?: "Unable to complete checkout. Please try again.",
             )
           }
         }
@@ -212,6 +367,7 @@ class CheckoutViewModel(
   private fun buildSignature(req: CheckoutRequest): String = buildString {
     append(req.fulfillmentType).append('|')
     append(req.scheduleType).append('|')
+    append(req.scheduledSlotId.orEmpty()).append('|')
     append(req.addressId.orEmpty()).append('|')
     append(req.paymentMethod).append('|')
     append(req.couponCode.orEmpty()).append('|')

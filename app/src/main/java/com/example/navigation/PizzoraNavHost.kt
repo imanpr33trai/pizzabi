@@ -91,8 +91,11 @@ import com.example.owner.OwnerOperationsScreen
 import com.example.owner.OwnerReportsSummaryScreen
 import com.example.owner.OwnerSettingsAndStaffScreen
 import com.example.owner.OwnerViewModel
+import com.example.profile.CustomerProfileScreen
+import com.example.profile.ProfileViewModel
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
+import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.PaymentMethod
 import com.pizzora.contracts.UserRole
@@ -129,6 +132,7 @@ fun PizzoraApp(
   ordersViewModel: OrdersViewModel? = null,
   kdsViewModel: KdsViewModel? = null,
   ownerViewModel: OwnerViewModel? = null,
+  profileViewModel: ProfileViewModel? = null,
 ) {
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -237,6 +241,7 @@ fun PizzoraApp(
             checkoutQuoteViewModel = checkoutQuoteViewModel,
             checkoutViewModel = checkoutViewModel,
             ordersViewModel = ordersViewModel,
+            profileViewModel = profileViewModel,
             onSignOut = authViewModel::logout,
           )
         }
@@ -277,6 +282,7 @@ fun CustomerRoleShell(
   checkoutQuoteViewModel: CheckoutQuoteViewModel? = null,
   checkoutViewModel: CheckoutViewModel? = null,
   ordersViewModel: OrdersViewModel? = null,
+  profileViewModel: ProfileViewModel? = null,
   onSignOut: () -> Unit,
 ) {
   val tabs = listOf(
@@ -311,6 +317,12 @@ fun CustomerRoleShell(
 
   LaunchedEffect(cartViewModel) {
     cartViewModel?.events?.collect { message ->
+      snackbarHostState.showSnackbar(message)
+    }
+  }
+
+  LaunchedEffect(profileViewModel) {
+    profileViewModel?.events?.collect { message ->
       snackbarHostState.showSnackbar(message)
     }
   }
@@ -418,16 +430,21 @@ fun CustomerRoleShell(
                 quoteState = quoteState,
                 itemCount = cartState.totalItemCount,
                 subtotalPaise = cartState.subtotalPaise,
-                onFulfillmentTypeChange = { checkoutQuoteViewModel?.onFulfillmentTypeChange(it) },
+                onFulfillmentTypeChange = { type ->
+                  checkoutQuoteViewModel?.onFulfillmentTypeChange(type)
+                  checkoutViewModel.onFulfillmentChanged(type)
+                },
                 onSelectAddress = checkoutViewModel::selectAddress,
                 onOpenAddAddress = checkoutViewModel::openAddAddressDialog,
                 onDismissAddAddress = checkoutViewModel::dismissAddAddressDialog,
-                onSaveAddress = checkoutViewModel::saveNewAddress,
+                onSaveAddress = { label, line1, pincode, city ->
+                  checkoutViewModel.saveNewAddress(label, line1, pincode, city)
+                },
                 onSelectPaymentMethod = checkoutViewModel::selectPaymentMethod,
                 onPlaceOrder = {
                   checkoutViewModel.placeOrder(
                     cartItems = cartState.items,
-                    fulfillmentType = quoteState?.fulfillmentType ?: com.pizzora.contracts.FulfillmentType.DELIVERY,
+                    fulfillmentType = quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
                     couponCode = quoteState?.appliedCouponCode,
                     onCartCleared = {
                       cartViewModel.clearCart()
@@ -437,6 +454,36 @@ fun CustomerRoleShell(
                 },
                 onBackToCart = { isCheckoutOpen = false },
                 modifier = Modifier.weight(1f),
+                onCheckAddressZone = checkoutViewModel::checkSelectedAddressServiceability,
+                onScheduleTypeChange = { scheduleType ->
+                  checkoutViewModel.onScheduleTypeChange(
+                    scheduleType,
+                    quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
+                  )
+                },
+                onSlotDateChange = { date ->
+                  checkoutViewModel.onSlotDateChange(
+                    date,
+                    quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
+                  )
+                },
+                onSelectSlot = checkoutViewModel::selectSlot,
+                onRefreshSlots = {
+                  checkoutViewModel.loadAvailableSlots(
+                    quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
+                  )
+                },
+                onSaveAddressWithDetails = { label, line1, line2, landmark, pincode, city, isDefault ->
+                  checkoutViewModel.saveNewAddress(
+                    label = label,
+                    line1 = line1,
+                    pincode = pincode,
+                    city = city,
+                    line2 = line2,
+                    landmark = landmark,
+                    isDefault = isDefault,
+                  )
+                },
               )
             } else {
               CartScreen(
@@ -483,6 +530,29 @@ fun CustomerRoleShell(
               onRetryPayment = { ordersViewModel.retryPayment() },
               onVerifyRazorpayPayment = ordersViewModel::verifyRazorpayPayment,
               onReportPaymentFailure = ordersViewModel::reportPaymentFailure,
+              modifier = Modifier.weight(1f),
+            )
+          }
+          selectedIndex == 3 && profileViewModel != null -> {
+            val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
+            LaunchedEffect(session.user.id, profileViewModel) {
+              profileViewModel.loadProfileAndAddresses(session.user)
+            }
+            CustomerProfileScreen(
+              uiState = profileState,
+              onRefresh = { profileViewModel.loadProfileAndAddresses(session.user) },
+              onOpenEditProfile = profileViewModel::openEditProfileDialog,
+              onDismissEditProfile = profileViewModel::dismissEditProfileDialog,
+              onSaveProfile = profileViewModel::saveProfile,
+              onOpenAddAddress = profileViewModel::openAddAddressDialog,
+              onOpenEditAddress = profileViewModel::openEditAddressDialog,
+              onDismissAddressDialog = profileViewModel::dismissAddressDialog,
+              onSaveAddress = profileViewModel::saveAddress,
+              onSetDefaultAddress = profileViewModel::setDefaultAddress,
+              onDeleteAddress = profileViewModel::deleteAddress,
+              onPincodeInputChange = profileViewModel::onPincodeCheckInputChange,
+              onCheckPincode = { profileViewModel.checkPincodeServiceability() },
+              onSignOut = onSignOut,
               modifier = Modifier.weight(1f),
             )
           }
@@ -771,6 +841,16 @@ fun OwnerRoleShell(
               onTransitionOrderStatus = ownerViewModel::transitionOrderStatus,
               onRefundOrder = ownerViewModel::refundOrder,
               modifier = Modifier.weight(1f),
+              onRefreshZonesAndSlots = { ownerViewModel.loadZonesAndSlots() },
+              onSlotFilterChange = { type, date -> ownerViewModel.loadZonesAndSlots(type, date) },
+              onCreateDeliveryZone = ownerViewModel::createDeliveryZone,
+              onUpdateDeliveryZone = ownerViewModel::updateDeliveryZone,
+              onToggleZoneActive = ownerViewModel::toggleZoneActive,
+              onDeleteDeliveryZone = ownerViewModel::deleteDeliveryZone,
+              onCreateScheduledSlot = ownerViewModel::createScheduledSlot,
+              onToggleSlotActive = ownerViewModel::toggleSlotActive,
+              onUpdateSlotCapacity = ownerViewModel::updateSlotCapacity,
+              onDeleteScheduledSlot = ownerViewModel::deleteScheduledSlot,
             )
             3 -> OwnerReportsSummaryScreen(
               uiState = ownerState,

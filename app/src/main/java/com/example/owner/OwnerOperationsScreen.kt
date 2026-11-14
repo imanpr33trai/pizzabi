@@ -45,7 +45,9 @@ import androidx.compose.ui.unit.dp
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
 import com.pizzora.contracts.CouponDto
+import com.pizzora.contracts.DeliveryZoneDto
 import com.pizzora.contracts.DiscountType
+import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.IngredientUnit
 import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerReason
@@ -56,6 +58,8 @@ import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
 import com.pizzora.contracts.PaymentMethod
 import com.pizzora.contracts.PaymentStatus
+import com.pizzora.contracts.ScheduledSlotDto
+import com.pizzora.contracts.UpdateDeliveryZoneRequest
 import com.pizzora.contracts.UserRole
 
 @Composable
@@ -80,21 +84,35 @@ fun OwnerOperationsScreen(
   onTransitionOrderStatus: (orderId: String, toStatus: OrderStatus, reason: String) -> Unit,
   onRefundOrder: (orderId: String, amountPaise: Long?, reason: String) -> Unit,
   modifier: Modifier = Modifier,
+  onRefreshZonesAndSlots: () -> Unit = {},
+  onSlotFilterChange: (FulfillmentType?, String) -> Unit = { _, _ -> },
+  onCreateDeliveryZone: (pincode: String, areaName: String, minOrderPaise: Long, deliveryFeePaise: Long, estimatedMins: Int) -> Unit = { _, _, _, _, _ -> },
+  onUpdateDeliveryZone: (zoneId: String, request: UpdateDeliveryZoneRequest) -> Unit = { _, _ -> },
+  onToggleZoneActive: (DeliveryZoneDto) -> Unit = {},
+  onDeleteDeliveryZone: (String) -> Unit = {},
+  onCreateScheduledSlot: (slotDate: String, fulfillmentType: FulfillmentType, startTimeIst: String, endTimeIst: String, cutoffMins: Int, maxCapacity: Int) -> Unit = { _, _, _, _, _, _ -> },
+  onToggleSlotActive: (ScheduledSlotDto) -> Unit = {},
+  onUpdateSlotCapacity: (slotId: String, maxCapacity: Int) -> Unit = { _, _ -> },
+  onDeleteScheduledSlot: (String) -> Unit = {},
 ) {
   var showCreateIngredientDialog by remember { mutableStateOf(false) }
   var adjustingIngredient by remember { mutableStateOf<InventoryItemDto?>(null) }
   var showCreateCouponDialog by remember { mutableStateOf(false) }
   var refundingOrder by remember { mutableStateOf<OrderDetailDto?>(null) }
+  var showCreateZoneDialog by remember { mutableStateOf(false) }
+  var editingZone by remember { mutableStateOf<DeliveryZoneDto?>(null) }
+  var showCreateSlotDialog by remember { mutableStateOf(false) }
+  var editingSlot by remember { mutableStateOf<ScheduledSlotDto?>(null) }
 
   Box(modifier = modifier.fillMaxSize()) {
   Column(modifier = Modifier.fillMaxSize().testTag("owner_operations_screen")) {
-    Row(
+    LazyRow(
       modifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = 16.dp, vertical = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      OwnerOperationsSection.entries.forEach { section ->
+      items(OwnerOperationsSection.entries) { section ->
         FilterChip(
           selected = uiState.operationsSection == section,
           onClick = { onSelectSection(section) },
@@ -106,7 +124,7 @@ fun OwnerOperationsScreen(
       }
     }
 
-    if (uiState.isLoadingOperations && uiState.inventory.isEmpty() && uiState.orders.isEmpty() && uiState.coupons.isEmpty()) {
+    if (uiState.isLoadingOperations && uiState.operationsSection != OwnerOperationsSection.ZONES_SLOTS && uiState.inventory.isEmpty() && uiState.orders.isEmpty() && uiState.coupons.isEmpty()) {
       Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator()
       }
@@ -289,6 +307,22 @@ fun OwnerOperationsScreen(
               }
             }
           }
+
+          OwnerOperationsSection.ZONES_SLOTS -> {
+            ownerZonesAndSlotsItems(
+              uiState = uiState,
+              onRefresh = onRefreshZonesAndSlots,
+              onSlotFilterChange = onSlotFilterChange,
+              onOpenCreateZone = { showCreateZoneDialog = true },
+              onOpenEditZone = { editingZone = it },
+              onToggleZoneActive = onToggleZoneActive,
+              onDeleteZone = onDeleteDeliveryZone,
+              onOpenCreateSlot = { showCreateSlotDialog = true },
+              onToggleSlotActive = onToggleSlotActive,
+              onOpenEditSlot = { editingSlot = it },
+              onDeleteSlot = onDeleteScheduledSlot,
+            )
+          }
         }
       }
     }
@@ -347,6 +381,47 @@ fun OwnerOperationsScreen(
       onConfirmRefund = { amountPaise, reason ->
         onRefundOrder(refundTarget.id, amountPaise, reason)
         refundingOrder = null
+      },
+    )
+  }
+
+  if (showCreateZoneDialog || editingZone != null) {
+    DeliveryZoneEditorDialog(
+      editing = editingZone,
+      onDismiss = {
+        showCreateZoneDialog = false
+        editingZone = null
+      },
+      onCreate = { pincode, areaName, minOrderPaise, feePaise, etaMins ->
+        onCreateDeliveryZone(pincode, areaName, minOrderPaise, feePaise, etaMins)
+        showCreateZoneDialog = false
+      },
+      onUpdate = { zoneId, request ->
+        onUpdateDeliveryZone(zoneId, request)
+        editingZone = null
+      },
+    )
+  }
+
+  if (showCreateSlotDialog) {
+    CreateScheduledSlotDialog(
+      defaultDate = uiState.slotFilterDate,
+      onDismiss = { showCreateSlotDialog = false },
+      onCreate = { slotDate, type, startTime, endTime, cutoffMins, maxCap ->
+        onCreateScheduledSlot(slotDate, type, startTime, endTime, cutoffMins, maxCap)
+        showCreateSlotDialog = false
+      },
+    )
+  }
+
+  val slotToEdit = editingSlot
+  if (slotToEdit != null) {
+    EditSlotCapacityDialog(
+      slot = slotToEdit,
+      onDismiss = { editingSlot = null },
+      onSave = { newCapacity ->
+        onUpdateSlotCapacity(slotToEdit.id, newCapacity)
+        editingSlot = null
       },
     )
   }
