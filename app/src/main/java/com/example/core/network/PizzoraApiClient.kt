@@ -5,6 +5,7 @@ import com.example.core.security.TokenStorage
 import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.AdjustInventoryRequest
 import com.pizzora.contracts.ApiErrorEnvelope
+import com.pizzora.contracts.AuditLogsResponse
 import com.pizzora.contracts.AuthTokensResponse
 import com.pizzora.contracts.AvailableCouponsResponse
 import com.pizzora.contracts.AvailableSlotsResponse
@@ -43,6 +44,7 @@ import com.pizzora.contracts.MarkNotificationReadResponse
 import com.pizzora.contracts.MessageResponse
 import com.pizzora.contracts.NotificationInboxResponse
 import com.pizzora.contracts.NotificationPreferencesDto
+import com.pizzora.contracts.OperationsReportResponse
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderListResponse
 import com.pizzora.contracts.OrderPaymentStatusResponse
@@ -69,6 +71,7 @@ import com.pizzora.contracts.ResendVerificationRequest
 import com.pizzora.contracts.ResetPasswordRequest
 import com.pizzora.contracts.RestaurantSettingsDto
 import com.pizzora.contracts.RetryPaymentRequest
+import com.pizzora.contracts.SalesReportResponse
 import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.StaffMemberDto
 import com.pizzora.contracts.ToppingDto
@@ -115,6 +118,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLParameter
 import io.ktor.http.encodedPath
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
@@ -890,6 +894,50 @@ class PizzoraApiClient(
       contentType(ContentType.Application.Json)
       setBody(request)
     }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerSalesReport(
+    startDate: String? = null,
+    endDate: String? = null,
+  ): SalesReportResponse {
+    val params = buildList {
+      if (!startDate.isNullOrBlank()) add("start_date=${startDate.trim().encodeURLParameter()}")
+      if (!endDate.isNullOrBlank()) add("end_date=${endDate.trim().encodeURLParameter()}")
+    }.joinToString("&")
+    val query = if (params.isNotEmpty()) "?$params" else ""
+    val response = httpClient.get("/api/v1/owner/reports/sales$query")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerOperationsReport(
+    startDate: String? = null,
+    endDate: String? = null,
+  ): OperationsReportResponse {
+    val params = buildList {
+      if (!startDate.isNullOrBlank()) add("start_date=${startDate.trim().encodeURLParameter()}")
+      if (!endDate.isNullOrBlank()) add("end_date=${endDate.trim().encodeURLParameter()}")
+    }.joinToString("&")
+    val query = if (params.isNotEmpty()) "?$params" else ""
+    val response = httpClient.get("/api/v1/owner/reports/operations$query")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerAuditLogs(
+    entityType: String? = null,
+    action: String? = null,
+    entityId: String? = null,
+    cursor: String? = null,
+    limit: Int = 50,
+  ): AuditLogsResponse {
+    val params = buildList {
+      if (!entityType.isNullOrBlank()) add("entity_type=${entityType.trim().encodeURLParameter()}")
+      if (!action.isNullOrBlank()) add("action=${action.trim().encodeURLParameter()}")
+      if (!entityId.isNullOrBlank()) add("entity_id=${entityId.trim().encodeURLParameter()}")
+      if (!cursor.isNullOrBlank()) add("cursor=${cursor.trim().encodeURLParameter()}")
+      add("limit=${limit.coerceIn(1, 100)}")
+    }.joinToString("&")
+    val response = httpClient.get("/api/v1/owner/audit-logs?$params")
     return decodeOrThrow(response)
   }
 

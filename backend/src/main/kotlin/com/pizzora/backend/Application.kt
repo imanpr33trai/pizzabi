@@ -1,5 +1,7 @@
 package com.pizzora.backend
 
+import com.pizzora.backend.audit.AuditService
+import com.pizzora.backend.audit.auditRoutes
 import com.pizzora.backend.auth.AuthService
 import com.pizzora.backend.auth.BootstrapOwner
 import com.pizzora.backend.auth.WsTicketService
@@ -60,6 +62,8 @@ import com.pizzora.backend.realtime.RealtimeHub
 import com.pizzora.backend.realtime.realtimeRoutes
 import com.pizzora.backend.recipes.RecipeService
 import com.pizzora.backend.recipes.recipesRoutes
+import com.pizzora.backend.reporting.ReportingService
+import com.pizzora.backend.reporting.reportingRoutes
 import com.pizzora.backend.slots.ScheduledSlotService
 import com.pizzora.backend.slots.scheduledSlotRoutes
 import com.pizzora.backend.users.UsersService
@@ -386,11 +390,19 @@ fun Application.pizzoraModule(
       val deliveryZoneService = DeliveryZoneService(dataSource = dataSource)
       val scheduledSlotService = ScheduledSlotService(dataSource = dataSource)
       val notificationService = NotificationService(dataSource = dataSource)
+      val auditService = AuditService(dataSource = dataSource)
+      val reportingService = ReportingService(
+        dataSource = dataSource,
+        configService = restaurantConfigService,
+        inventoryService = inventoryService,
+      )
 
       authRoutes(authService, resolvedWsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
       restaurantConfigRoutes(restaurantConfigService, authorizationService)
       ownerRoutes(ownerService, authorizationService)
+      auditRoutes(auditService, authorizationService)
+      reportingRoutes(reportingService, authorizationService)
       deliveryZoneRoutes(deliveryZoneService, authorizationService)
       scheduledSlotRoutes(scheduledSlotService, authorizationService)
       notificationsRoutes(notificationService)

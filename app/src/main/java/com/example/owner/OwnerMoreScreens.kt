@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -26,7 +24,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,72 +43,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.PizzoraMonoBody
-import com.example.ui.theme.PizzoraMonoTitle
-import com.pizzora.contracts.Money
 import com.pizzora.contracts.StaffMemberDto
 import com.pizzora.contracts.UpdateRestaurantSettingsRequest
 import com.pizzora.contracts.UserRole
-
-@Composable
-fun OwnerReportsSummaryScreen(
-  uiState: OwnerUiState,
-  onRefresh: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  val dash = uiState.dashboard
-  LazyColumn(
-    modifier = modifier.fillMaxSize().testTag("owner_reports_screen"),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
-  ) {
-    item {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-          Icon(Icons.Filled.Assessment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-          Text("Today's Operational Snapshot", style = MaterialTheme.typography.titleLarge)
-        }
-        OutlinedButton(onClick = onRefresh, modifier = Modifier.minimumInteractiveComponentSize()) {
-          Text("Refresh")
-        }
-      }
-    }
-
-    if (dash == null) {
-      item {
-        OwnerEmptyCard(
-          title = "Snapshot loading",
-          subtitle = "Tap Refresh to fetch today's IST revenue and kitchen throughput.",
-          tag = "owner_reports_empty",
-        )
-      }
-    } else {
-      item {
-        Card(
-          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Net Today Revenue (IST)", style = MaterialTheme.typography.labelLarge)
-            Text(Money.formatInr(dash.todayRevenuePaise), style = PizzoraMonoTitle, color = MaterialTheme.colorScheme.primary)
-            Text(
-              text = "Orders Today: ${dash.todayOrderCount} • Completed: ${dash.completedTodayCount} • Active: ${dash.activeOrderCount}",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-              text = "GST Rate: ${dash.settings.gstBps / 100.0}% (${dash.settings.gstBps} bps) • Prep SLA: ${dash.settings.defaultPrepMins} mins",
-              style = PizzoraMonoBody,
-            )
-          }
-        }
-      }
-    }
-  }
-}
 
 @Composable
 fun OwnerSettingsAndStaffScreen(

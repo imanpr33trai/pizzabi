@@ -5,6 +5,7 @@ import android.net.Uri
 import com.example.core.media.ProductImageUploader
 import com.example.core.network.PizzoraApiClient
 import com.pizzora.contracts.AdjustInventoryRequest
+import com.pizzora.contracts.AuditLogsResponse
 import com.pizzora.contracts.CategoryDto
 import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
@@ -18,6 +19,7 @@ import com.pizzora.contracts.DeliveryZoneDto
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerEntryDto
+import com.pizzora.contracts.OperationsReportResponse
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
@@ -30,6 +32,7 @@ import com.pizzora.contracts.RecipeBindingDto
 import com.pizzora.contracts.RecipesOverviewResponse
 import com.pizzora.contracts.RefundDto
 import com.pizzora.contracts.RestaurantSettingsDto
+import com.pizzora.contracts.SalesReportResponse
 import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.StaffMemberDto
 import com.pizzora.contracts.TransitionOrderStatusRequest
@@ -86,6 +89,16 @@ interface OwnerRepository {
   suspend fun createScheduledSlot(request: CreateScheduledSlotRequest): ScheduledSlotDto
   suspend fun updateScheduledSlot(slotId: String, request: UpdateScheduledSlotRequest): ScheduledSlotDto
   suspend fun deleteScheduledSlot(slotId: String)
+
+  suspend fun fetchSalesReport(startDate: String? = null, endDate: String? = null): SalesReportResponse
+  suspend fun fetchOperationsReport(startDate: String? = null, endDate: String? = null): OperationsReportResponse
+  suspend fun fetchAuditLogs(
+    entityType: String? = null,
+    action: String? = null,
+    entityId: String? = null,
+    cursor: String? = null,
+    limit: Int = 50,
+  ): AuditLogsResponse
 }
 
 class NetworkOwnerRepository(
@@ -202,4 +215,24 @@ class NetworkOwnerRepository(
 
   override suspend fun deleteScheduledSlot(slotId: String) =
     apiClient.deleteOwnerSlot(slotId)
+
+  override suspend fun fetchSalesReport(startDate: String?, endDate: String?): SalesReportResponse =
+    apiClient.getOwnerSalesReport(startDate = startDate, endDate = endDate)
+
+  override suspend fun fetchOperationsReport(startDate: String?, endDate: String?): OperationsReportResponse =
+    apiClient.getOwnerOperationsReport(startDate = startDate, endDate = endDate)
+
+  override suspend fun fetchAuditLogs(
+    entityType: String?,
+    action: String?,
+    entityId: String?,
+    cursor: String?,
+    limit: Int,
+  ): AuditLogsResponse = apiClient.getOwnerAuditLogs(
+    entityType = entityType,
+    action = action,
+    entityId = entityId,
+    cursor = cursor,
+    limit = limit,
+  )
 }

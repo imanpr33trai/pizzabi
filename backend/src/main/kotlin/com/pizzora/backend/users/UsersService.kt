@@ -1,5 +1,7 @@
 package com.pizzora.backend.users
 
+import com.pizzora.backend.audit.AuditContext
+import com.pizzora.backend.audit.AuditLogger
 import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.error.ConflictException
 import com.pizzora.backend.core.error.NotFoundException
@@ -15,11 +17,17 @@ import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.UserRole
 import java.util.UUID
 import javax.sql.DataSource
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class UsersService(
   private val dataSource: DataSource,
   private val passwordHasher: PasswordHasher,
 ) {
+  private val json = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+  }
   suspend fun getProfile(userId: UUID): UserProfileDto = DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
     conn.prepareStatement(
       """
@@ -235,7 +243,11 @@ class UsersService(
     }
   }
 
-  suspend fun createStaff(actorOwnerId: UUID, request: CreateStaffRequest): StaffMemberDto {
+  suspend fun createStaff(
+    actorOwnerId: UUID,
+    request: CreateStaffRequest,
+    audit: AuditContext = AuditContext(actorOwnerId, "OWNER", UUID.randomUUID().toString()),
+  ): StaffMemberDto {
     if (request.role != UserRole.KITCHEN_STAFF && request.role != UserRole.OWNER) {
       throw ValidationException("INVALID_STAFF_ROLE", "Staff accounts can only have role KITCHEN_STAFF or OWNER.")
     }
@@ -246,6 +258,15 @@ class UsersService(
 
     val passwordHash = passwordHasher.hash(request.password)
     val newUserId = UUID.randomUUID()
+    val createdDto = StaffMemberDto(
+      userId = newUserId.toString(),
+      email = email,
+      fullName = request.fullName.trim(),
+      phone = request.phone.trim(),
+      role = request.role,
+      employeeCode = request.employeeCode.trim(),
+      isActive = true,
+    )
 
     DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
       val emailExists = conn.prepareStatement("SELECT 1 FROM users WHERE email = ?").use { ps ->
@@ -294,20 +315,25 @@ class UsersService(
         ps.setObject(4, actorOwnerId)
         ps.executeUpdate()
       }
+
+      AuditLogger.record(
+        conn = conn,
+        context = audit,
+        action = "STAFF_CREATED",
+        entityType = "staff",
+        entityId = newUserId.toString(),
+        afterJson = json.encodeToString(createdDto),
+      )
     }
 
-    return StaffMemberDto(
-      userId = newUserId.toString(),
-      email = email,
-      fullName = request.fullName.trim(),
-      phone = request.phone.trim(),
-      role = request.role,
-      employeeCode = request.employeeCode.trim(),
-      isActive = true,
-    )
+    return createdDto
   }
 
-  suspend fun updateStaff(targetUserId: UUID, request: UpdateStaffRequest): StaffMemberDto {
+  suspend fun updateStaff(
+    targetUserId: UUID,
+    request: UpdateStaffRequest,
+    audit: AuditContext = AuditContext(null, "OWNER", UUID.randomUUID().toString()),
+  ): StaffMemberDto {
     val nextRole = request.role
     val nextActive = request.isActive
     if (nextRole != null && nextRole != UserRole.KITCHEN_STAFF && nextRole != UserRole.OWNER) {
@@ -315,11 +341,30 @@ class UsersService(
     }
 
     return DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
-      val exists = conn.prepareStatement("SELECT 1 FROM staff WHERE user_id = ?").use { ps ->
+      val before = conn.prepareStatement(
+        """
+        SELECT u.id, u.email, u.full_name, u.phone, r.code AS role_code, s.employee_code, s.is_active
+        FROM staff s
+        JOIN users u ON u.id = s.user_id
+        JOIN roles r ON r.id = s.role_id
+        WHERE s.user_id = ?
+        FOR UPDATE OF s, u
+        """.trimIndent(),
+      ).use { ps ->
         ps.setObject(1, targetUserId)
-        ps.executeQuery().use { it.next() }
+        ps.executeQuery().use { rs ->
+          if (!rs.next()) throw NotFoundException("STAFF_NOT_FOUND", "Staff member not found.")
+          StaffMemberDto(
+            userId = rs.getObject("id", UUID::class.java).toString(),
+            email = rs.getString("email"),
+            fullName = rs.getString("full_name"),
+            phone = rs.getString("phone"),
+            role = UserRole.valueOf(rs.getString("role_code")),
+            employeeCode = rs.getString("employee_code"),
+            isActive = rs.getBoolean("is_active"),
+          )
+        }
       }
-      if (!exists) throw NotFoundException("STAFF_NOT_FOUND", "Staff member not found.")
 
       if (nextRole != null) {
         val roleId = conn.prepareStatement("SELECT id FROM roles WHERE code = ?").use { ps ->
@@ -385,7 +430,7 @@ class UsersService(
         }
       }
 
-      conn.prepareStatement(
+      val after = conn.prepareStatement(
         """
         SELECT u.id, u.email, u.full_name, u.phone, r.code AS role_code, s.employee_code, s.is_active
         FROM staff s
@@ -408,6 +453,18 @@ class UsersService(
           )
         }
       }
+
+      AuditLogger.record(
+        conn = conn,
+        context = audit,
+        action = "STAFF_UPDATED",
+        entityType = "staff",
+        entityId = targetUserId.toString(),
+        beforeJson = json.encodeToString(before),
+        afterJson = json.encodeToString(after),
+      )
+
+      after
     }
   }
 

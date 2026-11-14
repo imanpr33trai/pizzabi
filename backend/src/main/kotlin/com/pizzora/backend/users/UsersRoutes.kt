@@ -1,5 +1,6 @@
 package com.pizzora.backend.users
 
+import com.pizzora.backend.audit.AuditContext
 import com.pizzora.backend.authorization.AuthorizationService
 import com.pizzora.backend.authorization.PizzoraPrincipal
 import com.pizzora.backend.authorization.requirePermission
@@ -10,8 +11,11 @@ import com.pizzora.contracts.UpdateProfileRequest
 import com.pizzora.contracts.UpdateStaffRequest
 import com.pizzora.contracts.UpsertAddressRequest
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.origin
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -75,18 +79,30 @@ fun Route.usersRoutes(
 
         post {
           val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+          val ctx = call.auditContext()
           val body = call.receive<CreateStaffRequest>()
-          call.respond(HttpStatusCode.Created, usersService.createStaff(principal.userId, body))
+          call.respond(HttpStatusCode.Created, usersService.createStaff(principal.userId, body, ctx))
         }
 
         patch("/{userId}") {
           val targetUserId = parseUuid(call.parameters["userId"], "user_id")
+          val ctx = call.auditContext()
           val body = call.receive<UpdateStaffRequest>()
-          call.respond(HttpStatusCode.OK, usersService.updateStaff(targetUserId, body))
+          call.respond(HttpStatusCode.OK, usersService.updateStaff(targetUserId, body, ctx))
         }
       }
     }
   }
+}
+
+private fun ApplicationCall.auditContext(): AuditContext {
+  val principal = principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+  return AuditContext(
+    actorUserId = principal.userId,
+    actorRole = principal.role.name,
+    correlationId = callId ?: UUID.randomUUID().toString(),
+    ipAddress = request.origin.remoteAddress,
+  )
 }
 
 private fun parseUuid(raw: String?, field: String): UUID =

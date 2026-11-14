@@ -93,7 +93,7 @@ import com.example.orders.OrdersViewModel
 import com.example.owner.OwnerCatalogScreen
 import com.example.owner.OwnerDashboardScreen
 import com.example.owner.OwnerOperationsScreen
-import com.example.owner.OwnerReportsSummaryScreen
+import com.example.owner.OwnerReportsAndAuditScreen
 import com.example.owner.OwnerSettingsAndStaffScreen
 import com.example.owner.OwnerViewModel
 import com.example.profile.CustomerProfileScreen
@@ -806,7 +806,7 @@ fun OwnerRoleShell(
       0 -> vm.loadDashboard()
       1 -> vm.loadCatalogData()
       2 -> vm.loadOperationsData()
-      3 -> if (vm.uiState.value.dashboard == null) vm.loadDashboard()
+      3 -> vm.loadReportsAndAudit()
       4 -> vm.loadStaffAndSettings()
     }
   }
@@ -980,9 +980,13 @@ fun OwnerRoleShell(
               onUpdateSlotCapacity = ownerViewModel::updateSlotCapacity,
               onDeleteScheduledSlot = ownerViewModel::deleteScheduledSlot,
             )
-            3 -> OwnerReportsSummaryScreen(
+            3 -> OwnerReportsAndAuditScreen(
               uiState = ownerState,
-              onRefresh = ownerViewModel::loadDashboard,
+              onSelectSubTab = ownerViewModel::selectReportsSubTab,
+              onSelectDatePreset = ownerViewModel::selectReportDatePreset,
+              onRefresh = ownerViewModel::loadReportsAndAudit,
+              onSelectAuditEntityFilter = { filter -> ownerViewModel.loadAuditLogs(entityType = filter, reset = true) },
+              onLoadMoreAuditLogs = ownerViewModel::loadMoreAuditLogs,
               modifier = Modifier.weight(1f),
             )
             else -> OwnerSettingsAndStaffScreen(

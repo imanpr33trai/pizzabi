@@ -268,6 +268,15 @@ object OpenApiSpec {
         putJsonObject("get") { put("summary", "Fetch notification preferences (order_updates, promo_alerts, kds_sound_enabled)") }
         putJsonObject("put") { put("summary", "Update notification preferences for authenticated user") }
       }
+      putJsonObject("/api/v1/owner/reports/sales") {
+        putJsonObject("get") { put("summary", "Asia/Kolkata range sales, GST breakdown, refund-netted revenue, top products, and coupon ROI report (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/reports/operations") {
+        putJsonObject("get") { put("summary", "Asia/Kolkata range operational prep-time SLA, fulfillment split, and ingredient wastage/stock movement report (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/audit-logs") {
+        putJsonObject("get") { put("summary", "Paginated immutable audit trail of owner/staff financial, catalog, inventory, coupon, and order actions (Owner)") }
+      }
     }
   }
 }

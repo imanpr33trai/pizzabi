@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pizzora.contracts.AdjustInventoryRequest
+import com.pizzora.contracts.AuditLogEntryDto
 import com.pizzora.contracts.CategoryDto
 import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
@@ -23,6 +24,7 @@ import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerEntryDto
 import com.pizzora.contracts.InventoryLedgerReason
 import com.pizzora.contracts.OrderDetailDto
+import com.pizzora.contracts.OperationsReportResponse
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
 import com.pizzora.contracts.OwnerDashboardResponse
@@ -33,6 +35,7 @@ import com.pizzora.contracts.RecipeIngredientLineRequest
 import com.pizzora.contracts.RecipeTargetType
 import com.pizzora.contracts.RecipesOverviewResponse
 import com.pizzora.contracts.RestaurantSettingsDto
+import com.pizzora.contracts.SalesReportResponse
 import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.SizeCode
 import com.pizzora.contracts.StaffMemberDto
@@ -71,11 +74,25 @@ enum class OwnerCatalogSection(val label: String) {
   RECIPES("Recipes"),
 }
 
+enum class OwnerReportsSubTab(val label: String) {
+  SALES("Sales & GST"),
+  OPERATIONS("Operations"),
+  AUDIT_LOGS("Audit Logs"),
+}
+
+enum class ReportDatePreset(val label: String, val daysBack: Long) {
+  TODAY("Today (IST)", 0L),
+  LAST_7_DAYS("Last 7D", 6L),
+  LAST_30_DAYS("Last 30D", 29L),
+}
+
 data class OwnerUiState(
   val isLoadingDashboard: Boolean = false,
   val isLoadingCatalog: Boolean = false,
   val isLoadingOperations: Boolean = false,
   val isLoadingZonesAndSlots: Boolean = false,
+  val isLoadingReports: Boolean = false,
+  val isLoadingAuditLogs: Boolean = false,
   val isLoadingMore: Boolean = false,
   val isSubmitting: Boolean = false,
   val uploadingProductId: String? = null,
@@ -97,6 +114,13 @@ data class OwnerUiState(
   val staff: List<StaffMemberDto> = emptyList(),
   val catalogSection: OwnerCatalogSection = OwnerCatalogSection.PRODUCTS,
   val operationsSection: OwnerOperationsSection = OwnerOperationsSection.INVENTORY,
+  val reportsSubTab: OwnerReportsSubTab = OwnerReportsSubTab.SALES,
+  val reportDatePreset: ReportDatePreset = ReportDatePreset.LAST_7_DAYS,
+  val salesReport: SalesReportResponse? = null,
+  val operationsReport: OperationsReportResponse? = null,
+  val auditLogs: List<AuditLogEntryDto> = emptyList(),
+  val auditNextCursor: String? = null,
+  val auditEntityFilter: String? = null,
   val errorMessage: String? = null,
 )
 
@@ -925,5 +949,113 @@ class OwnerViewModel(
         _uiState.update { it.copy(isSubmitting = false, errorMessage = t.message ?: "Could not delete slot.") }
       }
     }
+  }
+
+  private fun istDateRangeFor(preset: ReportDatePreset): Pair<String, String> {
+    val todayIst = LocalDate.now(ZoneId.of("Asia/Kolkata"))
+    val startIst = todayIst.minusDays(preset.daysBack)
+    return startIst.toString() to todayIst.toString()
+  }
+
+  fun selectReportsSubTab(tab: OwnerReportsSubTab) {
+    _uiState.update { it.copy(reportsSubTab = tab) }
+    when (tab) {
+      OwnerReportsSubTab.SALES -> if (_uiState.value.salesReport == null) loadSalesReport()
+      OwnerReportsSubTab.OPERATIONS -> if (_uiState.value.operationsReport == null) loadOperationsReport()
+      OwnerReportsSubTab.AUDIT_LOGS -> if (_uiState.value.auditLogs.isEmpty()) loadAuditLogs(reset = true)
+    }
+  }
+
+  fun selectReportDatePreset(preset: ReportDatePreset) {
+    _uiState.update { it.copy(reportDatePreset = preset) }
+    loadSalesReport(preset)
+    loadOperationsReport(preset)
+  }
+
+  fun loadReportsAndAudit() {
+    val preset = _uiState.value.reportDatePreset
+    loadSalesReport(preset)
+    loadOperationsReport(preset)
+    loadAuditLogs(entityType = _uiState.value.auditEntityFilter, reset = true)
+  }
+
+  fun loadSalesReport(preset: ReportDatePreset = _uiState.value.reportDatePreset) {
+    val (start, end) = istDateRangeFor(preset)
+    viewModelScope.launch {
+      _uiState.update { it.copy(isLoadingReports = true, errorMessage = null) }
+      runCatching {
+        repository.fetchSalesReport(startDate = start, endDate = end)
+      }.onSuccess { report ->
+        _uiState.update { it.copy(isLoadingReports = false, salesReport = report) }
+      }.onFailure { t ->
+        _uiState.update {
+          it.copy(isLoadingReports = false, errorMessage = t.message ?: "Failed to load sales report.")
+        }
+      }
+    }
+  }
+
+  fun loadOperationsReport(preset: ReportDatePreset = _uiState.value.reportDatePreset) {
+    val (start, end) = istDateRangeFor(preset)
+    viewModelScope.launch {
+      _uiState.update { it.copy(isLoadingReports = true, errorMessage = null) }
+      runCatching {
+        repository.fetchOperationsReport(startDate = start, endDate = end)
+      }.onSuccess { report ->
+        _uiState.update { it.copy(isLoadingReports = false, operationsReport = report) }
+      }.onFailure { t ->
+        _uiState.update {
+          it.copy(isLoadingReports = false, errorMessage = t.message ?: "Failed to load operations report.")
+        }
+      }
+    }
+  }
+
+  fun loadAuditLogs(
+    entityType: String? = _uiState.value.auditEntityFilter,
+    reset: Boolean = true,
+  ) {
+    val cleanFilter = entityType?.trim()?.takeIf { it.isNotEmpty() }
+    val cursor = if (reset) null else _uiState.value.auditNextCursor
+    if (!reset && cursor == null) return
+
+    viewModelScope.launch {
+      _uiState.update {
+        it.copy(
+          isLoadingAuditLogs = true,
+          auditEntityFilter = cleanFilter,
+          errorMessage = null,
+        )
+      }
+      runCatching {
+        repository.fetchAuditLogs(
+          entityType = cleanFilter,
+          cursor = cursor,
+          limit = 25,
+        )
+      }.onSuccess { resp ->
+        _uiState.update { state ->
+          val combined = if (reset) {
+            resp.entries
+          } else {
+            val seen = state.auditLogs.map { it.id }.toSet()
+            state.auditLogs + resp.entries.filterNot { it.id in seen }
+          }
+          state.copy(
+            isLoadingAuditLogs = false,
+            auditLogs = combined,
+            auditNextCursor = resp.nextCursor,
+          )
+        }
+      }.onFailure { t ->
+        _uiState.update {
+          it.copy(isLoadingAuditLogs = false, errorMessage = t.message ?: "Failed to load audit logs.")
+        }
+      }
+    }
+  }
+
+  fun loadMoreAuditLogs() {
+    loadAuditLogs(entityType = _uiState.value.auditEntityFilter, reset = false)
   }
 }
