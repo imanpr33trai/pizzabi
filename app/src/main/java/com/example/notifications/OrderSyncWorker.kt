@@ -156,4 +156,12 @@ object OrderSyncScheduler {
       )
     }
   }
+
+  fun cancelSync(context: Context) {
+    runCatching {
+      val wm = WorkManager.getInstance(context)
+      wm.cancelUniqueWork(OrderSyncWorker.PERIODIC_WORK_NAME)
+      wm.cancelUniqueWork(OrderSyncWorker.EXPEDITED_WORK_NAME)
+    }
+  }
 }

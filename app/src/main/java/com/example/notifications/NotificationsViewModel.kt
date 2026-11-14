@@ -214,4 +214,25 @@ class NotificationsViewModel(
         }
     }
   }
+
+  fun clearActionMessage() {
+    _uiState.update { it.copy(actionMessage = null) }
+  }
+
+  fun clearSessionState() {
+    realtimeEventStream?.stop()
+    _uiState.update {
+      it.copy(
+        unreadOnlyFilter = false,
+        isLoading = false,
+        isUpdatingPreferences = false,
+        preferences = null,
+        errorMessage = null,
+        actionMessage = null,
+      )
+    }
+    viewModelScope.launch {
+      repository.clearLocalInbox()
+    }
+  }
 }

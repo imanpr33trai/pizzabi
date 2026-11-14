@@ -20,8 +20,10 @@ import androidx.work.ListenableWorker
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.example.core.database.NotificationInboxEntity
 import com.example.core.database.PizzoraDatabase
 import com.example.core.network.PizzoraApiClient
+import com.example.core.network.RealtimeEventStream
 import com.example.core.security.AuthSession
 import com.example.core.security.TokenStorage
 import com.example.notifications.NetworkNotificationRepository
@@ -38,9 +40,12 @@ import com.pizzora.contracts.NotificationDeliveryStatus
 import com.pizzora.contracts.NotificationInboxItemDto
 import com.pizzora.contracts.NotificationInboxResponse
 import com.pizzora.contracts.NotificationPreferencesDto
+import com.pizzora.contracts.RealtimeConnectionState
+import com.pizzora.contracts.RealtimeEventDto
 import com.pizzora.contracts.UpdateNotificationPreferencesRequest
 import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.UserRole
+import com.pizzora.contracts.WsEventsFrame
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
@@ -50,15 +55,23 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import java.util.concurrent.Executor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -351,6 +364,227 @@ class Phase16NotificationsRobolectricTest {
     composeTestRule.onNodeWithText("Kitchen Accepted").assertIsDisplayed()
   }
 
+  @Test
+  fun notificationsViewModel_handlesRealtimeFrame_syncsInbox_andEmitsAlertEvent() {
+    val serverItems = mutableListOf<NotificationInboxItemDto>()
+    val apiClient = createMockApiClient(
+      notificationsProvider = { unreadOnly ->
+        val list = if (unreadOnly) serverItems.filter { !it.isRead } else serverItems.toList()
+        NotificationInboxResponse(
+          notifications = list,
+          unreadCount = serverItems.count { !it.isRead },
+          serverNow = "2026-05-01T14:00:00Z",
+        )
+      },
+      preferencesHolder = { null },
+    )
+    val repo = NetworkNotificationRepository(apiClient, db.notificationInboxDao())
+    val stream = FakeRealtimeEventStream()
+    val vm = NotificationsViewModel(
+      repository = repo,
+      tokenStorage = FakeTokenStorageP16(sampleCustomerSession()),
+      realtimeEventStream = stream,
+      notificationPoster = NotificationHelper(context),
+    )
+
+    val emittedEvents = mutableListOf<String>()
+    val job = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch {
+      vm.events.collect { emittedEvents += it }
+    }
+    try {
+      vm.startSessionSync("cust-1")
+      assertEquals("cust-1", stream.startedUserId)
+
+      // Push a new order status event via WebSocket frame
+      serverItems += NotificationInboxItemDto(
+        id = "ws-notif-1",
+        eventId = "ws-evt-1",
+        title = "Out for Delivery",
+        body = "Rider picked up order PZ-305.",
+        category = NotificationCategory.ORDER_UPDATE,
+        referenceId = "order-305",
+        isRead = false,
+        deliveryStatus = NotificationDeliveryStatus.SENT_WS,
+        createdAt = "2026-05-01T14:05:00Z",
+      )
+      stream.emitFrame(
+        WsEventsFrame(
+          type = "EVENTS",
+          events = listOf(
+            RealtimeEventDto(
+              eventId = "ws-evt-1",
+              streamSeq = 42L,
+              eventType = "order.status_changed",
+              aggregateType = "order",
+              aggregateId = "order-305",
+              aggregateVersion = 3L,
+              payload = buildJsonObject { put("status", "OUT_FOR_DELIVERY") },
+              createdAt = "2026-05-01T14:05:00Z",
+            ),
+          ),
+          serverHighWaterSeq = 42L,
+          serverNow = "2026-05-01T14:05:00Z",
+        ),
+      )
+
+      composeTestRule.waitUntil(timeoutMillis = 5_000) {
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        vm.uiState.value.notifications.any { it.id == "ws-notif-1" } &&
+          vm.uiState.value.unreadCount == 1 &&
+          emittedEvents.any { it.contains("Out for Delivery") }
+      }
+
+      assertEquals(1, vm.uiState.value.unreadCount)
+      assertTrue(emittedEvents.any { it == "Out for Delivery: Rider picked up order PZ-305." })
+    } finally {
+      job.cancel()
+    }
+  }
+
+  @Test
+  fun notificationsViewModel_markAllAsRead_andClearSessionState_wipesRoomInbox() {
+    val serverItems = mutableListOf(
+      NotificationInboxItemDto(
+        id = "n-1",
+        eventId = "e-1",
+        title = "Oven Lit",
+        body = "Order PZ-401 started.",
+        category = NotificationCategory.ORDER_UPDATE,
+        referenceId = "order-401",
+        isRead = false,
+        deliveryStatus = NotificationDeliveryStatus.SENT_WS,
+        createdAt = "2026-05-01T15:00:00Z",
+      ),
+      NotificationInboxItemDto(
+        id = "n-2",
+        eventId = "e-2",
+        title = "Weekend Offer",
+        body = "Flat 20% off Margherita.",
+        category = NotificationCategory.PROMO_ALERT,
+        referenceId = null,
+        isRead = false,
+        deliveryStatus = NotificationDeliveryStatus.PENDING,
+        createdAt = "2026-05-01T15:02:00Z",
+      ),
+    )
+
+    val apiClient = createMockApiClient(
+      notificationsProvider = { unreadOnly ->
+        val list = if (unreadOnly) serverItems.filter { !it.isRead } else serverItems.toList()
+        NotificationInboxResponse(
+          notifications = list,
+          unreadCount = serverItems.count { !it.isRead },
+          serverNow = "2026-05-01T15:03:00Z",
+        )
+      },
+      preferencesHolder = { null },
+      onMarkAllRead = {
+        var count = 0
+        for (i in serverItems.indices) {
+          if (!serverItems[i].isRead) {
+            serverItems[i] = serverItems[i].copy(isRead = true)
+            count++
+          }
+        }
+        MarkAllNotificationsReadResponse(markedCount = count, unreadCount = 0)
+      },
+    )
+
+    val repo = NetworkNotificationRepository(apiClient, db.notificationInboxDao())
+    val stream = FakeRealtimeEventStream()
+    val vm = NotificationsViewModel(
+      repository = repo,
+      tokenStorage = FakeTokenStorageP16(sampleCustomerSession()),
+      realtimeEventStream = stream,
+      notificationPoster = NotificationHelper(context),
+    )
+
+    vm.refreshAll()
+    composeTestRule.waitUntil(timeoutMillis = 5_000) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      vm.uiState.value.unreadCount == 2 && vm.uiState.value.preferences != null
+    }
+
+    vm.markAllAsRead()
+    composeTestRule.waitUntil(timeoutMillis = 5_000) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      vm.uiState.value.unreadCount == 0 && vm.uiState.value.notifications.all { it.isRead }
+    }
+    assertEquals(0, vm.uiState.value.unreadCount)
+
+    // Signing out clears local Room inbox and stops realtime stream
+    vm.clearSessionState()
+    composeTestRule.waitUntil(timeoutMillis = 5_000) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      vm.uiState.value.notifications.isEmpty() && vm.uiState.value.preferences == null
+    }
+    assertTrue(stream.stopped)
+    assertNull(vm.uiState.value.preferences)
+    assertTrue(vm.uiState.value.notifications.isEmpty())
+  }
+
+  @Test
+  fun notificationHelper_createsChannels_routesCategory_andRespectsPermission() {
+    val application = context.applicationContext as Application
+    val shadowApp = Shadows.shadowOf(application)
+    val helper = NotificationHelper(context)
+    val notifManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    val shadowNotifManager = Shadows.shadowOf(notifManager)
+
+    val orderItem = NotificationInboxEntity(
+      id = "helper-order-1",
+      eventId = "helper-evt-1",
+      title = "Order Baking",
+      body = "Your sourdough pizza is in the oven.",
+      category = NotificationCategory.ORDER_UPDATE,
+      referenceId = "order-99",
+      isRead = false,
+      createdAtIso = "2026-05-01T16:00:00Z",
+    )
+    val promoItem = NotificationInboxEntity(
+      id = "helper-promo-1",
+      eventId = "helper-evt-2",
+      title = "Garlic Bread Special",
+      body = "Free dip on orders above Rs 499.",
+      category = NotificationCategory.PROMO_ALERT,
+      referenceId = null,
+      isRead = false,
+      createdAtIso = "2026-05-01T16:05:00Z",
+    )
+
+    // Denied permission on API 33+ prevents posting
+    shadowApp.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+    assertFalse(helper.hasPermission())
+    assertFalse(helper.showNotification(orderItem))
+    assertEquals(0, shadowNotifManager.allNotifications.size)
+
+    // Granted permission creates both channels and routes by category
+    shadowApp.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+    assertTrue(helper.hasPermission())
+    assertTrue(helper.showNotification(orderItem))
+    assertTrue(helper.showNotification(promoItem))
+
+    val orderChannel = notifManager.getNotificationChannel(NotificationHelper.CHANNEL_ORDER_UPDATES)
+    val promoChannel = notifManager.getNotificationChannel(NotificationHelper.CHANNEL_PROMO_ALERTS)
+    assertNotNull(orderChannel)
+    assertNotNull(promoChannel)
+    assertEquals(NotificationManager.IMPORTANCE_HIGH, orderChannel.importance)
+    assertEquals(NotificationManager.IMPORTANCE_DEFAULT, promoChannel.importance)
+
+    val posted = shadowNotifManager.allNotifications
+    assertEquals(2, posted.size)
+    val orderNotif = shadowNotifManager.getNotification(orderItem.id.hashCode())
+    val promoNotif = shadowNotifManager.getNotification(promoItem.id.hashCode())
+    assertNotNull(orderNotif)
+    assertNotNull(promoNotif)
+    assertEquals(NotificationHelper.CHANNEL_ORDER_UPDATES, orderNotif.channelId)
+    assertEquals(NotificationHelper.CHANNEL_PROMO_ALERTS, promoNotif.channelId)
+
+    val launchIntent = Shadows.shadowOf(orderNotif.contentIntent).savedIntent
+    assertTrue(launchIntent.getBooleanExtra(NotificationHelper.EXTRA_OPEN_NOTIFICATIONS, false))
+    assertEquals("order-99", launchIntent.getStringExtra(NotificationHelper.EXTRA_REFERENCE_ID))
+  }
+
   private fun createMockApiClient(
     notificationsProvider: (Boolean) -> NotificationInboxResponse,
     preferencesHolder: (UpdateNotificationPreferencesRequest?) -> NotificationPreferencesDto?,
@@ -420,6 +654,37 @@ class Phase16NotificationsRobolectricTest {
       emailVerified = true,
     ),
   )
+
+  private class FakeRealtimeEventStream : RealtimeEventStream {
+    private val _connectionState = MutableStateFlow(RealtimeConnectionState.DISCONNECTED)
+    override val connectionState: StateFlow<RealtimeConnectionState> = _connectionState.asStateFlow()
+    private val _frames = MutableSharedFlow<WsEventsFrame>(extraBufferCapacity = 16)
+    override val frames: SharedFlow<WsEventsFrame> = _frames.asSharedFlow()
+    private val _lastHighWaterSeq = MutableStateFlow(0L)
+    override val lastHighWaterSeq: StateFlow<Long> = _lastHighWaterSeq.asStateFlow()
+
+    var startedUserId: String? = null
+    var stopped: Boolean = false
+
+    override fun start(sessionUserId: String, initialSinceSeq: Long) {
+      startedUserId = sessionUserId
+      stopped = false
+      _connectionState.value = RealtimeConnectionState.CONNECTED
+    }
+
+    override fun stop() {
+      stopped = true
+      _connectionState.value = RealtimeConnectionState.DISCONNECTED
+    }
+
+    override fun updateHighWaterSeq(seq: Long) {
+      _lastHighWaterSeq.value = seq
+    }
+
+    fun emitFrame(frame: WsEventsFrame) {
+      _frames.tryEmit(frame)
+    }
+  }
 
   private class FakeTokenStorageP16(initial: AuthSession?) : TokenStorage {
     private val _sessionFlow = MutableStateFlow(initial)

@@ -149,6 +149,7 @@ fun PizzoraApp(
 
   PizzoraTheme(kdsMode = isKdsSession) {
     val navController = rememberNavController()
+    val appContext = LocalContext.current
 
     var wasSignedIn by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(session != null) }
 
@@ -167,6 +168,8 @@ fun PizzoraApp(
         }
       } else if (wasSignedIn) {
         wasSignedIn = false
+        notificationsViewModel?.clearSessionState()
+        OrderSyncScheduler.cancelSync(appContext)
         navController.navigate(LoginRoute) {
           popUpTo(0) { inclusive = true }
           launchSingleTop = true
@@ -397,6 +400,7 @@ fun CustomerRoleShell(
       onTogglePromoAlerts = { enabled -> notificationsViewModel.updatePreferences(promoAlerts = enabled) },
       onNotificationPermissionResult = notificationsViewModel::onPermissionResult,
       onBackClick = { isNotificationsOpen = false },
+      onClearActionMessage = notificationsViewModel::clearActionMessage,
       modifier = Modifier.fillMaxSize(),
     )
     return
@@ -820,6 +824,7 @@ fun OwnerRoleShell(
       onToggleKdsSound = { enabled -> notificationsViewModel.updatePreferences(kdsSoundEnabled = enabled) },
       onNotificationPermissionResult = notificationsViewModel::onPermissionResult,
       onBackClick = { isNotificationsOpen = false },
+      onClearActionMessage = notificationsViewModel::clearActionMessage,
       modifier = Modifier.fillMaxSize(),
     )
     return

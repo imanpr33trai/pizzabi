@@ -12,10 +12,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,7 +31,6 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,12 +42,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,10 +78,18 @@ fun NotificationsScreen(
   onToggleKdsSound: ((Boolean) -> Unit)? = null,
   onNotificationPermissionResult: (Boolean) -> Unit,
   onBackClick: (() -> Unit)? = null,
+  onClearActionMessage: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   if (onBackClick != null) {
     BackHandler(onBack = onBackClick)
+  }
+
+  val snackbarHostState = remember { SnackbarHostState() }
+  LaunchedEffect(uiState.actionMessage) {
+    val msg = uiState.actionMessage ?: return@LaunchedEffect
+    snackbarHostState.showSnackbar(msg)
+    onClearActionMessage()
   }
 
   val permissionLauncher = rememberLauncherForActivityResult(
@@ -86,44 +101,52 @@ fun NotificationsScreen(
   val showPermissionCard = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
     !uiState.hasNotificationPermission
 
-  Column(modifier = modifier.fillMaxSize().testTag("notifications_screen")) {
-    TopAppBar(
-      title = { Text(stringResource(R.string.notifications_title)) },
-      navigationIcon = {
-        if (onBackClick != null) {
+  Scaffold(
+    modifier = modifier.fillMaxSize().testTag("notifications_screen"),
+    contentWindowInsets = WindowInsets.safeDrawing,
+    snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+    topBar = {
+      TopAppBar(
+        title = { Text(stringResource(R.string.notifications_title)) },
+        navigationIcon = {
+          if (onBackClick != null) {
+            IconButton(
+              onClick = onBackClick,
+              modifier = Modifier.minimumInteractiveComponentSize().testTag("notifications_back_button"),
+            ) {
+              Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.action_back),
+              )
+            }
+          }
+        },
+        actions = {
+          if (uiState.unreadCount > 0) {
+            TextButton(
+              onClick = onMarkAllRead,
+              modifier = Modifier.minimumInteractiveComponentSize().testTag("notifications_mark_all_read_button"),
+            ) {
+              Icon(Icons.Filled.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(stringResource(R.string.notifications_mark_all_read))
+            }
+          }
           IconButton(
-            onClick = onBackClick,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("notifications_back_button"),
+            onClick = onRefresh,
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("notifications_refresh_button"),
           ) {
-            Icon(
-              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-              contentDescription = stringResource(R.string.action_back),
-            )
+            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
           }
-        }
-      },
-      actions = {
-        if (uiState.unreadCount > 0) {
-          TextButton(
-            onClick = onMarkAllRead,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("notifications_mark_all_read_button"),
-          ) {
-            Icon(Icons.Filled.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(stringResource(R.string.notifications_mark_all_read))
-          }
-        }
-        IconButton(
-          onClick = onRefresh,
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("notifications_refresh_button"),
-        ) {
-          Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
-        }
-      },
-    )
-
+        },
+      )
+    },
+  ) { innerPadding ->
     LazyColumn(
-      modifier = Modifier.fillMaxSize().testTag("notifications_list"),
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(innerPadding)
+        .testTag("notifications_list"),
       contentPadding = PaddingValues(16.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -412,11 +435,17 @@ private fun NotificationInboxCard(
             fontWeight = if (item.isRead) FontWeight.Normal else FontWeight.SemiBold,
           )
         }
-        AssistChip(
-          onClick = {},
-          enabled = false,
-          label = { Text(item.category.replace('_', ' ')) },
-        )
+        Surface(
+          shape = MaterialTheme.shapes.small,
+          color = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+          Text(
+            text = item.category.replace('_', ' '),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+          )
+        }
       }
 
       Text(
