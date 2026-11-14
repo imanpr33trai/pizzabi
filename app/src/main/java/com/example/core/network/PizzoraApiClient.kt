@@ -16,8 +16,13 @@ import com.pizzora.contracts.ConfirmProductImageRequest
 import com.pizzora.contracts.CouponDto
 import com.pizzora.contracts.CreateCategoryRequest
 import com.pizzora.contracts.CreateCouponRequest
+import com.pizzora.contracts.CreateCrustRequest
 import com.pizzora.contracts.CreateIngredientRequest
 import com.pizzora.contracts.CreateProductRequest
+import com.pizzora.contracts.CreateStaffRequest
+import com.pizzora.contracts.CreateToppingRequest
+import com.pizzora.contracts.CreateVariantRequest
+import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.EventsReplayResponse
 import com.pizzora.contracts.FailPaymentAttemptRequest
 import com.pizzora.contracts.ForgotPasswordRequest
@@ -31,26 +36,42 @@ import com.pizzora.contracts.MessageResponse
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderListResponse
 import com.pizzora.contracts.OrderPaymentStatusResponse
+import com.pizzora.contracts.OrderStatus
+import com.pizzora.contracts.OwnerDashboardResponse
+import com.pizzora.contracts.OwnerRefundRequest
 import com.pizzora.contracts.PresignProductImageRequest
 import com.pizzora.contracts.PresignProductImageResponse
 import com.pizzora.contracts.PricingQuoteRequest
 import com.pizzora.contracts.PricingQuoteResponse
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductImageDto
+import com.pizzora.contracts.ProductVariantDto
+import com.pizzora.contracts.PublicConfigResponse
 import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.PutRecipeRequest
 import com.pizzora.contracts.RecipeBindingDto
 import com.pizzora.contracts.RecipesOverviewResponse
 import com.pizzora.contracts.RefreshTokenRequest
+import com.pizzora.contracts.RefundDto
 import com.pizzora.contracts.RegisterRequest
 import com.pizzora.contracts.ReplaceCartRequest
 import com.pizzora.contracts.ResendVerificationRequest
 import com.pizzora.contracts.ResetPasswordRequest
+import com.pizzora.contracts.RestaurantSettingsDto
 import com.pizzora.contracts.RetryPaymentRequest
+import com.pizzora.contracts.StaffMemberDto
+import com.pizzora.contracts.ToppingDto
+import com.pizzora.contracts.TransitionOrderStatusRequest
 import com.pizzora.contracts.UpdateCategoryRequest
 import com.pizzora.contracts.UpdateCouponRequest
+import com.pizzora.contracts.UpdateCrustRequest
+import com.pizzora.contracts.UpdateIngredientRequest
 import com.pizzora.contracts.UpdateOrderPriorityRequest
 import com.pizzora.contracts.UpdateProductRequest
+import com.pizzora.contracts.UpdateRestaurantSettingsRequest
+import com.pizzora.contracts.UpdateStaffRequest
+import com.pizzora.contracts.UpdateToppingRequest
+import com.pizzora.contracts.UpdateVariantRequest
 import com.pizzora.contracts.UpsertAddressRequest
 import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.ValidateCartRequest
@@ -576,6 +597,149 @@ class PizzoraApiClient(
     request: UpdateOrderPriorityRequest,
   ): KdsTicketActionResponse {
     val response = httpClient.patch("/api/v1/kds/orders/$orderId/priority") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getPublicConfig(): PublicConfigResponse {
+    val response = httpClient.get("/api/v1/config/public")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerDashboard(): OwnerDashboardResponse {
+    val response = httpClient.get("/api/v1/owner/dashboard")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerSettings(): RestaurantSettingsDto {
+    val response = httpClient.get("/api/v1/owner/settings")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateOwnerSettings(request: UpdateRestaurantSettingsRequest): RestaurantSettingsDto {
+    val response = httpClient.put("/api/v1/owner/settings") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerOrders(status: OrderStatus? = null, limit: Int = 50): OrderListResponse {
+    val params = buildList {
+      if (status != null) add("status=${status.name}")
+      add("limit=$limit")
+    }.joinToString("&")
+    val response = httpClient.get("/api/v1/owner/orders?$params")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun transitionOwnerOrderStatus(
+    orderId: String,
+    request: TransitionOrderStatusRequest,
+  ): OrderDetailDto {
+    val response = httpClient.patch("/api/v1/owner/orders/$orderId/status") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun refundOwnerOrder(
+    orderId: String,
+    idempotencyKey: String,
+    request: OwnerRefundRequest,
+  ): RefundDto {
+    val response = httpClient.post("/api/v1/owner/orders/$orderId/refund") {
+      header("Idempotency-Key", idempotencyKey)
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerStaff(): List<StaffMemberDto> {
+    val response = httpClient.get("/api/v1/owner/staff")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createOwnerStaff(request: CreateStaffRequest): StaffMemberDto {
+    val response = httpClient.post("/api/v1/owner/staff") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateOwnerStaff(userId: String, request: UpdateStaffRequest): StaffMemberDto {
+    val response = httpClient.patch("/api/v1/owner/staff/$userId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun addProductVariant(productId: String, request: CreateVariantRequest): ProductVariantDto {
+    val response = httpClient.post("/api/v1/owner/products/$productId/variants") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateProductVariant(variantId: String, request: UpdateVariantRequest): ProductVariantDto {
+    val response = httpClient.patch("/api/v1/owner/variants/$variantId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerCrusts(): List<CrustOptionDto> {
+    val response = httpClient.get("/api/v1/owner/crusts")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createOwnerCrust(request: CreateCrustRequest): CrustOptionDto {
+    val response = httpClient.post("/api/v1/owner/crusts") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateOwnerCrust(crustId: String, request: UpdateCrustRequest): CrustOptionDto {
+    val response = httpClient.patch("/api/v1/owner/crusts/$crustId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun getOwnerToppings(): List<ToppingDto> {
+    val response = httpClient.get("/api/v1/owner/toppings")
+    return decodeOrThrow(response)
+  }
+
+  suspend fun createOwnerTopping(request: CreateToppingRequest): ToppingDto {
+    val response = httpClient.post("/api/v1/owner/toppings") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateOwnerTopping(toppingId: String, request: UpdateToppingRequest): ToppingDto {
+    val response = httpClient.patch("/api/v1/owner/toppings/$toppingId") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun updateIngredient(ingredientId: String, request: UpdateIngredientRequest): InventoryItemDto {
+    val response = httpClient.patch("/api/v1/owner/inventory/$ingredientId") {
       contentType(ContentType.Application.Json)
       setBody(request)
     }

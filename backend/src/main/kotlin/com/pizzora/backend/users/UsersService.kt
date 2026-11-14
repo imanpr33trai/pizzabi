@@ -178,15 +178,31 @@ class UsersService(
 
   suspend fun deleteAddress(userId: UUID, addressId: UUID) {
     DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
-      val deleted = conn.prepareStatement(
-        "DELETE FROM addresses WHERE id = ? AND user_id = ?",
+      val deletedWasDefault = conn.prepareStatement(
+        "DELETE FROM addresses WHERE id = ? AND user_id = ? RETURNING is_default",
       ).use { ps ->
         ps.setObject(1, addressId)
         ps.setObject(2, userId)
-        ps.executeUpdate()
+        ps.executeQuery().use { rs ->
+          if (!rs.next()) {
+            throw NotFoundException("ADDRESS_NOT_FOUND", "Address not found for current user.")
+          }
+          rs.getBoolean("is_default")
+        }
       }
-      if (deleted == 0) {
-        throw NotFoundException("ADDRESS_NOT_FOUND", "Address not found for current user.")
+      if (deletedWasDefault) {
+        conn.prepareStatement(
+          """
+          UPDATE addresses
+          SET is_default = TRUE
+          WHERE id = (
+            SELECT id FROM addresses WHERE user_id = ? ORDER BY created_at DESC LIMIT 1
+          )
+          """.trimIndent(),
+        ).use { ps ->
+          ps.setObject(1, userId)
+          ps.executeUpdate()
+        }
       }
     }
   }

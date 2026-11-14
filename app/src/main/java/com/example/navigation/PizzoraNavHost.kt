@@ -85,6 +85,12 @@ import com.example.kds.KdsScreen
 import com.example.kds.KdsViewModel
 import com.example.orders.OrdersScreen
 import com.example.orders.OrdersViewModel
+import com.example.owner.OwnerCatalogScreen
+import com.example.owner.OwnerDashboardScreen
+import com.example.owner.OwnerOperationsScreen
+import com.example.owner.OwnerReportsSummaryScreen
+import com.example.owner.OwnerSettingsAndStaffScreen
+import com.example.owner.OwnerViewModel
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
 import com.pizzora.contracts.OrderStatus
@@ -122,6 +128,7 @@ fun PizzoraApp(
   checkoutViewModel: CheckoutViewModel? = null,
   ordersViewModel: OrdersViewModel? = null,
   kdsViewModel: KdsViewModel? = null,
+  ownerViewModel: OwnerViewModel? = null,
 ) {
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -252,6 +259,7 @@ fun PizzoraApp(
           OwnerRoleShell(
             session = active,
             kdsViewModel = kdsViewModel,
+            ownerViewModel = ownerViewModel,
             onSignOut = authViewModel::logout,
           )
         }
@@ -601,6 +609,7 @@ fun KdsRoleShell(
 fun OwnerRoleShell(
   session: AuthSession,
   kdsViewModel: KdsViewModel? = null,
+  ownerViewModel: OwnerViewModel? = null,
   onSignOut: () -> Unit,
 ) {
   val tabs = listOf(
@@ -612,6 +621,24 @@ fun OwnerRoleShell(
   )
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
   var isKdsViewOpen by rememberSaveable { mutableStateOf(false) }
+  val snackbarHostState = remember { SnackbarHostState() }
+
+  LaunchedEffect(ownerViewModel) {
+    ownerViewModel?.events?.collect { message ->
+      snackbarHostState.showSnackbar(message)
+    }
+  }
+
+  LaunchedEffect(selectedIndex, ownerViewModel) {
+    val vm = ownerViewModel ?: return@LaunchedEffect
+    when (selectedIndex) {
+      0 -> vm.loadDashboard()
+      1 -> vm.loadCatalogData()
+      2 -> vm.loadOperationsData()
+      3 -> if (vm.uiState.value.dashboard == null) vm.loadDashboard()
+      4 -> vm.loadStaffAndSettings()
+    }
+  }
 
   if (isKdsViewOpen && kdsViewModel != null) {
     androidx.activity.compose.BackHandler {
@@ -643,6 +670,7 @@ fun OwnerRoleShell(
     val useRail = maxWidth >= 600.dp
     Scaffold(
       contentWindowInsets = WindowInsets.safeDrawing,
+      snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
       topBar = {
         TopAppBar(
           title = { Text(stringResource(R.string.role_owner_title), style = MaterialTheme.typography.headlineSmall) },
@@ -673,6 +701,7 @@ fun OwnerRoleShell(
                 onClick = { selectedIndex = idx },
                 icon = { Icon(icon, contentDescription = label) },
                 label = { Text(label) },
+                modifier = Modifier.testTag("owner_tab_${label.lowercase()}"),
               )
             }
           }
@@ -688,16 +717,76 @@ fun OwnerRoleShell(
                 onClick = { selectedIndex = idx },
                 icon = { Icon(icon, contentDescription = label) },
                 label = { Text(label) },
+                modifier = Modifier.testTag("owner_tab_${label.lowercase()}"),
               )
             }
           }
         }
-        RoleShellCard(
-          title = "${stringResource(R.string.role_owner_title)} • ${tabs[selectedIndex].first}",
-          subtitle = "Manager: ${session.user.fullName} (${session.user.email})",
-          badge = "OWNER",
-          modifier = Modifier.weight(1f),
-        )
+        if (ownerViewModel == null) {
+          RoleShellCard(
+            title = "${stringResource(R.string.role_owner_title)} • ${tabs[selectedIndex].first}",
+            subtitle = "Manager: ${session.user.fullName} (${session.user.email})",
+            badge = "OWNER",
+            modifier = Modifier.weight(1f),
+          )
+        } else {
+          val ownerState by ownerViewModel.uiState.collectAsStateWithLifecycle()
+          when (selectedIndex) {
+            0 -> OwnerDashboardScreen(
+              uiState = ownerState,
+              onRefresh = ownerViewModel::loadDashboard,
+              onToggleStoreOpen = ownerViewModel::toggleStoreOpen,
+              onQuickRestock = ownerViewModel::adjustInventory,
+              onOpenKds = if (kdsViewModel != null) {
+                { isKdsViewOpen = true }
+              } else {
+                null
+              },
+              onGoToOperations = { selectedIndex = 2 },
+              modifier = Modifier.weight(1f),
+            )
+            1 -> OwnerCatalogScreen(
+              uiState = ownerState,
+              onSelectSection = ownerViewModel::setCatalogSection,
+              onRefresh = ownerViewModel::loadCatalogData,
+              onCreateCategory = ownerViewModel::createCategory,
+              onToggleCategoryActive = ownerViewModel::toggleCategoryActive,
+              onCreateProduct = ownerViewModel::createProduct,
+              onToggleProductActive = ownerViewModel::toggleProductActive,
+              onUploadProductPhoto = ownerViewModel::uploadProductPhoto,
+              onDeleteProductPhoto = ownerViewModel::deleteProductPhoto,
+              onSaveRecipe = ownerViewModel::saveRecipe,
+              modifier = Modifier.weight(1f),
+            )
+            2 -> OwnerOperationsScreen(
+              uiState = ownerState,
+              onSelectSection = ownerViewModel::setOperationsSection,
+              onRefresh = ownerViewModel::loadOperationsData,
+              onCreateIngredient = ownerViewModel::createIngredient,
+              onAdjustInventory = ownerViewModel::adjustInventory,
+              onCreateCoupon = ownerViewModel::createCoupon,
+              onToggleCouponActive = ownerViewModel::toggleCouponActive,
+              onSelectOrder = ownerViewModel::selectOrder,
+              onDismissOrderDetail = ownerViewModel::dismissOrderDetail,
+              onTransitionOrderStatus = ownerViewModel::transitionOrderStatus,
+              onRefundOrder = ownerViewModel::refundOrder,
+              modifier = Modifier.weight(1f),
+            )
+            3 -> OwnerReportsSummaryScreen(
+              uiState = ownerState,
+              onRefresh = ownerViewModel::loadDashboard,
+              modifier = Modifier.weight(1f),
+            )
+            else -> OwnerSettingsAndStaffScreen(
+              uiState = ownerState,
+              onRefresh = ownerViewModel::loadStaffAndSettings,
+              onUpdateSettings = ownerViewModel::updateSettings,
+              onCreateStaff = ownerViewModel::createStaff,
+              onToggleStaffActive = ownerViewModel::toggleStaffActive,
+              modifier = Modifier.weight(1f),
+            )
+          }
+        }
       }
     }
   }

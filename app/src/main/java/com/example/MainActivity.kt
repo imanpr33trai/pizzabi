@@ -13,6 +13,7 @@ import com.example.checkout.CheckoutViewModel
 import com.example.kds.KdsViewModel
 import com.example.navigation.PizzoraApp
 import com.example.orders.OrdersViewModel
+import com.example.owner.OwnerViewModel
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,6 +29,7 @@ class MainActivity : ComponentActivity() {
       val checkoutViewModel: CheckoutViewModel = viewModel(factory = container.checkoutViewModelFactory())
       val ordersViewModel: OrdersViewModel = viewModel(factory = container.ordersViewModelFactory())
       val kdsViewModel: KdsViewModel = viewModel(factory = container.kdsViewModelFactory())
+      val ownerViewModel: OwnerViewModel = viewModel(factory = container.ownerViewModelFactory())
       PizzoraApp(
         authViewModel = authViewModel,
         catalogViewModel = catalogViewModel,
@@ -36,6 +38,7 @@ class MainActivity : ComponentActivity() {
         checkoutViewModel = checkoutViewModel,
         ordersViewModel = ordersViewModel,
         kdsViewModel = kdsViewModel,
+        ownerViewModel = ownerViewModel,
       )
     }
   }

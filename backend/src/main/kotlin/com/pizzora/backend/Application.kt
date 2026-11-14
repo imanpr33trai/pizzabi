@@ -14,6 +14,8 @@ import com.pizzora.backend.categories.CategoriesService
 import com.pizzora.backend.categories.categoriesRoutes
 import com.pizzora.backend.checkout.CheckoutService
 import com.pizzora.backend.checkout.checkoutRoutes
+import com.pizzora.backend.config.RestaurantConfigService
+import com.pizzora.backend.config.restaurantConfigRoutes
 import com.pizzora.backend.core.config.AppConfig
 import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.db.PostgresJdbcProbe
@@ -42,6 +44,8 @@ import com.pizzora.backend.kitchen.KitchenService
 import com.pizzora.backend.kitchen.kitchenRoutes
 import com.pizzora.backend.orders.OrderService
 import com.pizzora.backend.orders.ordersRoutes
+import com.pizzora.backend.owner.OwnerService
+import com.pizzora.backend.owner.ownerRoutes
 import com.pizzora.backend.payments.PaymentService
 import com.pizzora.backend.payments.paymentsRoutes
 import com.pizzora.backend.pricing.PricingService
@@ -54,8 +58,12 @@ import com.pizzora.backend.realtime.RealtimeHub
 import com.pizzora.backend.realtime.realtimeRoutes
 import com.pizzora.backend.recipes.RecipeService
 import com.pizzora.backend.recipes.recipesRoutes
+import com.pizzora.backend.slots.ScheduledSlotService
+import com.pizzora.backend.slots.scheduledSlotRoutes
 import com.pizzora.backend.users.UsersService
 import com.pizzora.backend.users.usersRoutes
+import com.pizzora.backend.zones.DeliveryZoneService
+import com.pizzora.backend.zones.deliveryZoneRoutes
 import com.pizzora.contracts.ApiErrorDetail
 import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.DependencyHealthStatus
@@ -364,9 +372,24 @@ fun Application.pizzoraModule(
         effectiveRealtimeHub.close()
       }
       val realtimeEventService = RealtimeEventService(dataSource)
+      val restaurantConfigService = RestaurantConfigService(
+        dataSource = dataSource,
+        cacheStore = effectiveCacheStore,
+      )
+      val ownerService = OwnerService(
+        dataSource = dataSource,
+        configService = restaurantConfigService,
+        inventoryService = inventoryService,
+      )
+      val deliveryZoneService = DeliveryZoneService(dataSource = dataSource)
+      val scheduledSlotService = ScheduledSlotService(dataSource = dataSource)
 
       authRoutes(authService, resolvedWsTicketService, rateLimiter)
       usersRoutes(usersService, authorizationService)
+      restaurantConfigRoutes(restaurantConfigService, authorizationService)
+      ownerRoutes(ownerService, authorizationService)
+      deliveryZoneRoutes(deliveryZoneService, authorizationService)
+      scheduledSlotRoutes(scheduledSlotService, authorizationService)
       categoriesRoutes(categoriesService, authorizationService)
       catalogRoutes(catalogService, authorizationService)
       productImagesRoutes(productImagesService, authorizationService)

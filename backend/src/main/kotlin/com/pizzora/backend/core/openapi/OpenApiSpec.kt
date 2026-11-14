@@ -218,11 +218,42 @@ object OpenApiSpec {
       putJsonObject("/api/v1/kds/orders/{id}/priority") {
         putJsonObject("patch") { put("summary", "Toggle expedited kitchen priority flag with version bump and ORDER_PRIORITY_CHANGED event") }
       }
+      putJsonObject("/api/v1/config/public") {
+        putJsonObject("get") { put("summary", "Public store status, name, GST bps, and default prep SLA") }
+      }
+      putJsonObject("/api/v1/owner/dashboard") {
+        putJsonObject("get") { put("summary", "Owner KPI dashboard (today revenue, active orders, low-stock alerts, store settings)") }
+      }
+      putJsonObject("/api/v1/owner/settings") {
+        putJsonObject("get") { put("summary", "Get store & GST settings (Owner)") }
+        putJsonObject("put") { put("summary", "Update store open/closed switch, GST bps, or prep SLA with audit logging (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/orders") {
+        putJsonObject("get") { put("summary", "List all orders across customers with optional status filter (Owner)") }
+      }
       putJsonObject("/api/v1/events/replay") {
         putJsonObject("get") { put("summary", "Replay room-authorized sequenced realtime events since stream_seq with server_high_water_seq cursor") }
       }
       putJsonObject("/ws/v1/events") {
         putJsonObject("get") { put("summary", "WebSocket event stream authenticated via single-use ws-ticket or Bearer JWT with room isolation and replay") }
+      }
+      putJsonObject("/api/v1/me/addresses") {
+        putJsonObject("get") { put("summary", "List authenticated customer delivery addresses") }
+        putJsonObject("post") { put("summary", "Create delivery address with 6-digit Indian pincode validation") }
+      }
+      putJsonObject("/api/v1/delivery-zones/check") {
+        putJsonObject("get") { put("summary", "Check pincode delivery serviceability, min order, fee, and ETA") }
+      }
+      putJsonObject("/api/v1/slots") {
+        putJsonObject("get") { put("summary", "List active delivery or pickup time slots for an Asia/Kolkata (IST) date with bookability and remaining capacity") }
+      }
+      putJsonObject("/api/v1/owner/delivery-zones") {
+        putJsonObject("get") { put("summary", "List all configured delivery zones (Owner)") }
+        putJsonObject("post") { put("summary", "Create delivery zone for a pincode (Owner)") }
+      }
+      putJsonObject("/api/v1/owner/slots") {
+        putJsonObject("get") { put("summary", "List scheduled slots with capacity usage (Owner)") }
+        putJsonObject("post") { put("summary", "Create Asia/Kolkata scheduled order time slot (Owner)") }
       }
     }
   }

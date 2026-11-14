@@ -32,6 +32,9 @@ import com.example.kds.ToneGeneratorKdsChimePlayer
 import com.example.orders.NetworkOrderRepository
 import com.example.orders.OrderRepository
 import com.example.orders.OrdersViewModel
+import com.example.owner.NetworkOwnerRepository
+import com.example.owner.OwnerRepository
+import com.example.owner.OwnerViewModel
 
 class AppContainer(context: Context) {
   private val appContext = context.applicationContext
@@ -106,6 +109,13 @@ class AppContainer(context: Context) {
     ProductImageUploader(
       apiClient = apiClient,
       imageCompressor = imageCompressor,
+    )
+  }
+
+  val ownerRepository: OwnerRepository by lazy {
+    NetworkOwnerRepository(
+      apiClient = apiClient,
+      imageUploader = productImageUploader,
     )
   }
 
@@ -184,6 +194,16 @@ class AppContainer(context: Context) {
         chimePlayer = kdsChimePlayer,
         realtimeEventStream = webSocketEventClient,
       ) as T
+    }
+  }
+
+  fun ownerViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(OwnerViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return OwnerViewModel(repository = ownerRepository) as T
     }
   }
 }
