@@ -2,6 +2,7 @@ package com.pizzora.backend.core.error
 
 import com.pizzora.contracts.ApiErrorDetail
 import com.pizzora.contracts.ApiErrorEnvelope
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -63,6 +64,12 @@ class TooManyRequestsException(
   details: Map<String, String> = emptyMap(),
 ) : AppException(HttpStatusCode.TooManyRequests, code, message, details)
 
+class PayloadTooLargeException(
+  code: String = "PAYLOAD_TOO_LARGE",
+  message: String = "Request body exceeds the maximum allowed size.",
+  details: Map<String, String> = emptyMap(),
+) : AppException(HttpStatusCode.PayloadTooLarge, code, message, details)
+
 class ServiceUnavailableException(
   code: String = "SERVICE_UNAVAILABLE",
   message: String,
@@ -82,6 +89,12 @@ fun Application.installErrorHandling() {
         correlationId,
         cause.message,
       )
+      if (cause is TooManyRequestsException) {
+        val retryAfter = cause.details["retry_after_seconds"] ?: "60"
+        if (!call.response.headers.contains(HttpHeaders.RetryAfter)) {
+          call.response.headers.append(HttpHeaders.RetryAfter, retryAfter)
+        }
+      }
       call.respond(
         cause.statusCode,
         ApiErrorEnvelope(

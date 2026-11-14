@@ -1,6 +1,7 @@
 package com.pizzora.backend.images
 
 import com.pizzora.backend.core.config.StorageConfig
+import com.pizzora.backend.core.security.StorageKeyValidator
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -90,6 +91,7 @@ class S3ObjectStorageClient(
   }
 
   override fun presignPut(objectKey: String, contentType: String, expiresInSeconds: Long): String {
+    val safeKey = StorageKeyValidator.validateObjectKey(objectKey)
     if (config.endpoint.isBlank() || config.bucket.isBlank()) {
       throw ObjectStorageUnavailableException("Object storage endpoint or bucket is not configured.")
     }
@@ -97,7 +99,7 @@ class S3ObjectStorageClient(
     val amzDate = AMZ_DATE_FORMAT.format(now)
     val dateStamp = DATE_STAMP_FORMAT.format(now)
     val scope = "$dateStamp/${config.region}/s3/aws4_request"
-    val canonicalUri = "/${encodeSegment(config.bucket)}/${encodePath(objectKey)}"
+    val canonicalUri = "/${encodeSegment(config.bucket)}/${encodePath(safeKey)}"
 
     val queryParams = TreeMap<String, String>().apply {
       put("X-Amz-Algorithm", "AWS4-HMAC-SHA256")
@@ -132,8 +134,9 @@ class S3ObjectStorageClient(
   }
 
   override suspend fun inspectObject(objectKey: String): InspectedObject? = withContext(Dispatchers.IO) {
+    val safeKey = StorageKeyValidator.validateObjectKey(objectKey)
     val headResp = try {
-      executeSignedRequest("HEAD", objectKey, HttpRequest.BodyPublishers.noBody())
+      executeSignedRequest("HEAD", safeKey, HttpRequest.BodyPublishers.noBody())
     } catch (ex: Exception) {
       throw ObjectStorageUnavailableException("Failed to contact object storage during HEAD inspection.", ex)
     }
@@ -151,7 +154,7 @@ class S3ObjectStorageClient(
     val rangeResp = try {
       executeSignedRequest(
         method = "GET",
-        objectKey = objectKey,
+        objectKey = safeKey,
         bodyPublisher = HttpRequest.BodyPublishers.noBody(),
         extraHeaders = mapOf("Range" to "bytes=0-15"),
       )
@@ -174,14 +177,17 @@ class S3ObjectStorageClient(
   }
 
   override suspend fun deleteObject(objectKey: String): Boolean = withContext(Dispatchers.IO) {
+    val safeKey = StorageKeyValidator.validateObjectKey(objectKey)
     runCatching {
-      val resp = executeSignedRequest("DELETE", objectKey, HttpRequest.BodyPublishers.noBody())
+      val resp = executeSignedRequest("DELETE", safeKey, HttpRequest.BodyPublishers.noBody())
       resp.statusCode() in 200..299 || resp.statusCode() == 404
     }.getOrDefault(false)
   }
 
-  override fun publicUrlFor(objectKey: String): String =
-    "${config.publicBaseUrl.trimEnd('/')}/${objectKey.trimStart('/')}"
+  override fun publicUrlFor(objectKey: String): String {
+    val safeKey = StorageKeyValidator.validateObjectKey(objectKey)
+    return "${config.publicBaseUrl.trimEnd('/')}/${safeKey.trimStart('/')}"
+  }
 
   private fun executeSignedRequest(
     method: String,

@@ -16,6 +16,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.origin
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveNullable
@@ -40,7 +41,7 @@ fun Route.paymentsRoutes(
       actorUserId = null,
       actorRole = "SYSTEM",
       correlationId = call.callId ?: UUID.randomUUID().toString(),
-      ipAddress = call.request.local.remoteAddress,
+      ipAddress = call.request.origin.remoteAddress,
     )
     webhookService.handleRazorpayWebhook(
       rawBody = rawBody,
@@ -78,7 +79,7 @@ fun Route.paymentsRoutes(
             actorUserId = principal.userId,
             actorRole = principal.role.name,
             correlationId = call.callId ?: UUID.randomUUID().toString(),
-            ipAddress = call.request.local.remoteAddress,
+            ipAddress = call.request.origin.remoteAddress,
           )
           call.respond(
             HttpStatusCode.OK,
@@ -101,7 +102,7 @@ fun Route.paymentsRoutes(
             actorUserId = principal.userId,
             actorRole = principal.role.name,
             correlationId = call.callId ?: UUID.randomUUID().toString(),
-            ipAddress = call.request.local.remoteAddress,
+            ipAddress = call.request.origin.remoteAddress,
           )
           call.respond(
             HttpStatusCode.OK,
@@ -124,7 +125,7 @@ fun Route.paymentsRoutes(
           actorUserId = principal.userId,
           actorRole = principal.role.name,
           correlationId = call.callId ?: UUID.randomUUID().toString(),
-          ipAddress = call.request.local.remoteAddress,
+          ipAddress = call.request.origin.remoteAddress,
         )
         call.respond(
           HttpStatusCode.OK,
@@ -147,7 +148,7 @@ fun Route.paymentsRoutes(
           actorUserId = principal.userId,
           actorRole = principal.role.name,
           correlationId = call.callId ?: UUID.randomUUID().toString(),
-          ipAddress = call.request.local.remoteAddress,
+          ipAddress = call.request.origin.remoteAddress,
         )
         call.respond(
           HttpStatusCode.Accepted,

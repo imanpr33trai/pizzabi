@@ -42,6 +42,9 @@ android {
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
+      val releaseApiBaseUrl = (System.getenv("PIZZORA_API_BASE_URL") ?: "https://api.pizzora.app")
+        .replace("\"", "")
+      buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.

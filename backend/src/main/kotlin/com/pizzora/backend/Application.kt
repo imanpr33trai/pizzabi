@@ -34,6 +34,9 @@ import com.pizzora.backend.core.redis.LettuceRedisStore
 import com.pizzora.backend.core.redis.ResilientRateLimiter
 import com.pizzora.backend.core.security.JwtTokenProvider
 import com.pizzora.backend.core.security.PasswordHasher
+import com.pizzora.backend.core.security.installBodySizeLimits
+import com.pizzora.backend.core.security.installRouteGroupRateLimiting
+import com.pizzora.backend.core.security.installSecurityHeaders
 import com.pizzora.backend.coupons.CouponService
 import com.pizzora.backend.coupons.couponsRoutes
 import com.pizzora.backend.images.ObjectStorageClient
@@ -90,7 +93,6 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.callid.callId
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
@@ -182,10 +184,10 @@ fun Application.pizzoraModule(
   val authorizationService = dataSource?.let { AuthorizationService(it, effectiveCacheStore) }
   val wsTicketService = dataSource?.let { WsTicketService(it, effectiveCacheStore, config.auth) }
 
-  install(DefaultHeaders) {
-    header(HttpHeaders.CacheControl, "no-store")
-    header("X-Content-Type-Options", "nosniff")
-  }
+  val rateLimiter = ResilientRateLimiter(effectiveCacheStore)
+  val isProduction = config.environment.equals("production", ignoreCase = true)
+
+  installSecurityHeaders(isProduction = isProduction)
 
   install(ContentNegotiation) {
     json(
@@ -199,11 +201,13 @@ fun Application.pizzoraModule(
   install(WebSockets) {
     pingPeriod = 15.seconds
     timeout = 30.seconds
-    maxFrameSize = Long.MAX_VALUE
+    maxFrameSize = config.security.maxWsFrameBytes
   }
 
   installStructuredLogging()
   installErrorHandling()
+  installRouteGroupRateLimiting(rateLimiter = rateLimiter, securityConfig = config.security)
+  installBodySizeLimits(securityConfig = config.security)
 
   if (authorizationService != null) {
     install(Authentication) {
@@ -290,7 +294,6 @@ fun Application.pizzoraModule(
 
     if (dataSource != null && authorizationService != null) {
       val emailProvider = emailDeliveryProvider ?: SmtpEmailDeliveryProvider(config.smtp)
-      val rateLimiter = ResilientRateLimiter(effectiveCacheStore)
       val authService = AuthService(
         dataSource = dataSource,
         passwordHasher = passwordHasher,

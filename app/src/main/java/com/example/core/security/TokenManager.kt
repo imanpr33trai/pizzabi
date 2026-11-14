@@ -1,6 +1,7 @@
 package com.example.core.security
 
 import android.content.Context
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -44,12 +45,21 @@ interface TokenCipher {
 
 class AndroidKeystoreTokenCipher(
   private val keyAlias: String = "pizzora_session_aes_key",
+  private val allowPlainFallback: Boolean = Build.FINGERPRINT.equals("robolectric", ignoreCase = true),
+  private val secretKeyProvider: (() -> SecretKey?)? = null,
 ) : TokenCipher {
   override fun encrypt(plainText: String): String {
-    val key = getOrCreateKey() ?: return "plain:${Base64.encodeToString(plainText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)}"
+    val key = resolveKey()
+    if (key == null) {
+      if (allowPlainFallback) {
+        return "plain:${Base64.encodeToString(plainText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)}"
+      }
+      throw IllegalStateException("AndroidKeyStore AES-GCM encryption key is unavailable; refusing plaintext storage.")
+    }
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
     cipher.init(Cipher.ENCRYPT_MODE, key)
     val iv = cipher.iv
+    require(iv != null && iv.size == GCM_IV_LENGTH_BYTES) { "Unexpected AES-GCM IV length." }
     val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
     val combined = ByteArray(iv.size + encrypted.size)
     System.arraycopy(iv, 0, combined, 0, iv.size)
@@ -59,18 +69,21 @@ class AndroidKeystoreTokenCipher(
 
   override fun decrypt(cipherText: String): String? = runCatching {
     if (cipherText.startsWith("plain:")) {
+      if (!allowPlainFallback) return@runCatching null
       return@runCatching String(Base64.decode(cipherText.removePrefix("plain:"), Base64.NO_WRAP), Charsets.UTF_8)
     }
     if (!cipherText.startsWith("aesgcm:")) return@runCatching null
-    val key = getOrCreateKey() ?: return@runCatching null
+    val key = resolveKey() ?: return@runCatching null
     val raw = Base64.decode(cipherText.removePrefix("aesgcm:"), Base64.NO_WRAP)
-    if (raw.size < 13) return@runCatching null
-    val iv = raw.copyOfRange(0, 12)
-    val encrypted = raw.copyOfRange(12, raw.size)
+    if (raw.size <= GCM_IV_LENGTH_BYTES) return@runCatching null
+    val iv = raw.copyOfRange(0, GCM_IV_LENGTH_BYTES)
+    val encrypted = raw.copyOfRange(GCM_IV_LENGTH_BYTES, raw.size)
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
     String(cipher.doFinal(encrypted), Charsets.UTF_8)
   }.getOrNull()
+
+  private fun resolveKey(): SecretKey? = secretKeyProvider?.invoke() ?: getOrCreateKey()
 
   private fun getOrCreateKey(): SecretKey? = runCatching {
     val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -88,6 +101,11 @@ class AndroidKeystoreTokenCipher(
       keyGenerator.generateKey()
     }
   }.getOrNull()
+
+  private companion object {
+    const val GCM_IV_LENGTH_BYTES = 12
+    const val GCM_TAG_LENGTH_BITS = 128
+  }
 }
 
 interface TokenStorage {
@@ -137,10 +155,11 @@ class TokenManager(
 
   override suspend fun saveSession(session: AuthSession) {
     _session.value = session
+    val encodedUser = json.encodeToString(session.user)
     context.pizzoraPrefs.edit { prefs ->
       prefs[accessKey] = cipher.encrypt(session.accessToken)
       prefs[refreshKey] = cipher.encrypt(session.refreshToken)
-      prefs[userKey] = json.encodeToString(session.user)
+      prefs[userKey] = cipher.encrypt(encodedUser)
     }
   }
 
@@ -164,9 +183,12 @@ class TokenManager(
     val prefs = context.pizzoraPrefs.data.first()
     val encAccess = prefs[accessKey] ?: return null
     val encRefresh = prefs[refreshKey] ?: return null
-    val userJson = prefs[userKey] ?: return null
+    val rawUser = prefs[userKey] ?: return null
     val access = cipher.decrypt(encAccess) ?: return null
     val refresh = cipher.decrypt(encRefresh) ?: return null
+    val userJson = cipher.decrypt(rawUser)
+      ?: rawUser.takeIf { it.trimStart().startsWith("{") }
+      ?: return null
     val user = runCatching { json.decodeFromString<UserProfileDto>(userJson) }.getOrNull() ?: return null
     return AuthSession(accessToken = access, refreshToken = refresh, user = user)
   }

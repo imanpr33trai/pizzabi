@@ -9,6 +9,7 @@ import com.pizzora.backend.core.error.ServiceUnavailableException
 import com.pizzora.backend.core.error.UnprocessableEntityException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.core.redis.EphemeralCacheStore
+import com.pizzora.backend.core.security.StorageKeyValidator
 import com.pizzora.contracts.PresignProductImageRequest
 import com.pizzora.contracts.PresignProductImageResponse
 import com.pizzora.contracts.ProductImageDto
@@ -16,6 +17,8 @@ import com.pizzora.contracts.ProductImageStatus
 import java.util.UUID
 import javax.sql.DataSource
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
 
 class ProductImagesService(
@@ -27,6 +30,7 @@ class ProductImagesService(
   private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
   companion object {
+    const val MIN_IMAGE_SIZE_BYTES = 16L
     const val MAX_IMAGE_SIZE_BYTES = 5L * 1024L * 1024L
     val ALLOWED_MIME_TYPES = mapOf(
       "image/jpeg" to "jpg",
@@ -105,7 +109,11 @@ class ProductImagesService(
         action = "PRODUCT_IMAGE_PRESIGNED",
         entityType = "product_image",
         entityId = imageId.toString(),
-        afterJson = """{"product_id":"$productId","object_key":"$objectKey","mime_type":"$mimeType"}""",
+        afterJson = buildJsonObject {
+          put("product_id", productId.toString())
+          put("object_key", objectKey)
+          put("mime_type", mimeType)
+        }.toString(),
       )
     }
 
@@ -158,6 +166,8 @@ class ProductImagesService(
       throw ValidationException("IMAGE_DELETED", "Cannot confirm a deleted image.")
     }
 
+    StorageKeyValidator.validateObjectKey(record.objectKey)
+
     val inspected = try {
       objectStorageClient.inspectObject(record.objectKey)
     } catch (ex: ObjectStorageUnavailableException) {
@@ -171,17 +181,33 @@ class ProductImagesService(
       "Image binary has not been uploaded to storage yet.",
     )
 
-    if (inspected.sizeBytes <= 0 || inspected.sizeBytes > MAX_IMAGE_SIZE_BYTES) {
+    if (inspected.sizeBytes < MIN_IMAGE_SIZE_BYTES || inspected.sizeBytes > MAX_IMAGE_SIZE_BYTES) {
       objectStorageClient.deleteObject(record.objectKey)
+      recordRejectedUploadAudit(productId, imageId, auditContext, "INVALID_SIZE", inspected.sizeBytes, null)
       throw ValidationException(
         "IMAGE_TOO_LARGE",
-        "Uploaded image size (${inspected.sizeBytes} bytes) exceeds the 5 MB limit.",
+        "Uploaded image size (${inspected.sizeBytes} bytes) must be between $MIN_IMAGE_SIZE_BYTES bytes and 5 MB.",
+      )
+    }
+
+    val storedContentType = inspected.contentType?.substringBefore(';')?.trim()?.lowercase()
+    if (storedContentType != null &&
+      storedContentType != "application/octet-stream" &&
+      storedContentType != "binary/octet-stream" &&
+      storedContentType != record.declaredMimeType
+    ) {
+      objectStorageClient.deleteObject(record.objectKey)
+      recordRejectedUploadAudit(productId, imageId, auditContext, "CONTENT_TYPE_MISMATCH", inspected.sizeBytes, storedContentType)
+      throw UnprocessableEntityException(
+        "INVALID_IMAGE_SIGNATURE",
+        "Uploaded object Content-Type '$storedContentType' does not match '${record.declaredMimeType}'.",
       )
     }
 
     val detectedMime = ImageMagicBytesDetector.detectMimeType(inspected.headerBytes)
     if (detectedMime == null || detectedMime != record.declaredMimeType) {
       objectStorageClient.deleteObject(record.objectKey)
+      recordRejectedUploadAudit(productId, imageId, auditContext, "MAGIC_BYTES_MISMATCH", inspected.sizeBytes, detectedMime ?: "unknown")
       throw UnprocessableEntityException(
         "INVALID_IMAGE_SIGNATURE",
         "Uploaded object content signature does not match declared MIME type '${record.declaredMimeType}'.",
@@ -269,7 +295,7 @@ class ProductImagesService(
         action = "PRODUCT_IMAGE_DELETED",
         entityType = "product_image",
         entityId = imageId.toString(),
-        beforeJson = """{"object_key":"$existingKey"}""",
+        beforeJson = buildJsonObject { put("object_key", existingKey) }.toString(),
       )
       existingKey
     }
@@ -278,6 +304,41 @@ class ProductImagesService(
     val deletedFromStorage = objectStorageClient.deleteObject(objectKey)
     if (!deletedFromStorage) {
       logger.warn("Best-effort S3 delete failed or object missing objectKey={}", objectKey)
+    }
+  }
+
+  private suspend fun recordRejectedUploadAudit(
+    productId: UUID,
+    imageId: UUID,
+    auditContext: AuditContext,
+    reason: String,
+    sizeBytes: Long,
+    detected: String?,
+  ) {
+    logger.warn(
+      "Rejected malformed image upload productId={} imageId={} reason={} sizeBytes={} detected={}",
+      productId,
+      imageId,
+      reason,
+      sizeBytes,
+      detected,
+    )
+    runCatching {
+      DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+        AuditLogger.record(
+          conn = conn,
+          context = auditContext,
+          action = "PRODUCT_IMAGE_REJECTED",
+          entityType = "product_image",
+          entityId = imageId.toString(),
+          afterJson = buildJsonObject {
+            put("product_id", productId.toString())
+            put("reason", reason)
+            put("size_bytes", sizeBytes)
+            if (detected != null) put("detected", detected)
+          }.toString(),
+        )
+      }
     }
   }
 }

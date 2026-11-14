@@ -14,6 +14,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.origin
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveNullable
 import io.ktor.server.response.respond
@@ -105,7 +106,7 @@ fun Route.kitchenRoutes(
             actorUserId = principal.userId,
             actorRole = principal.role.name,
             correlationId = call.callId ?: UUID.randomUUID().toString(),
-            ipAddress = call.request.local.remoteAddress,
+            ipAddress = call.request.origin.remoteAddress,
           )
           val updated = kitchenService.updatePriority(
             orderId = orderId,
@@ -134,7 +135,7 @@ private suspend fun handleKdsTransition(
     actorUserId = principal.userId,
     actorRole = principal.role.name,
     correlationId = call.callId ?: UUID.randomUUID().toString(),
-    ipAddress = call.request.local.remoteAddress,
+    ipAddress = call.request.origin.remoteAddress,
   )
   val updated = kitchenService.transitionTicket(
     orderId = orderId,

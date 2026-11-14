@@ -12,6 +12,7 @@ data class AppConfig(
   val auth: AuthConfig,
   val worker: WorkerConfig,
   val razorpay: RazorpayConfig = RazorpayConfig(),
+  val security: SecurityConfig = SecurityConfig(),
 ) {
   companion object {
     fun fromEnv(env: Map<String, String> = System.getenv()): AppConfig {
@@ -23,12 +24,27 @@ data class AppConfig(
       val (s3Host, s3Port) = parseUriHostPort(s3Endpoint, defaultHost = "localhost", defaultPort = 9000)
 
       val environment = env["PIZZORA_ENV"] ?: "development"
+      val isProduction = environment.equals("production", ignoreCase = true)
       val jwtSecret = env["JWT_SECRET"]?.takeIf { it.isNotBlank() }
-        ?: if (environment == "production") {
+        ?: if (isProduction) {
           error("JWT_SECRET must be set in production")
         } else {
-          "pizzora-dev-only-hmac-secret-minimum-32-bytes"
+          DEV_DEFAULT_JWT_SECRET
         }
+
+      val dbPassword = env["DATABASE_PASSWORD"] ?: "pizzora_dev_password"
+      val s3SecretKey = env["S3_SECRET_KEY"] ?: "pizzora_minio_dev_secret"
+      if (isProduction) {
+        require(jwtSecret.length >= 32 && jwtSecret !in DISALLOWED_PRODUCTION_SECRETS) {
+          "JWT_SECRET must be at least 32 characters and not a development placeholder in production"
+        }
+        require(dbPassword.isNotBlank() && dbPassword != "pizzora_dev_password") {
+          "DATABASE_PASSWORD must not use the development default in production"
+        }
+        require(s3SecretKey.isNotBlank() && s3SecretKey != "pizzora_minio_dev_secret") {
+          "S3_SECRET_KEY must not use the development default in production"
+        }
+      }
 
       return AppConfig(
         environment = environment,
@@ -36,7 +52,7 @@ data class AppConfig(
         database = DatabaseConfig(
           jdbcUrl = dbUrl,
           username = env["DATABASE_USER"] ?: "pizzora",
-          password = env["DATABASE_PASSWORD"] ?: "pizzora_dev_password",
+          password = dbPassword,
           host = pgHost,
           port = pgPort,
           maxPoolSize = env["DATABASE_MAX_POOL_SIZE"]?.toIntOrNull() ?: 20,
@@ -53,7 +69,7 @@ data class AppConfig(
           bucket = env["S3_BUCKET"] ?: "pizzora-product-images",
           region = env["S3_REGION"] ?: "ap-south-1",
           accessKey = env["S3_ACCESS_KEY"] ?: "pizzora_minio_admin",
-          secretKey = env["S3_SECRET_KEY"] ?: "pizzora_minio_dev_secret",
+          secretKey = s3SecretKey,
           publicBaseUrl = env["S3_PUBLIC_URL"]?.trimEnd('/')
             ?: "${s3Endpoint.trimEnd('/')}/${env["S3_BUCKET"] ?: "pizzora-product-images"}",
         ),
@@ -82,8 +98,22 @@ data class AppConfig(
           webhookSecret = env["RAZORPAY_WEBHOOK_SECRET"] ?: "",
           baseUrl = (env["RAZORPAY_BASE_URL"] ?: "https://api.razorpay.com/v1").trimEnd('/'),
         ),
+        security = SecurityConfig(
+          maxJsonBodyBytes = env["MAX_JSON_BODY_BYTES"]?.toLongOrNull() ?: 262_144L,
+          maxWebhookBodyBytes = env["MAX_WEBHOOK_BODY_BYTES"]?.toLongOrNull() ?: 524_288L,
+          maxWsFrameBytes = env["MAX_WS_FRAME_BYTES"]?.toLongOrNull() ?: 65_536L,
+          rateLimitEnabled = env["RATE_LIMIT_ENABLED"]?.toBooleanStrictOrNull() ?: true,
+        ),
       )
     }
+
+    private const val DEV_DEFAULT_JWT_SECRET = "pizzora-dev-only-hmac-secret-minimum-32-bytes"
+    private val DISALLOWED_PRODUCTION_SECRETS = setOf(
+      DEV_DEFAULT_JWT_SECRET,
+      "dev-only-change-before-production-32bytes",
+      "changeme",
+      "secret",
+    )
 
     private fun parseJdbcHostPort(jdbcUrl: String, defaultHost: String, defaultPort: Int): Pair<String, Int> {
       val stripped = jdbcUrl.removePrefix("jdbc:")
@@ -154,4 +184,20 @@ data class RazorpayConfig(
   val keySecret: String = "",
   val webhookSecret: String = "",
   val baseUrl: String = "https://api.razorpay.com/v1",
+)
+
+data class SecurityConfig(
+  val maxJsonBodyBytes: Long = 262_144L,
+  val maxWebhookBodyBytes: Long = 524_288L,
+  val maxWsFrameBytes: Long = 65_536L,
+  val rateLimitEnabled: Boolean = true,
+  val authVerifyPerMinute: Int = 15,
+  val authResetPerMinute: Int = 10,
+  val authRefreshPerMinute: Int = 30,
+  val authWsTicketPerMinute: Int = 30,
+  val checkoutPaymentPerMinute: Int = 80,
+  val webhooksPerMinute: Int = 120,
+  val opsPerMinute: Int = 240,
+  val publicPerMinute: Int = 300,
+  val apiDefaultPerMinute: Int = 240,
 )

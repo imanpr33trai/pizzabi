@@ -253,7 +253,10 @@ class PaymentService(
             action = "PAYMENT_ATTEMPT_FAILED",
             entityType = "payment_attempt",
             entityId = targetAttempt.id.toString(),
-            afterJson = "{\"order_id\":\"$orderId\",\"failure_code\":\"$cleanCode\"}",
+            afterJson = buildJsonObject {
+              put("order_id", orderId.toString())
+              put("failure_code", cleanCode)
+            }.toString(),
           )
         }
       }
@@ -295,7 +298,10 @@ class PaymentService(
           action = "PAYMENT_SIGNATURE_INVALID",
           entityType = "order",
           entityId = orderId.toString(),
-          afterJson = "{\"gateway_order_id\":\"$gatewayOrderId\",\"gateway_payment_id\":\"$gatewayPaymentId\"}",
+          afterJson = buildJsonObject {
+            put("gateway_order_id", gatewayOrderId.take(128))
+            put("gateway_payment_id", gatewayPaymentId.take(128))
+          }.toString(),
         )
       }
       throw UnauthorizedException(
@@ -575,7 +581,12 @@ class PaymentService(
               action = "LATE_CAPTURE_REFUND_QUEUED",
               entityType = "refund",
               entityId = insertedRefundId.toString(),
-              afterJson = "{\"order_id\":\"$resolvedOrderId\",\"terminal_status\":\"${order.status.name}\",\"gateway_payment_id\":\"$gatewayPaymentId\",\"amount_paise\":$effectiveCapturedAmount}",
+              afterJson = buildJsonObject {
+                put("order_id", resolvedOrderId.toString())
+                put("terminal_status", order.status.name)
+                put("gateway_payment_id", gatewayPaymentId)
+                put("amount_paise", effectiveCapturedAmount)
+              }.toString(),
             )
           }
 
@@ -739,7 +750,10 @@ class PaymentService(
           action = "PAYMENT_WEBHOOK_FAILED",
           entityType = "payment_attempt",
           entityId = attempt.id.toString(),
-          afterJson = "{\"order_id\":\"${lookup.first}\",\"failure_code\":\"${failureCode ?: "PAYMENT_FAILED"}\"}",
+          afterJson = buildJsonObject {
+            put("order_id", lookup.first.toString())
+            put("failure_code", failureCode ?: "PAYMENT_FAILED")
+          }.toString(),
         )
       }
     }
@@ -809,7 +823,7 @@ class PaymentService(
           action = "REFUND_WEBHOOK_PROCESSED",
           entityType = "refund",
           entityId = refund.id,
-          afterJson = "{\"gateway_refund_id\":\"$gatewayRefundId\"}",
+          afterJson = buildJsonObject { put("gateway_refund_id", gatewayRefundId) }.toString(),
         )
       } else if (refund.status == RefundStatus.PENDING || refund.status == RefundStatus.PROCESSING) {
         conn.prepareStatement(
@@ -832,7 +846,7 @@ class PaymentService(
           action = "REFUND_WEBHOOK_FAILED",
           entityType = "refund",
           entityId = refund.id.toString(),
-          afterJson = "{\"gateway_refund_id\":\"$gatewayRefundId\"}",
+          afterJson = buildJsonObject { put("gateway_refund_id", gatewayRefundId) }.toString(),
         )
       }
     }

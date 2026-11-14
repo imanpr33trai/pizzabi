@@ -2,6 +2,7 @@ package com.example.core.network
 
 import com.example.core.security.AuthSession
 import com.example.core.security.TokenStorage
+import com.example.core.security.TransportSecurityPolicy
 import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.AdjustInventoryRequest
 import com.pizzora.contracts.ApiErrorEnvelope
@@ -138,7 +139,7 @@ class PizzoraApiClient(
   private val tokenStorage: TokenStorage,
   engine: HttpClientEngine = OkHttp.create(),
 ) {
-  private val normalizedBaseUrl = baseUrl.trimEnd('/')
+  private val normalizedBaseUrl = TransportSecurityPolicy.requireValidEndpointUrl(baseUrl)
   val apiBaseUrl: String get() = normalizedBaseUrl
   private val json = Json {
     ignoreUnknownKeys = true
@@ -362,8 +363,9 @@ class PizzoraApiClient(
     bytes: ByteArray,
     mimeType: String,
   ) {
+    val validatedUploadUrl = TransportSecurityPolicy.requireValidEndpointUrl(uploadUrl)
     val parsed = ContentType.parse(mimeType)
-    val response = rawUploadClient.put(uploadUrl) {
+    val response = rawUploadClient.put(validatedUploadUrl) {
       contentType(parsed)
       setBody(bytes)
     }

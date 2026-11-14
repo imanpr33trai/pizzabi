@@ -11,10 +11,12 @@ import java.nio.charset.StandardCharsets
 import javax.sql.DataSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 
 class WebhookService(
   private val dataSource: DataSource,
@@ -43,8 +45,10 @@ class WebhookService(
           context = audit.copy(actorRole = "SYSTEM"),
           action = "RAZORPAY_WEBHOOK_INVALID_SIGNATURE",
           entityType = "webhook",
-          entityId = eventIdHeader ?: "unknown",
-          afterJson = "{\"has_signature\":${!signatureHeader.isNullOrBlank()}}",
+          entityId = (eventIdHeader ?: "unknown").take(128),
+          afterJson = buildJsonObject {
+            put("has_signature", !signatureHeader.isNullOrBlank())
+          }.toString(),
         )
       }
       throw UnauthorizedException("INVALID_WEBHOOK_SIGNATURE", "Invalid Razorpay webhook signature.")

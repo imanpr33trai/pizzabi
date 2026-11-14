@@ -10,6 +10,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.origin
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -30,7 +31,7 @@ fun Route.checkoutRoutes(
           actorUserId = principal.userId,
           actorRole = principal.role.name,
           correlationId = call.callId ?: UUID.randomUUID().toString(),
-          ipAddress = call.request.local.remoteAddress,
+          ipAddress = call.request.origin.remoteAddress,
         )
         val result = checkoutService.checkout(
           customerId = principal.userId,
