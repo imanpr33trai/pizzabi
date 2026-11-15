@@ -2,14 +2,18 @@ name: PIZZORA Security & CI Verification
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: security-ci-\${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   security-audit:
@@ -21,19 +25,17 @@ jobs:
         run: bash infra/security-check.sh
 
   gradle-verify:
-    name: Contracts, Backend, Android Tests & APK Release
+    name: Contracts, Backend & Android Tests
     runs-on: ubuntu-latest
     needs: security-audit
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 17 (for backend toolchain)
+      - name: Set up JDK 17 (backend toolchain)
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up JDK 21 (for AGP 9 & Robolectric SDK 36)
+      - name: Set up JDK 21 (Android Gradle Plugin)
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -45,74 +47,92 @@ jobs:
         run: gradle :backend:test --no-daemon
       - name: Run Android Unit & Robolectric Suite
         run: gradle :app:testDebugUnitTest --no-daemon
-      - name: Prepare CI Keystores for Debug & Release APKs
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+  android-preview:
+    name: Build Preview APK
+    runs-on: ubuntu-latest
+    needs: gradle-verify
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Prepare debug signing key
         run: |
-          if [ ! -f debug.keystore ]; then
-            keytool -genkeypair -noprompt -v \
-              -keystore debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_STORE_PASSWORD" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
-            CI_RELEASE_KS="${RUNNER_TEMP:-/tmp}/upload-key.jks"
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '\n\r ' | base64 --decode > "$CI_RELEASE_KS"
-            echo "KEYSTORE_PATH=$CI_RELEASE_KS" >> "$GITHUB_ENV"
-            echo "STORE_PASSWORD=$ANDROID_STORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
-          elif [ ! -f "${KEYSTORE_PATH:-my-upload-key.jks}" ]; then
-            CI_RELEASE_KS="${RUNNER_TEMP:-/tmp}/ci-upload-key.jks"
-            rm -f "$CI_RELEASE_KS"
-            keytool -genkeypair -noprompt -v \
-              -keystore "$CI_RELEASE_KS" \
-              -storepass ci-release-pass \
-              -alias upload \
-              -keypass ci-release-pass \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=CI Release,O=Android,C=US"
-            echo "KEYSTORE_PATH=$CI_RELEASE_KS" >> "$GITHUB_ENV"
-            echo "STORE_PASSWORD=ci-release-pass" >> "$GITHUB_ENV"
-            echo "KEY_PASSWORD=ci-release-pass" >> "$GITHUB_ENV"
-          fi
-      - name: Build Debug & Release APKs
+          keytool -genkeypair -noprompt -v \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+      - name: Build preview APK
         env:
-          PIZZORA_API_BASE_URL: ${{ vars.PIZZORA_API_BASE_URL || 'https://api.pizzora.app' }}
-        run: gradle :app:assembleDebug :app:assembleRelease --no-daemon
-      - name: Prepare Release APK Assets
-        run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            RELEASE_TAG="${{ github.ref_name }}"
-          else
-            RELEASE_TAG="v1.0.${{ github.run_number }}"
-          fi
-          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
-          mkdir -p release-apks
-          cp app/build/outputs/apk/release/app-release.apk "release-apks/pizzora-${RELEASE_TAG}-release.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "release-apks/pizzora-${RELEASE_TAG}-debug.apk"
-      - name: Upload APK Build Artifacts
+          PIZZORA_API_BASE_URL: \${{ vars.PIZZORA_API_BASE_URL || 'https://api.pizzora.app' }}
+        run: gradle :app:assembleDebug --no-daemon
+      - name: Upload preview APK
         uses: actions/upload-artifact@v4
         with:
-          name: pizzora-apks-${{ env.RELEASE_TAG }}
-          path: release-apks/*.apk
-          retention-days: 30
-      - name: Publish APKs to GitHub Releases
-        if: github.event_name != 'pull_request'
+          name: pizzora-preview-\${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+  android-release:
+    name: Build and publish signed release APK
+    runs-on: ubuntu-latest
+    needs: gradle-verify
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: \${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: \${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_STORE_PASSWORD" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "::error::Release signing secrets are required: ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_PASSWORD."
+            exit 1
+          fi
+          KEYSTORE_PATH="\${RUNNER_TEMP}/pizzora-upload-key.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '\n\r ' | base64 --decode > "$KEYSTORE_PATH"
+          echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "STORE_PASSWORD=$ANDROID_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build signed release APK
+        env:
+          PIZZORA_API_BASE_URL: \${{ vars.PIZZORA_API_BASE_URL || 'https://api.pizzora.app' }}
+        run: gradle :app:assembleRelease --no-daemon
+      - name: Rename release APK
+        run: |
+          mkdir -p release-apks
+          cp app/build/outputs/apk/release/app-release.apk "release-apks/pizzora-\${GITHUB_REF_NAME}.apk"
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pizzora-\${{ github.ref_name }}
+          path: release-apks/pizzora-\${{ github.ref_name }}.apk
+          retention-days: 90
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: PIZZORA ${{ env.RELEASE_TAG }}
+          tag_name: \${{ github.ref_name }}
+          name: PIZZORA \${{ github.ref_name }}
           generate_release_notes: true
           make_latest: true
-          files: |
-            release-apks/pizzora-${{ env.RELEASE_TAG }}-release.apk
-            release-apks/pizzora-${{ env.RELEASE_TAG }}-debug.apk
+          files: release-apks/pizzora-\${{ github.ref_name }}.apk
