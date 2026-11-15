@@ -1,0 +1,11 @@
+{
+  "name": "pizzora-railway-config",
+  "private": true,
+  "description": "Railway Infrastructure as Code authoring dependency for PIZZORA",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "railway": "3.17.0"
+  }
+}
