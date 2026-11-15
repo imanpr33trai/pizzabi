@@ -6,7 +6,7 @@ COPY gradle ./gradle
 COPY shared ./shared
 COPY backend ./backend
 
-RUN gradle :backend:installDist --no-daemon
+RUN gradle -PbackendOnly=true :backend:installDist --no-daemon
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
