@@ -64,7 +64,7 @@ jobs:
   build-and-publish:
     name: Build & Publish Backend Docker Image
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && (github.event_name == 'workflow_call' || needs.verify-backend-for-manual-dispatch.result == 'success') }}
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || needs.verify-backend-for-manual-dispatch.result == 'success') }}
     needs: [verify-backend-for-manual-dispatch]
     permissions:
       contents: read
@@ -78,7 +78,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ -n "${{ inputs.mode }}" ]; then
+            MODE="${{ inputs.mode }}"
+            SHOULD_PUSH="${{ inputs.push }}"
+            TAG_NAME="${{ inputs.tag_name }}"
+          else
             MODE="preview"
             if [ "${{ inputs.publish_preview }}" = "true" ]; then
               SHOULD_PUSH="true"
@@ -86,10 +90,6 @@ jobs:
               SHOULD_PUSH="false"
             fi
             TAG_NAME=""
-          else
-            MODE="${{ inputs.mode }}"
-            SHOULD_PUSH="${{ inputs.push }}"
-            TAG_NAME="${{ inputs.tag_name }}"
           fi
 
           if [ "$MODE" != "validate" ] && [ "$MODE" != "preview" ] && [ "$MODE" != "release" ]; then
@@ -97,7 +97,20 @@ jobs:
             exit 1
           fi
 
-          # Safety guard: never allow pushing outside main preview or strict semver tag release
+          # Safety guards: PRs and validate mode never push; preview pushes only from main; release only from semver tags
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "$SHOULD_PUSH" = "true" ]; then
+            echo "ERROR: Pull requests must never push Docker images." >&2
+            exit 1
+          fi
+          if [ "$MODE" = "validate" ] && [ "$SHOULD_PUSH" = "true" ]; then
+            echo "ERROR: Validate mode must never push Docker images." >&2
+            exit 1
+          fi
+          if [ "$MODE" = "preview" ] && [ "$SHOULD_PUSH" = "true" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "ERROR: Preview Docker tags can only be published from main (current ref: '${{ github.ref }}')." >&2
+            exit 1
+          fi
+
           if [ "$MODE" = "release" ]; then
             if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.ref_type }}" != "tag" ]; then
               echo "ERROR: Release Docker image tags can only be published from a version tag." >&2
