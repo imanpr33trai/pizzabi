@@ -24,4 +24,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "PIZZORA"
 
-include(":shared:contracts", ":backend", ":app")
+include(":shared:contracts", ":backend")
+
+// The backend container build does not need the Android application or Android SDK.
+if (providers.gradleProperty("backendOnly").orNull != "true") {
+  include(":app")
+}
