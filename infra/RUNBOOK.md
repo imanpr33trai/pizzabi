@@ -100,3 +100,25 @@ bash infra/scripts/verify-backup-restore.sh
    ```bash
    sudo systemctl start pizzora-migrate pizzora-api pizzora-worker
    ```
+
+## 7. Build-free Docker deployment (GitHub Container Registry)
+
+The `.github/workflows/publish-backend.yml` workflow runs backend tests on pull requests and publishes the backend runtime image to GHCR on pushes to `main` and version tags (`vX.Y.Z`). The API, worker, and migration job all use the same immutable application image; their Compose commands select the appropriate entry point.
+
+After the first successful publish, open the package at `https://github.com/imanpr33trai/pizzabi/pkgs/container/pizzora-backend` and set its visibility to **Public** if you want machines to pull it without authenticating. If it remains private, run `docker login ghcr.io` with a GitHub token that has `read:packages`.
+
+For local development, pull and start the prebuilt image:
+
+```bash
+docker compose -f infra/docker-compose.yml pull
+docker compose -f infra/docker-compose.yml up -d
+```
+
+For production, configure `BACKEND_IMAGE` to a tested version tag (for example, `ghcr.io/imanpr33trai/pizzora-backend:1.0.0`) in the deployment environment, then pull and start the stack:
+
+```bash
+docker compose -f infra/docker-compose.prod.yml pull
+docker compose -f infra/docker-compose.prod.yml up -d
+```
+
+The Dockerfile remains the source of the image build, but Gradle and Docker builds run in GitHub Actions rather than on the deployment machine. PostgreSQL, Redis, storage, and proxy images remain separate infrastructure dependencies.
