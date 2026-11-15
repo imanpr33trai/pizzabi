@@ -154,7 +154,7 @@ class ResilientRateLimiter(
   private val localBuckets = ConcurrentHashMap<String, WindowBucket>()
 
   suspend fun isAllowed(key: String, maxRequests: Int, windowSeconds: Long): Boolean {
-    val redisCount = redisStore.incrementWithinWindow("rl:$key", windowSeconds)
+    val redisCount = runCatching { redisStore.incrementWithinWindow("rl:$key", windowSeconds) }.getOrNull()
     if (redisCount != null) {
       return redisCount <= maxRequests
     }

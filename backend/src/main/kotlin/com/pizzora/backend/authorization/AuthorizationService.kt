@@ -11,6 +11,8 @@ import io.ktor.server.routing.Route
 import java.util.UUID
 import javax.sql.DataSource
 
+import org.slf4j.LoggerFactory
+
 data class PizzoraPrincipal(
   val userId: UUID,
   val sessionId: UUID,
@@ -21,9 +23,13 @@ class AuthorizationService(
   private val dataSource: DataSource,
   private val cacheStore: EphemeralCacheStore,
 ) {
+  private val logger = LoggerFactory.getLogger(AuthorizationService::class.java)
+
   suspend fun getPermissions(role: UserRole): Set<String> {
     val cacheKey = "rbac:perms:${role.name}"
-    val cached = cacheStore.get(cacheKey)
+    val cached = runCatching { cacheStore.get(cacheKey) }
+      .onFailure { logger.warn("Redis read failed for RBAC permissions role={}; falling back to PostgreSQL", role, it) }
+      .getOrNull()
     if (!cached.isNullOrBlank()) {
       return cached.split(',').filter { it.isNotBlank() }.toSet()
     }
@@ -50,7 +56,8 @@ class AuthorizationService(
     }
 
     if (permissions.isNotEmpty()) {
-      cacheStore.setEx(cacheKey, 300L, permissions.joinToString(","))
+      runCatching { cacheStore.setEx(cacheKey, 300L, permissions.joinToString(",")) }
+        .onFailure { logger.warn("Redis write failed for RBAC permissions role={}", role, it) }
     }
     return permissions
   }

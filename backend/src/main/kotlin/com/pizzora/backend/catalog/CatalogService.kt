@@ -40,7 +40,9 @@ class CatalogService(
   private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
   suspend fun getPublicMenu(): PublicMenuResponse {
-    val cached = cacheStore.get(CatalogCacheKeys.PUBLIC_MENU)
+    val cached = runCatching { cacheStore.get(CatalogCacheKeys.PUBLIC_MENU) }
+      .onFailure { logger.warn("Redis read failed for public menu; falling back to PostgreSQL", it) }
+      .getOrNull()
     if (!cached.isNullOrBlank()) {
       runCatching { json.decodeFromString<PublicMenuResponse>(cached) }
         .onSuccess { return it }
@@ -65,7 +67,11 @@ class CatalogService(
       )
     }
 
-    cacheStore.setEx(CatalogCacheKeys.PUBLIC_MENU, CatalogCacheKeys.TTL_SECONDS, json.encodeToString(menu))
+    runCatching {
+      cacheStore.setEx(CatalogCacheKeys.PUBLIC_MENU, CatalogCacheKeys.TTL_SECONDS, json.encodeToString(menu))
+    }.onFailure {
+      logger.warn("Redis write failed for public menu; continuing without cache", it)
+    }
     return menu
   }
 

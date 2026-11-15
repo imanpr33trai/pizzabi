@@ -26,7 +26,11 @@ class WsTicketService(
     val ttl = authConfig.wsTicketTtlSeconds
     val payload = "${principal.userId}|${principal.sessionId}|${principal.role.name}"
 
-    val storedInRedis = cacheStore.setEx("ws_ticket:$ticketHash", ttl, payload)
+    val storedInRedis = runCatching {
+      cacheStore.setEx("ws_ticket:$ticketHash", ttl, payload)
+    }.onFailure {
+      logger.warn("Redis exception during ws-ticket setEx; falling back to PostgreSQL ws_tickets table", it)
+    }.getOrDefault(false)
     if (!storedInRedis) {
       logger.warn("Redis unavailable for ws-ticket; falling back to PostgreSQL ws_tickets table")
       val expiresAt = Timestamp.from(Instant.now().plusSeconds(ttl))
@@ -57,7 +61,9 @@ class WsTicketService(
     if (rawTicket.isBlank()) return null
     val ticketHash = CryptoTokens.sha256Hex(rawTicket)
 
-    val redisPayload = cacheStore.getDel("ws_ticket:$ticketHash")
+    val redisPayload = runCatching { cacheStore.getDel("ws_ticket:$ticketHash") }
+      .onFailure { logger.warn("Redis exception during ws-ticket getDel; checking PostgreSQL ws_tickets fallback", it) }
+      .getOrNull()
     if (redisPayload != null) {
       val parts = redisPayload.split('|')
       if (parts.size != 3) return null
