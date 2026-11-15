@@ -13,7 +13,8 @@ object TransportSecurityPolicy {
     val uri = runCatching { URI(trimmed) }.getOrNull()
       ?: throw IllegalArgumentException("Invalid endpoint URL.")
     val scheme = uri.scheme?.lowercase() ?: throw IllegalArgumentException("Endpoint URL must include a scheme.")
-    val host = uri.host?.lowercase().orEmpty()
+    val host = uri.host?.lowercase()?.takeIf { it.isNotBlank() }
+      ?: throw SecurityException("Endpoint URL must include a valid host.")
 
     when (scheme) {
       "https", "wss" -> return trimmed

@@ -188,6 +188,7 @@ fun Application.pizzoraModule(
   val isProduction = config.environment.equals("production", ignoreCase = true)
 
   installSecurityHeaders(isProduction = isProduction)
+  installBodySizeLimits(securityConfig = config.security)
 
   install(ContentNegotiation) {
     json(
@@ -207,7 +208,6 @@ fun Application.pizzoraModule(
   installStructuredLogging()
   installErrorHandling()
   installRouteGroupRateLimiting(rateLimiter = rateLimiter, securityConfig = config.security)
-  installBodySizeLimits(securityConfig = config.security)
 
   if (authorizationService != null) {
     install(Authentication) {

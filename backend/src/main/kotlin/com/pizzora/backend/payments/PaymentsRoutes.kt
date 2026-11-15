@@ -4,6 +4,7 @@ import com.pizzora.backend.audit.AuditContext
 import com.pizzora.backend.authorization.AuthorizationService
 import com.pizzora.backend.authorization.PizzoraPrincipal
 import com.pizzora.backend.authorization.requirePermission
+import com.pizzora.backend.core.error.AppException
 import com.pizzora.backend.core.error.UnauthorizedException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.razorpay.WebhookService
@@ -74,7 +75,13 @@ fun Route.paymentsRoutes(
           val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
           val orderId = parseUuid(call.parameters["id"], "order_id")
           val idempotencyKey = call.request.header("Idempotency-Key")
-          val request = runCatching { call.receiveNullable<RetryPaymentRequest>() }.getOrNull()
+          val request = try {
+            call.receiveNullable<RetryPaymentRequest>()
+          } catch (ex: AppException) {
+            throw ex
+          } catch (_: Throwable) {
+            null
+          }
           val audit = AuditContext(
             actorUserId = principal.userId,
             actorRole = principal.role.name,
@@ -96,8 +103,13 @@ fun Route.paymentsRoutes(
         post("/payments/fail") {
           val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
           val orderId = parseUuid(call.parameters["id"], "order_id")
-          val request = runCatching { call.receiveNullable<FailPaymentAttemptRequest>() }.getOrNull()
-            ?: FailPaymentAttemptRequest()
+          val request = try {
+            call.receiveNullable<FailPaymentAttemptRequest>()
+          } catch (ex: AppException) {
+            throw ex
+          } catch (_: Throwable) {
+            null
+          } ?: FailPaymentAttemptRequest()
           val audit = AuditContext(
             actorUserId = principal.userId,
             actorRole = principal.role.name,

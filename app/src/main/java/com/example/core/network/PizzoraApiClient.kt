@@ -961,7 +961,7 @@ class PizzoraApiClient(
         "ws://" + normalizedBaseUrl.removePrefix("http://")
       else -> normalizedBaseUrl
     }
-    return "$wsBase/ws/v1/events?ticket=$ticket&since_seq=$sinceSeq"
+    return "$wsBase/ws/v1/events?ticket=${ticket.encodeURLParameter()}&since_seq=$sinceSeq"
   }
 
   private suspend inline fun <reified T> decodeOrThrow(response: HttpResponse): T {

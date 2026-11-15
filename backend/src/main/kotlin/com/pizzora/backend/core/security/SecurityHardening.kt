@@ -11,6 +11,7 @@ import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
 import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.plugins.origin
+import io.ktor.server.request.ApplicationReceivePipeline
 import io.ktor.server.request.path
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readRemaining
@@ -20,8 +21,11 @@ import org.slf4j.LoggerFactory
 private val SAFE_OBJECT_KEY_REGEX = Regex("^[A-Za-z0-9][A-Za-z0-9/._-]{0,254}$")
 
 object StorageKeyValidator {
+  private val logger = LoggerFactory.getLogger("com.pizzora.backend.core.security.StorageKeyValidator")
+
   fun validateObjectKey(rawKey: String): String {
     if (rawKey.isBlank() || rawKey != rawKey.trim()) {
+      logger.warn("Blocked unsafe storage object key (blank/whitespace) keyLength={}", rawKey.length)
       throw ValidationException("INVALID_OBJECT_KEY", "Object key cannot be empty or contain surrounding whitespace.")
     }
     val lower = rawKey.lowercase()
@@ -35,6 +39,7 @@ object StorageKeyValidator {
       lower.contains("%5c") ||
       !SAFE_OBJECT_KEY_REGEX.matches(rawKey)
     ) {
+      logger.warn("Blocked prohibited path traversal or unsafe storage object key='{}'", rawKey.take(128))
       throw ValidationException("INVALID_OBJECT_KEY", "Object key contains prohibited path traversal or unsafe characters.")
     }
     return rawKey
@@ -62,47 +67,56 @@ fun Application.installBodySizeLimits(securityConfig: SecurityConfig) {
   val plugin = createApplicationPlugin("PizzoraBodySizeLimit") {
     onCall { call ->
       val limit = maxBodyBytesForPath(call.request.path(), securityConfig)
-      val contentLength = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-      if (contentLength != null && contentLength > limit) {
-        logger.warn(
-          "Rejected oversized request Content-Length={} limit={} path={} ip={}",
-          contentLength,
-          limit,
-          call.request.path(),
-          call.request.origin.remoteAddress,
-        )
-        throw PayloadTooLargeException(
-          message = "Request body ($contentLength bytes) exceeds limit of $limit bytes.",
-          details = mapOf("max_bytes" to limit.toString()),
-        )
-      }
-    }
-
-    onCallReceive { call ->
-      val limit = maxBodyBytesForPath(call.request.path(), securityConfig)
-      transformBody { data ->
-        if (data !is ByteReadChannel) {
-          return@transformBody data
+      val rawContentLength = call.request.headers[HttpHeaders.ContentLength]
+      if (rawContentLength != null) {
+        val contentLength = rawContentLength.trim().toLongOrNull()
+        if (contentLength == null || contentLength < 0L) {
+          logger.warn("Rejected invalid Content-Length header='{}' path={} ip={}", rawContentLength, call.request.path(), call.request.origin.remoteAddress)
+          throw ValidationException("INVALID_CONTENT_LENGTH", "Content-Length header is invalid.")
         }
-        val packet = data.readRemaining(limit + 1L)
-        val bytes = packet.readByteArray()
-        if (bytes.size.toLong() > limit) {
+        if (contentLength > limit) {
           logger.warn(
-            "Rejected streamed oversized request readBytes>{} path={} ip={}",
+            "Rejected oversized request Content-Length={} limit={} path={} ip={}",
+            contentLength,
             limit,
             call.request.path(),
             call.request.origin.remoteAddress,
           )
           throw PayloadTooLargeException(
-            message = "Request body exceeds maximum allowed size of $limit bytes.",
+            message = "Request body ($contentLength bytes) exceeds limit of $limit bytes.",
             details = mapOf("max_bytes" to limit.toString()),
           )
         }
-        ByteReadChannel(bytes)
       }
     }
   }
   install(plugin)
+
+  receivePipeline.intercept(ApplicationReceivePipeline.Before) { subject ->
+    if (subject is ByteReadChannel) {
+      val requestCall = context
+      val isWsUpgrade = requestCall.request.headers[HttpHeaders.Upgrade]?.equals("websocket", ignoreCase = true) == true
+      if (isWsUpgrade) {
+        return@intercept
+      }
+      val limit = maxBodyBytesForPath(requestCall.request.path(), securityConfig)
+      val packet = subject.readRemaining(limit + 1L)
+      val bytes = packet.readByteArray()
+      if (bytes.size.toLong() > limit) {
+        logger.warn(
+          "Rejected streamed oversized request readBytes>{} path={} ip={}",
+          limit,
+          requestCall.request.path(),
+          requestCall.request.origin.remoteAddress,
+        )
+        throw PayloadTooLargeException(
+          message = "Request body exceeds maximum allowed size of $limit bytes.",
+          details = mapOf("max_bytes" to limit.toString()),
+        )
+      }
+      proceedWith(ByteReadChannel(bytes))
+    }
+  }
 }
 
 fun Application.installRouteGroupRateLimiting(

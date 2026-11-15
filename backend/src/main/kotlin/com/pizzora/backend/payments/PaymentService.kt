@@ -42,6 +42,7 @@ import java.util.UUID
 import javax.sql.DataSource
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.slf4j.LoggerFactory
 
 class PaymentService(
   private val dataSource: DataSource,
@@ -51,6 +52,7 @@ class PaymentService(
   private val razorpayConfig: RazorpayConfig,
   private val publicKeyIdProvider: () -> String = { razorpayConfig.keyId },
 ) {
+  private val logger = LoggerFactory.getLogger(PaymentService::class.java)
 
   suspend fun getOrderPaymentStatus(
     orderId: UUID,
@@ -61,6 +63,7 @@ class PaymentService(
       val detail = orderService.loadOrderDetail(conn, orderId)
         ?: throw NotFoundException("ORDER_NOT_FOUND", "Order $orderId was not found.")
       if (actorRole == UserRole.CUSTOMER && detail.customerId != actorUserId.toString()) {
+        logger.warn("Blocked cross-user payment read IDOR actorUserId={} orderId={} ownerCustomerId={}", actorUserId, orderId, detail.customerId)
         throw ForbiddenException("FORBIDDEN", "You do not have access to this order's payment.")
       }
       buildOrderPaymentStatusResponse(conn, detail)
@@ -81,6 +84,7 @@ class PaymentService(
     return DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
       val order = lockOrder(conn, orderId)
       if (order.customerId != customerId) {
+        logger.warn("Blocked cross-user payment retry IDOR actorUserId={} orderId={} ownerCustomerId={}", customerId, orderId, order.customerId)
         throw ForbiddenException("FORBIDDEN", "You cannot retry payment for another customer's order.")
       }
       if (order.status != OrderStatus.PENDING_PAYMENT) {
@@ -207,6 +211,7 @@ class PaymentService(
     DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
       val order = lockOrder(conn, orderId)
       if (order.customerId != customerId) {
+        logger.warn("Blocked cross-user payment failure report IDOR actorUserId={} orderId={} ownerCustomerId={}", customerId, orderId, order.customerId)
         throw ForbiddenException("FORBIDDEN", "You cannot modify another customer's payment attempt.")
       }
       val payment = lockPaymentByOrder(conn, orderId)
@@ -291,6 +296,13 @@ class PaymentService(
     )
 
     if (!signatureValid) {
+      logger.warn(
+        "Blocked client Razorpay verify with invalid signature orderId={} customerId={} gatewayOrderId={} ip={}",
+        orderId,
+        customerId,
+        gatewayOrderId.take(64),
+        audit.ipAddress,
+      )
       DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
         AuditLogger.record(
           conn = conn,
@@ -371,6 +383,7 @@ class PaymentService(
       // Consistent lock hierarchy: orders -> payments -> payment_attempts
       val order = lockOrder(conn, resolvedOrderId)
       if (actorCustomerId != null && order.customerId != actorCustomerId) {
+        logger.warn("Blocked cross-user payment verify IDOR actorUserId={} orderId={} ownerCustomerId={}", actorCustomerId, resolvedOrderId, order.customerId)
         throw ForbiddenException("FORBIDDEN", "You cannot verify payment for another customer's order.")
       }
       val payment = lockPaymentByOrder(conn, resolvedOrderId)

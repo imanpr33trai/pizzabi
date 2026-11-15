@@ -33,12 +33,14 @@ import javax.sql.DataSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.slf4j.LoggerFactory
 
 class OrderService(
   private val dataSource: DataSource,
   private val inventoryService: InventoryService,
   private val couponService: CouponService,
 ) {
+  private val logger = LoggerFactory.getLogger(OrderService::class.java)
   private val json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
@@ -97,6 +99,7 @@ class OrderService(
       val detail = loadOrderDetail(conn, orderId)
         ?: throw NotFoundException("ORDER_NOT_FOUND", "Order $orderId was not found.")
       if (actorRole == UserRole.CUSTOMER && detail.customerId != actorUserId.toString()) {
+        logger.warn("Blocked cross-user order read IDOR actorUserId={} orderId={} ownerCustomerId={}", actorUserId, orderId, detail.customerId)
         throw ForbiddenException("FORBIDDEN", "You do not have access to this order.")
       }
       detail
@@ -140,6 +143,7 @@ class OrderService(
       }
 
       if (actorRole == UserRole.CUSTOMER && lockedOrder.customerId != actorUserId) {
+        logger.warn("Blocked cross-user order cancel IDOR actorUserId={} orderId={} ownerCustomerId={}", actorUserId, orderId, lockedOrder.customerId)
         throw ForbiddenException("FORBIDDEN", "You cannot cancel another customer's order.")
       }
 

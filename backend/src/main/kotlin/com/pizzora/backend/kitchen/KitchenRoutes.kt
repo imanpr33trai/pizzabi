@@ -4,6 +4,7 @@ import com.pizzora.backend.audit.AuditContext
 import com.pizzora.backend.authorization.AuthorizationService
 import com.pizzora.backend.authorization.PizzoraPrincipal
 import com.pizzora.backend.authorization.requirePermission
+import com.pizzora.backend.core.error.AppException
 import com.pizzora.backend.core.error.UnauthorizedException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.contracts.KdsActionRequest
@@ -130,7 +131,13 @@ private suspend fun handleKdsTransition(
 ) {
   val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
   val orderId = parseUuid(call.parameters["id"], "order_id")
-  val request = runCatching { call.receiveNullable<KdsActionRequest>() }.getOrNull()
+  val request = try {
+    call.receiveNullable<KdsActionRequest>()
+  } catch (ex: AppException) {
+    throw ex
+  } catch (_: Throwable) {
+    null
+  }
   val audit = AuditContext(
     actorUserId = principal.userId,
     actorRole = principal.role.name,

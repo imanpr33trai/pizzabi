@@ -62,7 +62,7 @@ import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [36], qualifiers = "w411dp-h915dp")
 class Phase13KdsRobolectricTest {
 
   @get:Rule
@@ -286,7 +286,8 @@ class Phase13KdsRobolectricTest {
     composeTestRule.onNodeWithTag("kds_priority_button_t-fresh").performClick()
     composeTestRule.waitUntil(timeoutMillis = 3_000) {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
-      vm.uiState.value.priorityCount == 1
+      vm.uiState.value.priorityCount == 1 &&
+        composeTestRule.onAllNodesWithTag("kds_priority_badge_t-fresh").fetchSemanticsNodes().isNotEmpty()
     }
     composeTestRule.onNodeWithTag("kds_priority_badge_t-fresh").assertIsDisplayed()
     assertEquals("t-fresh", vm.uiState.value.visibleTickets.first().id)

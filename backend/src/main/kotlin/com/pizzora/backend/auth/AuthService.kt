@@ -133,6 +133,7 @@ class AuthService(
     }
 
     if (!verified) {
+      logger.warn("Blocked invalid, expired, or already-used email verification token")
       throw ValidationException("INVALID_OR_EXPIRED_TOKEN", "Verification token is invalid, expired, or already used.")
     }
     return MessageResponse("Email verified successfully.")
@@ -222,15 +223,21 @@ class AuthService(
           }
         }
       }
-    } ?: throw UnauthorizedException("INVALID_CREDENTIALS", "Invalid email or password.")
+    } ?: run {
+      logger.warn("Blocked login for unknown email domain='{}' ip={}", email.substringAfter('@', "unknown"), ipAddress)
+      throw UnauthorizedException("INVALID_CREDENTIALS", "Invalid email or password.")
+    }
 
     if (!passwordHasher.verify(request.password, user.passwordHash)) {
+      logger.warn("Blocked login with invalid password userId={} ip={}", user.id, ipAddress)
       throw UnauthorizedException("INVALID_CREDENTIALS", "Invalid email or password.")
     }
     if (!user.isActive) {
+      logger.warn("Blocked login for deactivated account userId={} ip={}", user.id, ipAddress)
       throw ForbiddenException("ACCOUNT_DISABLED", "This account has been deactivated.")
     }
     if (!user.emailVerified) {
+      logger.warn("Blocked login for unverified email userId={} ip={}", user.id, ipAddress)
       throw ForbiddenException("EMAIL_NOT_VERIFIED", "Please verify your email address before signing in.")
     }
 
@@ -551,6 +558,7 @@ class AuthService(
     }
 
     if (!resetOk) {
+      logger.warn("Blocked invalid, expired, or replayed password reset token")
       throw ValidationException("INVALID_OR_EXPIRED_TOKEN", "Password reset token is invalid, expired, or already used.")
     }
     return MessageResponse("Password reset successful. Please sign in with your new password.")

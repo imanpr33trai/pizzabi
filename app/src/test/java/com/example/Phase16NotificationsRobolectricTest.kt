@@ -13,6 +13,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
@@ -95,6 +98,25 @@ class Phase16NotificationsRobolectricTest {
 
   private lateinit var context: Context
   private lateinit var db: PizzoraDatabase
+  private val viewModelStore = ViewModelStore()
+
+  private fun createNotificationsVm(
+    repo: NetworkNotificationRepository,
+    tokenStorage: TokenStorage? = null,
+    realtimeEventStream: RealtimeEventStream? = null,
+    notificationPoster: com.example.notifications.LocalNotificationPoster? = null,
+  ): NotificationsViewModel {
+    val factory = object : ViewModelProvider.Factory {
+      @Suppress("UNCHECKED_CAST")
+      override fun <T : ViewModel> create(modelClass: Class<T>): T = NotificationsViewModel(
+        repository = repo,
+        tokenStorage = tokenStorage,
+        realtimeEventStream = realtimeEventStream,
+        notificationPoster = notificationPoster,
+      ) as T
+    }
+    return ViewModelProvider(viewModelStore, factory)["notif_vm_${System.nanoTime()}", NotificationsViewModel::class.java]
+  }
 
   @Before
   fun setup() {
@@ -106,6 +128,8 @@ class Phase16NotificationsRobolectricTest {
 
   @After
   fun tearDown() {
+    viewModelStore.clear()
+    Shadows.shadowOf(Looper.getMainLooper()).idle()
     PizzoraWorkerFactory.testOverride = null
     db.close()
   }
@@ -287,8 +311,8 @@ class Phase16NotificationsRobolectricTest {
 
     val repo = NetworkNotificationRepository(apiClient, db.notificationInboxDao())
     val helper = NotificationHelper(context)
-    val vm = NotificationsViewModel(
-      repository = repo,
+    val vm = createNotificationsVm(
+      repo = repo,
       tokenStorage = FakeTokenStorageP16(sampleCustomerSession()),
       notificationPoster = helper,
     )
@@ -380,8 +404,8 @@ class Phase16NotificationsRobolectricTest {
     )
     val repo = NetworkNotificationRepository(apiClient, db.notificationInboxDao())
     val stream = FakeRealtimeEventStream()
-    val vm = NotificationsViewModel(
-      repository = repo,
+    val vm = createNotificationsVm(
+      repo = repo,
       tokenStorage = FakeTokenStorageP16(sampleCustomerSession()),
       realtimeEventStream = stream,
       notificationPoster = NotificationHelper(context),
@@ -492,8 +516,8 @@ class Phase16NotificationsRobolectricTest {
 
     val repo = NetworkNotificationRepository(apiClient, db.notificationInboxDao())
     val stream = FakeRealtimeEventStream()
-    val vm = NotificationsViewModel(
-      repository = repo,
+    val vm = createNotificationsVm(
+      repo = repo,
       tokenStorage = FakeTokenStorageP16(sampleCustomerSession()),
       realtimeEventStream = stream,
       notificationPoster = NotificationHelper(context),

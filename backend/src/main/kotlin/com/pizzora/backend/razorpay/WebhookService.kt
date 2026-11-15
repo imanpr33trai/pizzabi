@@ -18,11 +18,14 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
+import org.slf4j.LoggerFactory
+
 class WebhookService(
   private val dataSource: DataSource,
   private val paymentService: PaymentService,
   private val razorpayConfig: RazorpayConfig,
 ) {
+  private val logger = LoggerFactory.getLogger(WebhookService::class.java)
   private val json = Json { ignoreUnknownKeys = true }
 
   suspend fun handleRazorpayWebhook(
@@ -39,6 +42,12 @@ class WebhookService(
     )
 
     if (!validSignature) {
+      logger.warn(
+        "Blocked Razorpay webhook with invalid HMAC signature eventId={} hasSignature={} ip={}",
+        (eventIdHeader ?: "unknown").take(128),
+        !signatureHeader.isNullOrBlank(),
+        audit.ipAddress,
+      )
       DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
         AuditLogger.record(
           conn = conn,
