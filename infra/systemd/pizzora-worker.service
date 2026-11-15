@@ -1,0 +1,29 @@
+[Unit]
+Description=PIZZORA Background Outbox & Reconciliation Worker
+After=network-online.target postgresql.service pizzora-migrate.service
+Requires=pizzora-migrate.service
+Wants=network-online.target redis.service
+
+[Service]
+Type=simple
+User=pizzora
+Group=pizzora
+WorkingDirectory=/opt/pizzora
+EnvironmentFile=/etc/pizzora/pizzora.env
+Environment=PIZZORA_ENV=production
+Environment=RUN_MIGRATIONS_ON_STARTUP=false
+ExecStart=/usr/bin/java -Xms256m -Xmx768m -XX:+UseG1GC -cp "/opt/pizzora/libs/*" com.pizzora.backend.worker.WorkerMainKt
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=25s
+KillSignal=SIGTERM
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -159,7 +159,7 @@ private fun maxBodyBytesForPath(path: String, config: SecurityConfig): Long =
 
 private fun resolveRateLimitPolicy(path: String, config: SecurityConfig): RouteRateLimitPolicy? =
   when {
-    path == "/api/v1/health/live" || path == "/api/v1/health/ready" || path == "/api/v1/openapi.json" -> null
+    path == "/api/v1/health/live" || path == "/api/v1/health/ready" || path == "/api/v1/openapi.json" || path == "/metrics" -> null
     // Existing fine-grained limits enforced directly inside AuthRoutes.kt
     path == "/api/v1/auth/register" ||
       path == "/api/v1/auth/resend-verification" ||

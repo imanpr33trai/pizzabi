@@ -46,6 +46,8 @@ data class AppConfig(
         }
       }
 
+      val runMigrationsOnStartup = env["RUN_MIGRATIONS_ON_STARTUP"]?.toBooleanStrictOrNull() ?: !isProduction
+
       return AppConfig(
         environment = environment,
         httpPort = env["PORT"]?.toIntOrNull() ?: 8080,
@@ -56,6 +58,7 @@ data class AppConfig(
           host = pgHost,
           port = pgPort,
           maxPoolSize = env["DATABASE_MAX_POOL_SIZE"]?.toIntOrNull() ?: 20,
+          runMigrationsOnStartup = runMigrationsOnStartup,
         ),
         redis = RedisConfig(
           url = redisUrl,
@@ -138,6 +141,7 @@ data class DatabaseConfig(
   val host: String,
   val port: Int,
   val maxPoolSize: Int,
+  val runMigrationsOnStartup: Boolean = true,
 )
 
 data class RedisConfig(

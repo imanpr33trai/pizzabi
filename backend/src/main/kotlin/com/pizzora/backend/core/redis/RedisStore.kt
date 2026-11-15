@@ -145,6 +145,7 @@ class LettuceRedisStore(
 
 class ResilientRateLimiter(
   private val redisStore: EphemeralCacheStore,
+  private val enabled: Boolean = true,
 ) {
   private data class WindowBucket(
     val windowStartEpochSec: AtomicLong,
@@ -154,6 +155,7 @@ class ResilientRateLimiter(
   private val localBuckets = ConcurrentHashMap<String, WindowBucket>()
 
   suspend fun isAllowed(key: String, maxRequests: Int, windowSeconds: Long): Boolean {
+    if (!enabled) return true
     val redisCount = runCatching { redisStore.incrementWithinWindow("rl:$key", windowSeconds) }.getOrNull()
     if (redisCount != null) {
       return redisCount <= maxRequests

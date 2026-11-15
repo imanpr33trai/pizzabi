@@ -239,7 +239,6 @@ class Phase19ConcurrencyOutageAndIndexTest {
 
   private fun baseTestConfig(
     rateLimitEnabled: Boolean = false,
-    authMaxPerMinute: Int = 60,
   ): AppConfig {
     val base = AppConfig.fromEnv(mapOf("JWT_SECRET" to "test-jwt-secret-minimum-32-bytes-long-key"))
     return base.copy(
@@ -250,7 +249,6 @@ class Phase19ConcurrencyOutageAndIndexTest {
       ),
       security = base.security.copy(
         rateLimitEnabled = rateLimitEnabled,
-        authMaxPerMinute = authMaxPerMinute,
       ),
     )
   }
@@ -516,13 +514,14 @@ class Phase19ConcurrencyOutageAndIndexTest {
       }
 
       // Restock dough generously so slot + coupon cap are the contention points
-      client.post("/api/v1/owner/inventory") {
+      client.post("/api/v1/owner/inventory/adjust") {
         header(HttpHeaders.Authorization, "Bearer $ownerToken")
         contentType(ContentType.Application.Json)
         setBody(
           json.encodeToString(
             com.pizzora.contracts.AdjustInventoryRequest(
               ingredientId = dough.ingredientId,
+              operationId = "p19-restock-$suf",
               deltaQty = 10_000L,
               reason = com.pizzora.contracts.InventoryLedgerReason.RESTOCK,
             ),
@@ -642,7 +641,7 @@ class Phase19ConcurrencyOutageAndIndexTest {
       try {
         application {
           pizzoraModule(
-            config = baseTestConfig(rateLimitEnabled = true, authMaxPerMinute = 20),
+            config = baseTestConfig(rateLimitEnabled = true),
             probes = listOf(
               PostgresJdbcProbe(pg.postgresDatabase),
               object : DependencyProbe {
@@ -990,10 +989,13 @@ class Phase19ConcurrencyOutageAndIndexTest {
         orderPs.setTimestamp(8, createdAt)
         orderPs.addBatch()
 
-        itemPs.setObject(1, UUID.randomUUID())
-        itemPs.setObject(2, oid)
-        itemPs.setObject(3, sampleProductIds[i % sampleProductIds.size])
-        itemPs.addBatch()
+        val itemsPerOrder = if (status == "COMPLETED") 5 else 1
+        repeat(itemsPerOrder) {
+          itemPs.setObject(1, UUID.randomUUID())
+          itemPs.setObject(2, oid)
+          itemPs.setObject(3, sampleProductIds[i % sampleProductIds.size])
+          itemPs.addBatch()
+        }
 
         val payId = UUID.randomUUID()
         refundPs.setObject(1, payId)

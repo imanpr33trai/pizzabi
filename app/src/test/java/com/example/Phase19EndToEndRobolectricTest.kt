@@ -2,13 +2,15 @@ package com.example
 
 import android.content.Context
 import android.os.Looper
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
@@ -54,7 +56,7 @@ import com.pizzora.contracts.CartToppingViewDto
 import com.pizzora.contracts.CategoryDto
 import com.pizzora.contracts.CheckoutRequest
 import com.pizzora.contracts.CheckoutResponse
-import com.pizzora.contracts.CouponDiscountRule
+import com.pizzora.contracts.CouponCalculationSpec
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.CustomerCouponDto
 import com.pizzora.contracts.DeliveryAddressSnapshotDto
@@ -300,7 +302,7 @@ class Phase19EndToEndRobolectricTest {
     val coupon = CustomerCouponDto(
       id = "cpn-19",
       code = "PIZZORA20",
-      discountType = DiscountType.PERCENTAGE,
+      discountType = DiscountType.PERCENT_BPS,
       discountValue = 2000L,
       maxDiscountPaise = 20_000L,
       minOrderPaise = 25_000L,
@@ -436,7 +438,7 @@ class Phase19EndToEndRobolectricTest {
           val lines = req.items.map { PricedLineInput(50_000L, it.quantity, isTaxable = true) }
           val applied = req.couponCode?.trim()?.uppercase()?.takeIf { it == coupon.code }
           val rule = if (applied != null) {
-            CouponDiscountRule(coupon.discountType, coupon.discountValue, coupon.maxDiscountPaise)
+            CouponCalculationSpec(coupon.discountType, coupon.discountValue, coupon.maxDiscountPaise)
           } else {
             null
           }
@@ -479,7 +481,7 @@ class Phase19EndToEndRobolectricTest {
           val addr = savedAddresses.firstOrNull { it.id == req.addressId }
           val lines = req.items.map { PricedLineInput(50_000L, it.quantity, isTaxable = true) }
           val rule = if (req.couponCode?.equals(coupon.code, ignoreCase = true) == true) {
-            CouponDiscountRule(coupon.discountType, coupon.discountValue, coupon.maxDiscountPaise)
+            CouponCalculationSpec(coupon.discountType, coupon.discountValue, coupon.maxDiscountPaise)
           } else {
             null
           }
@@ -495,7 +497,15 @@ class Phase19EndToEndRobolectricTest {
             scheduleType = req.scheduleType,
             scheduledSlotId = req.scheduledSlotId,
             deliveryAddress = addr?.let {
-              DeliveryAddressSnapshotDto(it.id, it.label, it.line1, it.pincode, it.city)
+              DeliveryAddressSnapshotDto(
+                addressId = it.id,
+                label = it.label,
+                line1 = it.line1,
+                line2 = it.line2,
+                landmark = it.landmark,
+                pincode = it.pincode,
+                city = it.city,
+              )
             },
             status = OrderStatus.PLACED,
             version = 1L,
@@ -765,18 +775,19 @@ class Phase19EndToEndRobolectricTest {
 
     composeTestRule.waitUntil(timeoutMillis = 5_000) {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
-      composeTestRule.onAllNodesWithTag("cart_tab_badge").fetchSemanticsNodes().isNotEmpty()
+      composeTestRule.onAllNodesWithTag("cart_tab_badge", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
     }
-    composeTestRule.onNodeWithTag("cart_tab_badge").assertTextContains("1")
+    composeTestRule.onNodeWithTag("cart_tab_badge", useUnmergedTree = true).assertTextContains("1")
 
     // Switch to Cart Tab -> apply PIZZORA20 -> Proceed to Checkout
     composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
     composeTestRule.waitUntil(timeoutMillis = 5_000) {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
-      composeTestRule.onAllNodesWithTag("coupon_code_input").fetchSemanticsNodes().isNotEmpty() &&
+      composeTestRule.onAllNodesWithTag("cart_lazy_column").fetchSemanticsNodes().isNotEmpty() &&
         quoteVm.uiState.value.quote != null
     }
-    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("coupon_code_input"))
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("promo_coupon_card"))
+    composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("coupon_code_input").performTextInput("PIZZORA20")
     composeTestRule.onNodeWithTag("apply_coupon_button").performClick()
 
@@ -786,10 +797,16 @@ class Phase19EndToEndRobolectricTest {
     }
     composeTestRule.onNodeWithTag("applied_coupon_code_text").assertTextContains("PIZZORA20")
 
+    composeTestRule.mainClock.advanceTimeBy(5_000)
+    composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("proceed_to_checkout_button").performClick()
     composeTestRule.waitUntil(timeoutMillis = 5_000) {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
-      composeTestRule.onAllNodesWithTag("checkout_screen").fetchSemanticsNodes().isNotEmpty() &&
+      composeTestRule.onAllNodesWithTag("checkout_screen").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.waitUntil(timeoutMillis = 5_000) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      !checkoutVm.uiState.value.isLoadingAddresses &&
         composeTestRule.onAllNodesWithTag("address_card_addr-19-1").fetchSemanticsNodes().isNotEmpty()
     }
 
@@ -870,7 +887,8 @@ class Phase19EndToEndRobolectricTest {
     }
 
     val expectedRevenue = Money.formatInr(orders.getValue("ord-19-1").totalPaise)
-    composeTestRule.onNodeWithText(expectedRevenue).assertIsDisplayed()
+    composeTestRule.onNodeWithTag("kpi_today_revenue").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("kpi_today_revenue").assert(hasAnyDescendant(hasText(expectedRevenue)))
     assertNotNull(ownerVm.uiState.value.dashboard)
 
     // Toggle Store Open switch -> persists isAcceptingOrders = false

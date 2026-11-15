@@ -1,0 +1,18 @@
+[Unit]
+Description=PIZZORA Pre-Deploy Flyway Database Migration
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pizzora
+Group=pizzora
+WorkingDirectory=/opt/pizzora
+EnvironmentFile=/etc/pizzora/pizzora.env
+ExecStart=/usr/bin/java -Xms128m -Xmx512m -cp "/opt/pizzora/libs/*" com.pizzora.backend.ApplicationKt --migrate-only
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

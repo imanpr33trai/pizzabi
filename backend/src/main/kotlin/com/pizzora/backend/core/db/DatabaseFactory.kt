@@ -46,7 +46,7 @@ object DatabaseFactory {
     return HikariDataSource(hikariConfig)
   }
 
-  fun migrateAndConnect(dataSource: DataSource): DatabaseHandle {
+  fun migrate(dataSource: DataSource): Int {
     logger.info("Running Flyway migrations against PostgreSQL")
     val result = Flyway.configure()
       .dataSource(dataSource)
@@ -55,9 +55,33 @@ object DatabaseFactory {
       .load()
       .migrate()
     logger.info("Flyway migration complete migrationsExecuted={}", result.migrationsExecuted)
+    return result.migrationsExecuted
+  }
 
+  fun connect(dataSource: DataSource, verifyMigrated: Boolean = false): DatabaseHandle {
+    if (verifyMigrated) {
+      val info = Flyway.configure()
+        .dataSource(dataSource)
+        .locations("classpath:db/migration")
+        .validateMigrationNaming(true)
+        .load()
+        .info()
+      val pending = info.pending()
+      if (pending.isNotEmpty()) {
+        val versions = pending.joinToString(",") { it.version?.version ?: it.description }
+        throw IllegalStateException(
+          "Pending Flyway migrations detected ($versions). Run pre-deploy migration (--migrate-only) before starting API or worker.",
+        )
+      }
+      logger.info("Verified Flyway schema is up-to-date currentVersion={}", info.current()?.version?.version ?: "none")
+    }
     val exposedDb = Database.connect(dataSource)
     return DatabaseHandle(dataSource = dataSource, database = exposedDb)
+  }
+
+  fun migrateAndConnect(dataSource: DataSource): DatabaseHandle {
+    migrate(dataSource)
+    return connect(dataSource, verifyMigrated = false)
   }
 
   suspend fun <T> dbQuery(

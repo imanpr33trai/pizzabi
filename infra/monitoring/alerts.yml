@@ -1,0 +1,65 @@
+groups:
+  - name: pizzora-production-alerts
+    rules:
+      - alert: PizzoraApiDown
+        expr: up{job="pizzora-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PIZZORA API server is unreachable"
+          description: "Prometheus cannot scrape pizzora-api /metrics for over 1 minute."
+
+      - alert: PizzoraWorkerDown
+        expr: up{job="pizzora-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PIZZORA background worker is unreachable"
+          description: "Outbox sequencing, dispatch, expiry, and Razorpay reconciliation are halted."
+
+      - alert: PizzoraHttp5xxSpike
+        expr: sum(rate(pizzora_http_errors_5xx_total[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Elevated HTTP 5xx error rate on PIZZORA API"
+          description: "HTTP 5xx responses exceeded 0.5 req/s over 5 minutes."
+
+      - alert: PizzoraOutboxDeadLetterDetected
+        expr: pizzora_outbox_dead_letter_total > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dead-lettered outbox event(s) require inspection"
+          description: "One or more outbox_events moved to DEAD_LETTER status."
+
+      - alert: PizzoraOutboxSequencerBacklog
+        expr: pizzora_outbox_unsequenced_total > 25 or pizzora_outbox_pending_dispatch_total > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox sequencer or dispatcher backlog growing"
+          description: "Check EventSequencerWorker / OutboxDispatcherWorker and PostgreSQL locks."
+
+      - alert: PizzoraFailedRefundsPending
+        expr: pizzora_refunds_failed_total > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Failed Razorpay refund(s) require reconciliation or Owner retry"
+          description: "Inspect refunds WHERE status='FAILED' and verify RazorpayReconciliationWorker."
+
+      - alert: PizzoraDbPoolExhaustion
+        expr: pizzora_hikari_threads_awaiting > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Threads awaiting PostgreSQL HikariCP connections"
+          description: "Database connection pool pressure detected on pizzora-api."

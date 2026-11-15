@@ -1,0 +1,44 @@
+{
+	email {$PIZZORA_ACME_EMAIL:ops@pizzora.app}
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$PIZZORA_DOMAIN:api.pizzora.app} {
+	encode gzip zstd
+
+	tls {
+		protocols tls1.2 tls1.3
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Never expose Prometheus scrape endpoint to public internet
+	@internal_metrics {
+		path /metrics /metrics/*
+	}
+	respond @internal_metrics 403
+
+	# Long-lived WebSocket connections (/ws/v1/events) and REST API (/api/v1/*)
+	reverse_proxy backend:8080 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+		transport http {
+			read_timeout 1h
+			write_timeout 60s
+			dial_timeout 5s
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

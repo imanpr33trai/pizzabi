@@ -24,7 +24,10 @@ fun Application.installStructuredLogging() {
   install(CallLogging) {
     level = Level.INFO
     callIdMdc("correlation_id")
-    filter { call -> !call.request.path().startsWith("/api/v1/health/live") }
+    filter { call ->
+      val p = call.request.path()
+      !p.startsWith("/api/v1/health/live") && p != "/metrics"
+    }
     format { call ->
       val status = call.response.status()
       val method = call.request.httpMethod.value

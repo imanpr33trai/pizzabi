@@ -28,6 +28,8 @@ import com.pizzora.backend.core.health.DependencyProbe
 import com.pizzora.backend.core.health.HealthService
 import com.pizzora.backend.core.health.TcpDependencyProbe
 import com.pizzora.backend.core.logging.installStructuredLogging
+import com.pizzora.backend.core.metrics.PizzoraMetricsRegistry
+import com.pizzora.backend.core.metrics.installHttpMetrics
 import com.pizzora.backend.core.openapi.OpenApiSpec
 import com.pizzora.backend.core.redis.EphemeralCacheStore
 import com.pizzora.backend.core.redis.LettuceRedisStore
@@ -78,6 +80,7 @@ import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.DependencyHealthStatus
 import com.pizzora.contracts.HealthReadinessResponse
 import com.pizzora.contracts.ReadinessState
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -94,6 +97,7 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.callid.callId
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -113,7 +117,18 @@ fun main(args: Array<String>) {
   val logger = LoggerFactory.getLogger("com.pizzora.backend.Application")
 
   val dataSource = DatabaseFactory.createDataSource(config.database)
-  val dbHandle = DatabaseFactory.migrateAndConnect(dataSource)
+  if ("--migrate-only" in args) {
+    val executed = DatabaseFactory.migrate(dataSource)
+    logger.info("Pre-deploy Flyway migration step finished migrationsExecuted={}", executed)
+    dataSource.close()
+    return
+  }
+
+  val dbHandle = if (config.database.runMigrationsOnStartup) {
+    DatabaseFactory.migrateAndConnect(dataSource)
+  } else {
+    DatabaseFactory.connect(dataSource, verifyMigrated = true)
+  }
 
   if ("--bootstrap-owner" in args) {
     val env = System.getenv()
@@ -136,21 +151,19 @@ fun main(args: Array<String>) {
   }
 
   val redisStore = LettuceRedisStore(config.redis.url)
-  Runtime.getRuntime().addShutdownHook(
-    Thread {
-      redisStore.close()
-      dbHandle.close()
-    },
-  )
-
   val runtimeProbes = listOf(
     PostgresJdbcProbe(dataSource),
     TcpDependencyProbe(name = "redis", required = false, host = config.redis.host, port = config.redis.port),
     TcpDependencyProbe(name = "minio", required = false, host = config.storage.host, port = config.storage.port),
   )
 
-  logger.info("Starting PIZZORA backend API environment={} port={}", config.environment, config.httpPort)
-  embeddedServer(
+  logger.info(
+    "Starting PIZZORA backend API environment={} port={} runMigrationsOnStartup={}",
+    config.environment,
+    config.httpPort,
+    config.database.runMigrationsOnStartup,
+  )
+  val server = embeddedServer(
     factory = Netty,
     port = config.httpPort,
     host = "0.0.0.0",
@@ -163,7 +176,18 @@ fun main(args: Array<String>) {
         emailDeliveryProvider = SmtpEmailDeliveryProvider(config.smtp),
       )
     },
-  ).start(wait = true)
+  )
+
+  Runtime.getRuntime().addShutdownHook(
+    Thread {
+      logger.info("Received shutdown signal; draining PIZZORA API connections gracefully")
+      runCatching { server.stop(gracePeriodMillis = 2_000L, timeoutMillis = 10_000L) }
+      redisStore.close()
+      dbHandle.close()
+    },
+  )
+
+  server.start(wait = true)
 }
 
 fun Application.pizzoraModule(
@@ -176,6 +200,7 @@ fun Application.pizzoraModule(
   razorpayGateway: RazorpayGateway? = null,
   realtimeHub: RealtimeHub? = null,
   passwordHasher: PasswordHasher = PasswordHasher(),
+  metricsRegistry: PizzoraMetricsRegistry = PizzoraMetricsRegistry(),
   extraRoutes: Routing.() -> Unit = {},
 ) {
   val healthService = HealthService(probes)
@@ -184,7 +209,7 @@ fun Application.pizzoraModule(
   val authorizationService = dataSource?.let { AuthorizationService(it, effectiveCacheStore) }
   val wsTicketService = dataSource?.let { WsTicketService(it, effectiveCacheStore, config.auth) }
 
-  val rateLimiter = ResilientRateLimiter(effectiveCacheStore)
+  val rateLimiter = ResilientRateLimiter(effectiveCacheStore, enabled = config.security.rateLimitEnabled)
   val isProduction = config.environment.equals("production", ignoreCase = true)
 
   installSecurityHeaders(isProduction = isProduction)
@@ -205,6 +230,7 @@ fun Application.pizzoraModule(
     maxFrameSize = config.security.maxWsFrameBytes
   }
 
+  installHttpMetrics(metricsRegistry)
   installStructuredLogging()
   installErrorHandling()
   installRouteGroupRateLimiting(rateLimiter = rateLimiter, securityConfig = config.security)
@@ -290,6 +316,13 @@ fun Application.pizzoraModule(
 
     get("/api/v1/openapi.json") {
       call.respond(HttpStatusCode.OK, OpenApiSpec.buildDocument())
+    }
+
+    get("/metrics") {
+      call.respondText(
+        text = metricsRegistry.renderPrometheus(dataSource),
+        contentType = ContentType.parse("text/plain; version=0.0.4; charset=utf-8"),
+      )
     }
 
     if (dataSource != null && authorizationService != null) {
