@@ -68,9 +68,7 @@ services:
 
   # Pre-deploy Flyway migration job separated from API & Worker runtime startup.
   migrate:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.backend
+    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:latest}
     container_name: pizzora-prod-migrate
     restart: "no"
     env_file:
@@ -81,9 +79,7 @@ services:
     command: ["java", "-cp", "/app/libs/*", "com.pizzora.backend.ApplicationKt", "--migrate-only"]
 
   backend:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.backend
+    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:latest}
     container_name: pizzora-prod-api
     restart: unless-stopped
     stop_grace_period: 20s
@@ -112,9 +108,7 @@ services:
           memory: 1G
 
   worker:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.backend
+    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:latest}
     container_name: pizzora-prod-worker
     restart: unless-stopped
     stop_grace_period: 20s
