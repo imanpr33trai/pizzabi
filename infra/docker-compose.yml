@@ -73,9 +73,7 @@ services:
       - "${MAILPIT_UI_PORT:-8025}:8025"
 
   backend:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.backend
+    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:main}
     container_name: pizzora-backend
     depends_on:
       postgres:
@@ -108,9 +106,7 @@ services:
       retries: 5
 
   worker:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile.backend
+    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:main}
     container_name: pizzora-worker
     command: ["java", "-cp", "/app/libs/*", "com.pizzora.backend.worker.WorkerMainKt"]
     depends_on:
