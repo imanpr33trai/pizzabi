@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "infra/Dockerfile.backend"
+  },
+  "deploy": {
+    "preDeployCommand": "java -cp '/app/libs/*' com.pizzora.backend.ApplicationKt --migrate-only",
+    "healthcheckPath": "/api/v1/health/ready",
+    "healthcheckTimeout": 300
+  }
+}
