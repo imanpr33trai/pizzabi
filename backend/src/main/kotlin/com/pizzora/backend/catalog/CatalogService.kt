@@ -638,11 +638,13 @@ class CatalogService(
       ps.executeQuery().use { rs ->
         while (rs.next()) {
           val objectKey = rs.getString("object_key")
+          val publicUrl = publicUrlResolver(objectKey)
+          if (publicUrl.isBlank()) continue
           val img = ProductImageDto(
             id = rs.getObject("id", UUID::class.java).toString(),
             productId = rs.getObject("product_id", UUID::class.java).toString(),
             objectKey = objectKey,
-            publicUrl = publicUrlResolver(objectKey),
+            publicUrl = publicUrl,
             mimeType = rs.getString("mime_type"),
             sizeBytes = rs.getLong("size_bytes"),
             status = ProductImageStatus.valueOf(rs.getString("status")),
