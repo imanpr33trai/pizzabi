@@ -304,14 +304,16 @@ class Phase20ProductionDeploymentAndRecoveryTest {
           }
         }
 
-        val nativeDump = findPostgresBinaryOrNull("pg_dump")
-        val nativeRestore = findPostgresBinaryOrNull("pg_restore")
-        val nativePsql = findPostgresBinaryOrNull("psql")
-        val (pgDumpBin, pgRestoreBin, psqlBin) = if (nativeDump != null && nativeRestore != null && nativePsql != null) {
-          Triple(nativeDump, nativeRestore, nativePsql)
-        } else {
-          createPostgresToolShims(backupDir)
+        val serverMajorVersion = srcPg.postgresDatabase.connection.use { conn ->
+          conn.createStatement().use { st ->
+            st.executeQuery("SELECT current_setting('server_version_num')::int / 10000").use { rs ->
+              rs.next()
+              rs.getInt(1)
+            }
+          }
         }
+        val (pgDumpBin, pgRestoreBin, psqlBin) = findPostgresToolsetOrNull(serverMajorVersion)
+          ?: createPostgresToolShims(backupDir)
         val pgLibEnv = buildPgLibraryEnv(pgDumpBin, pgRestoreBin, psqlBin)
 
         // Run backup-postgres.sh against source EmbeddedPostgres
@@ -323,6 +325,7 @@ class Phase20ProductionDeploymentAndRecoveryTest {
             "PGPORT" to srcPg.port.toString(),
             "PGUSER" to "postgres",
             "PGDATABASE" to "postgres",
+            "PGPASSWORD" to "",
             "PG_DUMP_BIN" to pgDumpBin,
           ),
           workingDir = rootDir,
@@ -341,6 +344,7 @@ class Phase20ProductionDeploymentAndRecoveryTest {
               "PGPORT" to dstPg.port.toString(),
               "PGUSER" to "postgres",
               "PGDATABASE" to "postgres",
+              "PGPASSWORD" to "",
               "PG_RESTORE_BIN" to pgRestoreBin,
               "PSQL_BIN" to psqlBin,
             ),
@@ -582,27 +586,71 @@ class Phase20ProductionDeploymentAndRecoveryTest {
     error("Could not locate repository root from ${System.getProperty("user.dir")}")
   }
 
-  private fun findPostgresBinaryOrNull(name: String): String? {
-    val searchRoots = linkedSetOf<File>().apply {
-      add(File("/tmp/embedded-pg"))
-      add(File("/tmp"))
-      System.getProperty("java.io.tmpdir")?.takeIf { it.isNotBlank() }?.let { add(File(it)) }
-      System.getProperty("ot.epg.working-dir")?.takeIf { it.isNotBlank() }?.let { add(File(it)) }
-      add(File("/usr/lib/postgresql"))
-    }.filter { it.exists() && it.isDirectory }
+  private fun findPostgresToolsetOrNull(serverMajorVersion: Int): Triple<String, String, String>? {
+    val candidateBinDirs = linkedSetOf<File>()
 
-    for (root in searchRoots) {
-      val match = root.walkTopDown()
-        .maxDepth(6)
-        .firstOrNull { it.isFile && it.name == name && it.canExecute() }
-      if (match != null) return match.absolutePath
+    listOfNotNull(
+      File("/tmp/embedded-pg"),
+      System.getProperty("ot.epg.working-dir")?.takeIf { it.isNotBlank() }?.let { File(it) },
+    ).filter { it.exists() && it.isDirectory }.forEach { root ->
+      root.walkTopDown()
+        .maxDepth(5)
+        .filter { it.isDirectory && it.name == "bin" }
+        .sortedBy { it.absolutePath }
+        .forEach { candidateBinDirs += it }
     }
 
-    return System.getenv("PATH")
+    val usrLibPg = File("/usr/lib/postgresql")
+    if (usrLibPg.exists() && usrLibPg.isDirectory) {
+      usrLibPg.listFiles()
+        ?.filter { it.isDirectory && it.name.toIntOrNull() != null }
+        ?.sortedWith(
+          compareBy<File>(
+            { dir -> if (dir.name.toInt() == serverMajorVersion) 0 else 1 },
+            { dir -> dir.name.toInt() },
+          ),
+        )
+        ?.map { File(it, "bin") }
+        ?.filter { it.isDirectory }
+        ?.forEach { candidateBinDirs += it }
+    }
+
+    System.getenv("PATH")
       ?.split(File.pathSeparator)
-      ?.map { File(it, name) }
-      ?.firstOrNull { it.isFile && it.canExecute() }
-      ?.absolutePath
+      ?.filter { it.isNotBlank() }
+      ?.map { File(it) }
+      ?.filter { it.exists() && it.isDirectory }
+      ?.forEach { candidateBinDirs += it }
+
+    for (binDir in candidateBinDirs) {
+      val dump = File(binDir, "pg_dump")
+      val restore = File(binDir, "pg_restore")
+      val psql = File(binDir, "psql")
+      if (!dump.isFile || !dump.canExecute() || !restore.isFile || !restore.canExecute() || !psql.isFile || !psql.canExecute()) {
+        continue
+      }
+      val clientMajor = readPostgresClientMajorOrNull(dump) ?: continue
+      if (clientMajor >= serverMajorVersion) {
+        return Triple(dump.absolutePath, restore.absolutePath, psql.absolutePath)
+      }
+    }
+
+    return null
+  }
+
+  private fun readPostgresClientMajorOrNull(binary: File): Int? {
+    val env = buildPgLibraryEnv(binary.absolutePath)
+    val result = runCatching {
+      runProcess(
+        command = listOf(binary.absolutePath, "--version"),
+        env = env,
+        workingDir = binary.parentFile,
+      )
+    }.getOrNull() ?: return null
+    if (result.exitCode != 0) return null
+    val match = Regex("""\(PostgreSQL[^)]*\)\s+(\d+)""").find(result.output)
+      ?: Regex("""(\d+)(?:\.\d+)?""").findAll(result.output).lastOrNull()
+    return match?.groupValues?.getOrNull(1)?.toIntOrNull()
   }
 
   private fun createPostgresToolShims(workDir: File): Triple<String, String, String> {

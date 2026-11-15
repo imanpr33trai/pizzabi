@@ -35,17 +35,60 @@ else
 fi
 
 echo "[restore] Restoring $ARCHIVE_PATH into database=$PGDATABASE host=$PGHOST port=$PGPORT"
-"$PG_RESTORE_BIN" \
-  --host="$PGHOST" \
-  --port="$PGPORT" \
-  --username="$PGUSER" \
-  --dbname="$PGDATABASE" \
-  --clean \
-  --if-exists \
-  --no-owner \
-  --no-privileges \
-  --single-transaction \
-  "$ARCHIVE_PATH"
+if "$PG_RESTORE_BIN" --version >/dev/null 2>&1 && "$PSQL_BIN" --version >/dev/null 2>&1; then
+  SERVER_VERSION_NUM="$("$PSQL_BIN" \
+    --host="$PGHOST" \
+    --port="$PGPORT" \
+    --username="$PGUSER" \
+    --dbname="$PGDATABASE" \
+    --tuples-only \
+    --no-align \
+    --command="SHOW server_version_num;" | tr -d '[:space:]')"
+
+  "$PG_RESTORE_BIN" \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges \
+    --file=- \
+    "$ARCHIVE_PATH" | \
+    awk -v server_ver="${SERVER_VERSION_NUM:-0}" '
+      BEGIN { in_copy = 0 }
+      in_copy == 1 {
+        print
+        if ($0 == "\\.") { in_copy = 0 }
+        next
+      }
+      /^COPY .* FROM stdin;$/ {
+        in_copy = 1
+        print
+        next
+      }
+      (server_ver + 0) < 170000 && /^SET transaction_timeout = / { next }
+      /^DROP SCHEMA (IF EXISTS )?(public|"public");$/ { next }
+      /^CREATE SCHEMA (public|"public");$/ { print "CREATE SCHEMA IF NOT EXISTS public;"; next }
+      { print }
+    ' | \
+    "$PSQL_BIN" \
+      --host="$PGHOST" \
+      --port="$PGPORT" \
+      --username="$PGUSER" \
+      --dbname="$PGDATABASE" \
+      --single-transaction \
+      --set=ON_ERROR_STOP=1
+else
+  "$PG_RESTORE_BIN" \
+    --host="$PGHOST" \
+    --port="$PGPORT" \
+    --username="$PGUSER" \
+    --dbname="$PGDATABASE" \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges \
+    --single-transaction \
+    "$ARCHIVE_PATH"
+fi
 
 echo "[restore] Verifying Flyway schema history and critical tables..."
 "$PSQL_BIN" \
