@@ -277,3 +277,23 @@ class S3ObjectStorageClient(
     private const val EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 }
+
+
+/**
+ * Object-storage adapter used when no provider has been configured.
+ * The API remains available, while image upload/verification returns a controlled
+ * unavailable response instead of preventing the whole application from starting.
+ */
+object UnavailableObjectStorageClient : ObjectStorageClient {
+  override fun presignPut(objectKey: String, contentType: String, expiresInSeconds: Long): String {
+    throw ObjectStorageUnavailableException("Object storage is disabled. Set S3_ENABLED=true after configuring an S3-compatible provider.")
+  }
+
+  override suspend fun inspectObject(objectKey: String): InspectedObject? {
+    throw ObjectStorageUnavailableException("Object storage is disabled.")
+  }
+
+  override suspend fun deleteObject(objectKey: String): Boolean = false
+
+  override fun publicUrlFor(objectKey: String): String = ""
+}
