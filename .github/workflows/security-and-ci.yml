@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: security-ci-\${{ github.ref }}
+  group: security-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -74,12 +74,12 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US"
       - name: Build preview APK
         env:
-          PIZZORA_API_BASE_URL: \${{ vars.PIZZORA_API_BASE_URL || 'https://api.pizzora.app' }}
+          PIZZORA_API_BASE_URL: ${{ vars.PIZZORA_API_BASE_URL || 'https://api.pizzora.app' }}
         run: gradle :app:assembleDebug --no-daemon
       - name: Upload preview APK
         uses: actions/upload-artifact@v4
         with:
-          name: pizzora-preview-\${{ github.sha }}
+          name: pizzora-preview-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
@@ -100,39 +100,39 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Configure release signing
         env:
-          ANDROID_KEYSTORE_BASE64: \${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_STORE_PASSWORD: \${{ secrets.ANDROID_STORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_STORE_PASSWORD" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
             echo "::error::Release signing secrets are required: ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_PASSWORD."
             exit 1
           fi
-          KEYSTORE_PATH="\${RUNNER_TEMP}/pizzora-upload-key.jks"
+          KEYSTORE_PATH="${RUNNER_TEMP}/pizzora-upload-key.jks"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '\n\r ' | base64 --decode > "$KEYSTORE_PATH"
           echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           echo "STORE_PASSWORD=$ANDROID_STORE_PASSWORD" >> "$GITHUB_ENV"
           echo "KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
       - name: Build signed release APK
         env:
-          PIZZORA_API_BASE_URL: \${{ vars.PIZZORA_API_BASE_URL || 'https://api.pizzora.app' }}
+          PIZZORA_API_BASE_URL: ${{ vars.PIZZORA_API_BASE_URL || 'https://api.pizzora.app' }}
         run: gradle :app:assembleRelease --no-daemon
       - name: Rename release APK
         run: |
           mkdir -p release-apks
-          cp app/build/outputs/apk/release/app-release.apk "release-apks/pizzora-\${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "release-apks/pizzora-${GITHUB_REF_NAME}.apk"
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pizzora-\${{ github.ref_name }}
-          path: release-apks/pizzora-\${{ github.ref_name }}.apk
+          name: pizzora-${{ github.ref_name }}
+          path: release-apks/pizzora-${{ github.ref_name }}.apk
           retention-days: 90
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: \${{ github.ref_name }}
-          name: PIZZORA \${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          name: PIZZORA ${{ github.ref_name }}
           generate_release_notes: true
           make_latest: true
-          files: release-apks/pizzora-\${{ github.ref_name }}.apk
+          files: release-apks/pizzora-${{ github.ref_name }}.apk
