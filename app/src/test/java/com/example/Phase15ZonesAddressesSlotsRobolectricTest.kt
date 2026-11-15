@@ -10,9 +10,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import java.util.concurrent.atomic.AtomicReference
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.auth.AuthRepository
@@ -228,7 +230,7 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
     val addresses = mutableListOf(
       AddressDto("addr-1", "Home", "12 MG Road", null, "Near Metro", "560001", "Bengaluru", isDefault = true),
     )
-    var updatedProfileReq: UpdateProfileRequest? = null
+    val updatedProfileReq = AtomicReference<UpdateProfileRequest?>(null)
 
     val engine = MockEngine { request ->
       val path = request.url.encodedPath
@@ -255,7 +257,7 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
         )
         path == "/api/v1/me" && request.method == HttpMethod.Patch -> {
           val req = json.decodeFromString<UpdateProfileRequest>(readBody(request.body))
-          updatedProfileReq = req
+          updatedProfileReq.set(req)
           profile = profile.copy(fullName = req.fullName, phone = req.phone)
           respond(
             content = json.encodeToString(profile),
@@ -378,8 +380,8 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
     composeTestRule.onNodeWithTag("profile_edit_name_input").performTextClearance()
     composeTestRule.onNodeWithTag("profile_edit_name_input").performTextInput("Priya Rao")
     composeTestRule.onNodeWithTag("profile_edit_save_button").performClick()
-    waitUntilMainLooper { updatedProfileReq != null && !profileVm.uiState.value.isSavingProfile }
-    assertEquals("Priya Rao", updatedProfileReq?.fullName)
+    waitUntilMainLooper { updatedProfileReq.get() != null && !profileVm.uiState.value.isSavingProfile }
+    assertEquals("Priya Rao", updatedProfileReq.get()?.fullName)
     composeTestRule.onNodeWithTag("profile_full_name_text").assertTextContains("Priya Rao")
 
     // Standalone pincode checker: serviceable & unserviceable
@@ -422,7 +424,7 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
     val savedAddresses = listOf(
       AddressDto("addr-s1", "Home", "42 Indiranagar", null, null, "560038", "Bengaluru", isDefault = true),
     )
-    var capturedCheckoutRequest: CheckoutRequest? = null
+    val capturedCheckoutRequest = AtomicReference<CheckoutRequest?>(null)
 
     val cartItem = CartItemViewDto(
       id = "cart-item-1",
@@ -453,6 +455,11 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
         )
         path == "/api/v1/cart" && request.method == HttpMethod.Get -> respond(
           content = json.encodeToString(CartResponseDto("cart-1", listOf(cartItem), 50_000L, 1, true, 0, "2026-11-14T10:00:00Z")),
+          status = HttpStatusCode.OK,
+          headers = headersOf(HttpHeaders.ContentType, "application/json"),
+        )
+        path == "/api/v1/cart" && request.method == HttpMethod.Put -> respond(
+          content = json.encodeToString(CartResponseDto("cart-1", emptyList(), 0L, 0, true, 0, "2026-11-14T10:00:00Z")),
           status = HttpStatusCode.OK,
           headers = headersOf(HttpHeaders.ContentType, "application/json"),
         )
@@ -566,7 +573,7 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
         )
         path == "/api/v1/checkout" && request.method == HttpMethod.Post -> {
           val req = json.decodeFromString<CheckoutRequest>(readBody(request.body))
-          capturedCheckoutRequest = req
+          capturedCheckoutRequest.set(req)
           val detail = OrderDetailDto(
             id = "ord-sched-1",
             orderNumber = "PZ-2026-1501",
@@ -621,53 +628,105 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
       )
     }
 
-    waitUntilMainLooper {
-      composeTestRule.onAllNodesWithTag("cart_tab_badge", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    waitUntilMainLooper(
+      debugMessage = {
+        "cart_tab_badge missing; cartSyncing=${cartVm.uiState.value.isSyncing}, items=${cartVm.uiState.value.items.size}"
+      },
+    ) {
+      composeTestRule.onAllNodesWithTag("cart_tab_badge", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
+        !cartVm.uiState.value.isSyncing
     }
     composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
-    waitUntilMainLooper { quoteVm.uiState.value.quote != null }
+    waitUntilMainLooper(
+      debugMessage = {
+        "initial quote missing; isLoadingQuote=${quoteVm.uiState.value.isLoadingQuote}, quoteError=${quoteVm.uiState.value.quoteError}"
+      },
+    ) {
+      quoteVm.uiState.value.quote != null && !quoteVm.uiState.value.isLoadingQuote
+    }
 
     // Unserviceable pincode check in Cart displays error banner
     composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("delivery_pincode_input"))
-    composeTestRule.onNodeWithTag("delivery_pincode_input").performTextInput("560999")
-    composeTestRule.onNodeWithTag("check_pincode_button").performClick()
-    waitUntilMainLooper { quoteVm.uiState.value.quoteError != null }
+    composeTestRule.onNodeWithTag("delivery_pincode_input").performScrollTo().performTextInput("560999")
+    composeTestRule.onNodeWithTag("check_pincode_button").performScrollTo().performClick()
+    waitUntilMainLooper(
+      debugMessage = {
+        "unserviceable quoteError missing; isCheckingZone=${quoteVm.uiState.value.isCheckingZone}, zone=${quoteVm.uiState.value.zoneCheckResult}"
+      },
+    ) {
+      quoteVm.uiState.value.quoteError != null && !quoteVm.uiState.value.isCheckingZone
+    }
     composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("quote_error_text"))
-    composeTestRule.onNodeWithTag("quote_error_text").assertTextContains("Outside delivery zone", substring = true)
+    composeTestRule.onNodeWithTag("quote_error_text").performScrollTo().assertTextContains("Outside delivery zone", substring = true)
 
     // Serviceable pincode check in Cart clears error and shows Indiranagar
     composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("delivery_pincode_input"))
-    composeTestRule.onNodeWithTag("delivery_pincode_input").performTextClearance()
+    composeTestRule.onNodeWithTag("delivery_pincode_input").performScrollTo().performTextClearance()
     composeTestRule.onNodeWithTag("delivery_pincode_input").performTextInput("560038")
-    composeTestRule.onNodeWithTag("check_pincode_button").performClick()
-    waitUntilMainLooper { quoteVm.uiState.value.quote?.deliveryZone?.pincode == "560038" }
+    composeTestRule.onNodeWithTag("check_pincode_button").performScrollTo().performClick()
+    waitUntilMainLooper(
+      debugMessage = {
+        "serviceable quote missing; isCheckingZone=${quoteVm.uiState.value.isCheckingZone}, isLoadingQuote=${quoteVm.uiState.value.isLoadingQuote}, zone=${quoteVm.uiState.value.quote?.deliveryZone}"
+      },
+    ) {
+      quoteVm.uiState.value.quote?.deliveryZone?.pincode == "560038" &&
+        !quoteVm.uiState.value.isCheckingZone &&
+        !quoteVm.uiState.value.isLoadingQuote
+    }
 
     // Proceed to Checkout -> verify address zone -> switch to SCHEDULED
     composeTestRule.onNodeWithTag("proceed_to_checkout_button").performClick()
-    waitUntilMainLooper { checkoutVm.uiState.value.addresses.size == 1 }
+    waitUntilMainLooper(
+      debugMessage = {
+        "addresses not loaded; isLoadingAddresses=${checkoutVm.uiState.value.isLoadingAddresses}, addrError=${checkoutVm.uiState.value.addressError}"
+      },
+    ) {
+      checkoutVm.uiState.value.addresses.size == 1 && !checkoutVm.uiState.value.isLoadingAddresses
+    }
 
     composeTestRule.onNodeWithTag("checkout_lazy_column").performScrollToNode(hasTestTag("check_selected_address_zone_button"))
-    composeTestRule.onNodeWithTag("check_selected_address_zone_button").performClick()
-    waitUntilMainLooper { checkoutVm.uiState.value.selectedAddressZoneCheck != null }
-    composeTestRule.onNodeWithTag("address_zone_status_banner").assertTextContains("Indiranagar", substring = true)
+    composeTestRule.onNodeWithTag("check_selected_address_zone_button").performScrollTo().performClick()
+    waitUntilMainLooper(
+      debugMessage = {
+        "selectedAddressZoneCheck missing; isChecking=${checkoutVm.uiState.value.isCheckingAddressZone}, err=${checkoutVm.uiState.value.checkoutError}"
+      },
+    ) {
+      checkoutVm.uiState.value.selectedAddressZoneCheck != null && !checkoutVm.uiState.value.isCheckingAddressZone
+    }
+    composeTestRule.onNodeWithTag("address_zone_status_banner").performScrollTo().assertTextContains("Indiranagar", substring = true)
 
     composeTestRule.onNodeWithTag("checkout_lazy_column").performScrollToNode(hasTestTag("schedule_scheduled_chip"))
-    composeTestRule.onNodeWithTag("schedule_scheduled_chip").performClick()
-    waitUntilMainLooper { checkoutVm.uiState.value.availableSlots.size == 2 }
+    composeTestRule.onNodeWithTag("schedule_scheduled_chip").performScrollTo().performClick()
+    waitUntilMainLooper(
+      debugMessage = {
+        "slots not loaded; isLoadingSlots=${checkoutVm.uiState.value.isLoadingSlots}, slotsError=${checkoutVm.uiState.value.slotsError}"
+      },
+    ) {
+      checkoutVm.uiState.value.availableSlots.size == 2 && !checkoutVm.uiState.value.isLoadingSlots
+    }
 
     // Past-cutoff slot is disabled, evening slot can be picked
     composeTestRule.onNodeWithTag("checkout_lazy_column").performScrollToNode(hasTestTag("slot_card_slot-past"))
-    composeTestRule.onNodeWithTag("slot_card_slot-past").assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("slot_card_slot-past").performScrollTo().assertIsNotEnabled()
     composeTestRule.onNodeWithTag("checkout_lazy_column").performScrollToNode(hasTestTag("slot_card_slot-evening"))
-    composeTestRule.onNodeWithTag("slot_card_slot-evening").performClick()
+    composeTestRule.onNodeWithTag("slot_card_slot-evening").performScrollTo().performClick()
+    Shadows.shadowOf(Looper.getMainLooper()).idle()
+    composeTestRule.waitForIdle()
     assertEquals("slot-evening", checkoutVm.uiState.value.selectedSlotId)
 
     composeTestRule.onNodeWithTag("place_order_button").performClick()
-    waitUntilMainLooper { capturedCheckoutRequest != null }
+    waitUntilMainLooper(
+      debugMessage = {
+        "checkout request not captured; isPlacingOrder=${checkoutVm.uiState.value.isPlacingOrder}, checkoutError=${checkoutVm.uiState.value.checkoutError}"
+      },
+    ) {
+      capturedCheckoutRequest.get() != null
+    }
 
-    assertEquals(ScheduleType.SCHEDULED, capturedCheckoutRequest?.scheduleType)
-    assertEquals("slot-evening", capturedCheckoutRequest?.scheduledSlotId)
-    assertEquals("addr-s1", capturedCheckoutRequest?.addressId)
+    val submitted = capturedCheckoutRequest.get()
+    assertEquals(ScheduleType.SCHEDULED, submitted?.scheduleType)
+    assertEquals("slot-evening", submitted?.scheduledSlotId)
+    assertEquals("addr-s1", submitted?.addressId)
   }
 
   @Test
@@ -878,14 +937,19 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
     else -> error("Unexpected body type: ${body::class.simpleName}")
   }
 
-  private fun waitUntilMainLooper(timeoutMs: Long = 5_000, condition: () -> Boolean) {
+  private fun waitUntilMainLooper(
+    timeoutMs: Long = 15_000,
+    debugMessage: () -> String = { "" },
+    condition: () -> Boolean,
+  ) {
     val deadline = System.currentTimeMillis() + timeoutMs
     while (true) {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
       composeTestRule.waitForIdle()
       if (condition()) return
       if (System.currentTimeMillis() > deadline) {
-        throw AssertionError("Timed out after ${timeoutMs}ms waiting for async Robolectric/Compose state")
+        val extra = debugMessage().takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
+        throw AssertionError("Timed out after ${timeoutMs}ms waiting for async Robolectric/Compose state$extra")
       }
       Thread.sleep(20)
     }
