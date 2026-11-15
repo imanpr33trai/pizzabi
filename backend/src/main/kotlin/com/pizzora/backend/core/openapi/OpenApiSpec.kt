@@ -16,7 +16,7 @@ object OpenApiSpec {
       put("version", "1.0.0")
       put(
         "description",
-        "Firebase-free self-hosted REST & WebSocket API for PIZZORA customer ordering, Kitchen Display System (KDS), and Owner operations.",
+        "FireBas-free self-hosted REST & WebSocket API for PIZZORA customer ordering, Kitchen Display System (KDS), and Owner operations.",
       )
     }
     put(
