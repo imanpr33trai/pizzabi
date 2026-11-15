@@ -20,11 +20,12 @@ data class AppConfig(
       val (pgHost, pgPort) = parseJdbcHostPort(dbUrl, defaultHost = "localhost", defaultPort = 5432)
       val redisUrl = env["REDIS_URL"] ?: "redis://localhost:6379"
       val (redisHost, redisPort) = parseUriHostPort(redisUrl, defaultHost = "localhost", defaultPort = 6379)
-      val s3Endpoint = env["S3_ENDPOINT"] ?: "http://localhost:9000"
-      val (s3Host, s3Port) = parseUriHostPort(s3Endpoint, defaultHost = "localhost", defaultPort = 9000)
-
       val environment = env["PIZZORA_ENV"] ?: "development"
       val isProduction = environment.equals("production", ignoreCase = true)
+      val storageEnabled = env["S3_ENABLED"]?.toBooleanStrictOrNull() ?: !isProduction
+      // Ignore stale/placeholder S3 variables while storage is disabled.
+      val s3Endpoint = if (storageEnabled) env["S3_ENDPOINT"] ?: "http://localhost:9000" else "http://localhost:9000"
+      val (s3Host, s3Port) = parseUriHostPort(s3Endpoint, defaultHost = "localhost", defaultPort = 9000)
       val jwtSecret = env["JWT_SECRET"]?.takeIf { it.isNotBlank() }
         ?: if (isProduction) {
           error("JWT_SECRET must be set in production")
@@ -41,8 +42,10 @@ data class AppConfig(
         require(dbPassword.isNotBlank() && dbPassword != "pizzora_dev_password") {
           "DATABASE_PASSWORD must not use the development default in production"
         }
-        require(s3SecretKey.isNotBlank() && s3SecretKey != "pizzora_minio_dev_secret") {
-          "S3_SECRET_KEY must not use the development default in production"
+        if (storageEnabled) {
+          require(s3SecretKey.isNotBlank() && s3SecretKey != "pizzora_minio_dev_secret") {
+            "S3_SECRET_KEY must not use the development default in production when S3_ENABLED=true"
+          }
         }
       }
 
@@ -66,6 +69,7 @@ data class AppConfig(
           port = redisPort,
         ),
         storage = StorageConfig(
+          enabled = storageEnabled,
           endpoint = s3Endpoint,
           host = s3Host,
           port = s3Port,
@@ -151,6 +155,7 @@ data class RedisConfig(
 )
 
 data class StorageConfig(
+  val enabled: Boolean = true,
   val endpoint: String,
   val host: String,
   val port: Int,
