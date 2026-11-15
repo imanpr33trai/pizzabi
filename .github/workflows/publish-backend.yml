@@ -1,30 +1,52 @@
-name: Publish backend container
+name: Publish Backend Container
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-  pull_request:
-    branches: [main]
+  workflow_call:
+    inputs:
+      mode:
+        description: "Image build mode: validate (no push), preview (preview tags), or release (semver tags)"
+        required: true
+        type: string
+      push:
+        description: "Whether to push the built image to GHCR"
+        required: true
+        type: boolean
+      tag_name:
+        description: "Git tag name for release mode (e.g., v1.0.0)"
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: "Push preview tags to GHCR (false = build validation only)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: backend-image-${{ github.ref }}
-  cancel-in-progress: true
+  group: backend-image-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
-  backend:
-    name: Test and publish backend image
+  verify-backend-for-manual-dispatch:
+    name: Security Audit & Backend Tests (Manual Dispatch)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Run security and policy audit
+        run: bash infra/security-check.sh
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -32,45 +54,117 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "9.3.1"
 
-      - name: Run backend tests
-        run: gradle :backend:test --no-daemon
+      - name: Run shared contracts & backend tests (S3 disabled by default)
+        env:
+          S3_ENABLED: "false"
+          PIZZORA_ENV: "development"
+        run: gradle -PbackendOnly=true :shared:contracts:test :backend:test --no-daemon
+
+  build-and-publish:
+    name: Build & Publish Backend Docker Image
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() && (github.event_name == 'workflow_call' || needs.verify-backend-for-manual-dispatch.result == 'success') }}
+    needs: [verify-backend-for-manual-dispatch]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Resolve image publishing mode and tags
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE="preview"
+            if [ "${{ inputs.publish_preview }}" = "true" ]; then
+              SHOULD_PUSH="true"
+            else
+              SHOULD_PUSH="false"
+            fi
+            TAG_NAME=""
+          else
+            MODE="${{ inputs.mode }}"
+            SHOULD_PUSH="${{ inputs.push }}"
+            TAG_NAME="${{ inputs.tag_name }}"
+          fi
+
+          if [ "$MODE" != "validate" ] && [ "$MODE" != "preview" ] && [ "$MODE" != "release" ]; then
+            echo "ERROR: Invalid backend image mode '$MODE'." >&2
+            exit 1
+          fi
+
+          # Safety guard: never allow pushing outside main preview or strict semver tag release
+          if [ "$MODE" = "release" ]; then
+            if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.ref_type }}" != "tag" ]; then
+              echo "ERROR: Release Docker image tags can only be published from a version tag." >&2
+              exit 1
+            fi
+            if [[ ! "$TAG_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z.-]+))?$ ]]; then
+              echo "ERROR: Tag '$TAG_NAME' does not match semantic version format vMAJOR.MINOR.PATCH[-PRERELEASE]." >&2
+              exit 1
+            fi
+            if [ -n "${BASH_REMATCH[4]:-}" ]; then
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "should_push=$SHOULD_PUSH" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        if: github.event_name != 'pull_request'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
+        if: steps.mode.outputs.should_push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate image tags
-        if: github.event_name != 'pull_request'
-        id: meta
+      - name: Generate preview image metadata
+        if: steps.mode.outputs.mode != 'release'
+        id: meta_preview
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/imanpr33trai/pizzora-backend
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=preview-main,enable=${{ github.ref == 'refs/heads/main' && steps.mode.outputs.mode == 'preview' }}
+            type=raw,value=preview-${{ steps.mode.outputs.short_sha }},enable=${{ steps.mode.outputs.mode == 'preview' }}
+            type=raw,value=pr-${{ github.event.pull_request.number || steps.mode.outputs.short_sha }},enable=${{ steps.mode.outputs.mode == 'validate' }}
+
+      - name: Generate production release image metadata
+        if: steps.mode.outputs.mode == 'release'
+        id: meta_release
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/imanpr33trai/pizzora-backend
+          flavor: |
+            latest=${{ steps.mode.outputs.is_prerelease == 'false' }}
+          tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=short
 
-      - name: Build and publish backend image
-        if: github.event_name != 'pull_request'
+      - name: Build (and optionally push) backend Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/Dockerfile.backend
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: ${{ steps.mode.outputs.should_push == 'true' }}
+          tags: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.tags || steps.meta_preview.outputs.tags }}
+          labels: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.labels || steps.meta_preview.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

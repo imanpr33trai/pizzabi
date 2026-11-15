@@ -18,7 +18,7 @@ import javax.sql.DataSource
 
 class CartService(
   private val dataSource: DataSource,
-  private val publicUrlResolver: (String) -> String,
+  private val publicUrlResolver: (String) -> String?,
 ) {
   suspend fun getCart(userId: UUID): CartResponseDto =
     DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
@@ -287,7 +287,7 @@ class CartService(
   private fun evaluateCartItems(
     conn: Connection,
     inputs: List<PersistedCartInput>,
-    publicUrlResolver: (String) -> String,
+    publicUrlResolver: (String) -> String?,
   ): List<CartItemViewDto> {
     if (inputs.isEmpty()) return emptyList()
 
@@ -323,8 +323,10 @@ class CartService(
     ).use { ps ->
       ps.executeQuery().use { rs ->
         while (rs.next()) {
-          productImageMap[rs.getObject("product_id", UUID::class.java)] =
-            publicUrlResolver(rs.getString("object_key"))
+          val resolvedUrl = publicUrlResolver(rs.getString("object_key"))?.trim()?.takeIf { it.isNotEmpty() }
+          if (resolvedUrl != null) {
+            productImageMap[rs.getObject("product_id", UUID::class.java)] = resolvedUrl
+          }
         }
       }
     }

@@ -44,6 +44,7 @@ import com.pizzora.backend.coupons.couponsRoutes
 import com.pizzora.backend.images.ObjectStorageClient
 import com.pizzora.backend.images.ProductImagesService
 import com.pizzora.backend.images.S3ObjectStorageClient
+import com.pizzora.backend.images.UnavailableObjectStorageClient
 import com.pizzora.backend.images.productImagesRoutes
 import com.pizzora.backend.inventory.InventoryService
 import com.pizzora.backend.inventory.inventoryRoutes
@@ -151,17 +152,20 @@ fun main(args: Array<String>) {
   }
 
   val redisStore = LettuceRedisStore(config.redis.url)
-  val runtimeProbes = listOf(
-    PostgresJdbcProbe(dataSource),
-    TcpDependencyProbe(name = "redis", required = false, host = config.redis.host, port = config.redis.port),
-    TcpDependencyProbe(name = "minio", required = false, host = config.storage.host, port = config.storage.port),
-  )
+  val runtimeProbes = buildList {
+    add(PostgresJdbcProbe(dataSource))
+    add(TcpDependencyProbe(name = "redis", required = false, host = config.redis.host, port = config.redis.port))
+    if (config.storage.enabled) {
+      add(TcpDependencyProbe(name = "minio", required = false, host = config.storage.host, port = config.storage.port))
+    }
+  }
 
   logger.info(
-    "Starting PIZZORA backend API environment={} port={} runMigrationsOnStartup={}",
+    "Starting PIZZORA backend API environment={} port={} runMigrationsOnStartup={} s3Enabled={}",
     config.environment,
     config.httpPort,
     config.database.runMigrationsOnStartup,
+    config.storage.enabled,
   )
   val server = embeddedServer(
     factory = Netty,
@@ -344,7 +348,12 @@ fun Application.pizzoraModule(
         passwordHasher = passwordHasher,
       )
 
-      val storageClient = objectStorageClient ?: S3ObjectStorageClient(config.storage)
+      val storageClient: ObjectStorageClient = objectStorageClient
+        ?: if (config.storage.enabled) {
+          S3ObjectStorageClient(config.storage)
+        } else {
+          UnavailableObjectStorageClient
+        }
       val categoriesService = CategoriesService(
         dataSource = dataSource,
         cacheStore = effectiveCacheStore,
@@ -352,7 +361,7 @@ fun Application.pizzoraModule(
       val catalogService = CatalogService(
         dataSource = dataSource,
         cacheStore = effectiveCacheStore,
-        publicUrlResolver = storageClient::publicUrlFor,
+        publicUrlResolver = storageClient::resolvePublicUrlOrNull,
       )
       val productImagesService = ProductImagesService(
         dataSource = dataSource,
@@ -361,7 +370,7 @@ fun Application.pizzoraModule(
       )
       val cartService = CartService(
         dataSource = dataSource,
-        publicUrlResolver = storageClient::publicUrlFor,
+        publicUrlResolver = storageClient::resolvePublicUrlOrNull,
       )
       val couponService = CouponService(
         dataSource = dataSource,
@@ -369,7 +378,7 @@ fun Application.pizzoraModule(
       val pricingService = PricingService(
         dataSource = dataSource,
         couponService = couponService,
-        publicUrlResolver = storageClient::publicUrlFor,
+        publicUrlResolver = storageClient::resolvePublicUrlOrNull,
       )
       val inventoryService = InventoryService(
         dataSource = dataSource,

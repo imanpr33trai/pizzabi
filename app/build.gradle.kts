@@ -13,8 +13,14 @@ android {
     applicationId = "com.aistudio.pizzora.xkqzmw"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    val resolvedVersionCode = providers.gradleProperty("pizzoraVersionCode").orNull?.toIntOrNull()
+      ?: providers.environmentVariable("ANDROID_VERSION_CODE").orNull?.toIntOrNull()
+      ?: 1
+    val resolvedVersionName = providers.gradleProperty("pizzoraVersionName").orNull?.takeIf { it.isNotBlank() }
+      ?: providers.environmentVariable("ANDROID_VERSION_NAME").orNull?.takeIf { it.isNotBlank() }
+      ?: "1.0"
+    versionCode = resolvedVersionCode
+    versionName = resolvedVersionName
 
     buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080\"")
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

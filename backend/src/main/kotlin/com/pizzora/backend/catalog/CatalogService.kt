@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory
 class CatalogService(
   private val dataSource: DataSource,
   private val cacheStore: EphemeralCacheStore,
-  private val publicUrlResolver: (String) -> String,
+  private val publicUrlResolver: (String) -> String?,
 ) {
   private val logger = LoggerFactory.getLogger(CatalogService::class.java)
   private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -638,11 +638,12 @@ class CatalogService(
       ps.executeQuery().use { rs ->
         while (rs.next()) {
           val objectKey = rs.getString("object_key")
+          val resolvedPublicUrl = publicUrlResolver(objectKey)?.trim()?.takeIf { it.isNotEmpty() } ?: continue
           val img = ProductImageDto(
             id = rs.getObject("id", UUID::class.java).toString(),
             productId = rs.getObject("product_id", UUID::class.java).toString(),
             objectKey = objectKey,
-            publicUrl = publicUrlResolver(objectKey),
+            publicUrl = resolvedPublicUrl,
             mimeType = rs.getString("mime_type"),
             sizeBytes = rs.getLong("size_bytes"),
             status = ProductImageStatus.valueOf(rs.getString("status")),

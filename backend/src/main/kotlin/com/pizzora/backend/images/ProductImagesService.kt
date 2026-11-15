@@ -60,6 +60,13 @@ class ProductImagesService(
       )
     }
 
+    if (!objectStorageClient.isEnabled) {
+      throw ServiceUnavailableException(
+        "OBJECT_STORAGE_UNAVAILABLE",
+        "Image storage is disabled. Catalog browsing and ordering remain available.",
+      )
+    }
+
     val imageId = UUID.randomUUID()
     val objectKey = "products/$productId/$imageId.$extension"
 
@@ -133,6 +140,13 @@ class ProductImagesService(
     imageId: UUID,
     auditContext: AuditContext,
   ): ProductImageDto {
+    if (!objectStorageClient.isEnabled) {
+      throw ServiceUnavailableException(
+        "OBJECT_STORAGE_UNAVAILABLE",
+        "Image storage is disabled. Catalog browsing and ordering remain available.",
+      )
+    }
+
     data class PendingImageRecord(
       val objectKey: String,
       val declaredMimeType: String,

@@ -267,17 +267,30 @@ class Phase18SecurityHardeningTest {
       "PIZZORA_ENV" to "production",
       "JWT_SECRET" to "prod-strong-hmac-secret-with-more-than-32-chars",
       "DATABASE_PASSWORD" to "prod-db-secret-9981",
-      "S3_SECRET_KEY" to "prod-s3-secret-7741",
     )
     val validConfig = AppConfig.fromEnv(validProdEnv)
     assertEquals("production", validConfig.environment)
+    assertFalse(validConfig.storage.enabled)
+
+    val validProdS3Env = validProdEnv + mapOf(
+      "S3_ENABLED" to "true",
+      "S3_ENDPOINT" to "https://s3.ap-south-1.amazonaws.com",
+      "S3_BUCKET" to "pizzora-prod-media",
+      "S3_REGION" to "ap-south-1",
+      "S3_ACCESS_KEY" to "AKIA_PROD_ACCESS_KEY",
+      "S3_SECRET_KEY" to "prod-s3-secret-7741",
+    )
+    val validS3Config = AppConfig.fromEnv(validProdS3Env)
+    assertTrue(validS3Config.storage.enabled)
 
     val checks = listOf(
       validProdEnv - "JWT_SECRET",
       validProdEnv + ("JWT_SECRET" to "too-short"),
       validProdEnv + ("JWT_SECRET" to "pizzora-dev-only-hmac-secret-minimum-32-bytes"),
       validProdEnv + ("DATABASE_PASSWORD" to "pizzora_dev_password"),
-      validProdEnv + ("S3_SECRET_KEY" to "pizzora_minio_dev_secret"),
+      validProdS3Env + ("S3_SECRET_KEY" to "pizzora_minio_dev_secret"),
+      validProdS3Env + ("S3_ACCESS_KEY" to "pizzora_minio_admin"),
+      validProdS3Env - "S3_SECRET_KEY",
     )
     for (badEnv in checks) {
       val failed = runCatching { AppConfig.fromEnv(badEnv) }.isFailure

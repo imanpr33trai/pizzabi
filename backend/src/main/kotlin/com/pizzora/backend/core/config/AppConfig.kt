@@ -20,9 +20,6 @@ data class AppConfig(
       val (pgHost, pgPort) = parseJdbcHostPort(dbUrl, defaultHost = "localhost", defaultPort = 5432)
       val redisUrl = env["REDIS_URL"] ?: "redis://localhost:6379"
       val (redisHost, redisPort) = parseUriHostPort(redisUrl, defaultHost = "localhost", defaultPort = 6379)
-      val s3Endpoint = env["S3_ENDPOINT"] ?: "http://localhost:9000"
-      val (s3Host, s3Port) = parseUriHostPort(s3Endpoint, defaultHost = "localhost", defaultPort = 9000)
-
       val environment = env["PIZZORA_ENV"] ?: "development"
       val isProduction = environment.equals("production", ignoreCase = true)
       val jwtSecret = env["JWT_SECRET"]?.takeIf { it.isNotBlank() }
@@ -33,7 +30,6 @@ data class AppConfig(
         }
 
       val dbPassword = env["DATABASE_PASSWORD"] ?: "pizzora_dev_password"
-      val s3SecretKey = env["S3_SECRET_KEY"] ?: "pizzora_minio_dev_secret"
       if (isProduction) {
         require(jwtSecret.length >= 32 && jwtSecret !in DISALLOWED_PRODUCTION_SECRETS) {
           "JWT_SECRET must be at least 32 characters and not a development placeholder in production"
@@ -41,11 +37,9 @@ data class AppConfig(
         require(dbPassword.isNotBlank() && dbPassword != "pizzora_dev_password") {
           "DATABASE_PASSWORD must not use the development default in production"
         }
-        require(s3SecretKey.isNotBlank() && s3SecretKey != "pizzora_minio_dev_secret") {
-          "S3_SECRET_KEY must not use the development default in production"
-        }
       }
 
+      val storage = resolveStorageConfig(env = env, isProduction = isProduction)
       val runMigrationsOnStartup = env["RUN_MIGRATIONS_ON_STARTUP"]?.toBooleanStrictOrNull() ?: !isProduction
 
       return AppConfig(
@@ -65,17 +59,7 @@ data class AppConfig(
           host = redisHost,
           port = redisPort,
         ),
-        storage = StorageConfig(
-          endpoint = s3Endpoint,
-          host = s3Host,
-          port = s3Port,
-          bucket = env["S3_BUCKET"] ?: "pizzora-product-images",
-          region = env["S3_REGION"] ?: "ap-south-1",
-          accessKey = env["S3_ACCESS_KEY"] ?: "pizzora_minio_admin",
-          secretKey = s3SecretKey,
-          publicBaseUrl = env["S3_PUBLIC_URL"]?.trimEnd('/')
-            ?: "${s3Endpoint.trimEnd('/')}/${env["S3_BUCKET"] ?: "pizzora-product-images"}",
-        ),
+        storage = storage,
         smtp = SmtpConfig(
           host = env["SMTP_HOST"] ?: "localhost",
           port = env["SMTP_PORT"]?.toIntOrNull() ?: 1025,
@@ -109,6 +93,136 @@ data class AppConfig(
         ),
       )
     }
+
+    private fun resolveStorageConfig(env: Map<String, String>, isProduction: Boolean): StorageConfig {
+      val rawS3Enabled = env["S3_ENABLED"]?.trim()?.takeIf { it.isNotEmpty() }
+      val explicitS3Enabled = rawS3Enabled?.let { raw ->
+        when (raw.lowercase()) {
+          "true" -> true
+          "false" -> false
+          else -> throw IllegalArgumentException("S3_ENABLED must be 'true' or 'false', got '$raw'")
+        }
+      }
+
+      if (explicitS3Enabled == false || (explicitS3Enabled == null && isProduction)) {
+        return StorageConfig(enabled = false)
+      }
+
+      if (explicitS3Enabled == true) {
+        return buildValidatedStorageConfig(
+          endpoint = env["S3_ENDPOINT"].orEmpty(),
+          bucket = env["S3_BUCKET"].orEmpty(),
+          region = env["S3_REGION"].orEmpty(),
+          accessKey = env["S3_ACCESS_KEY"].orEmpty(),
+          secretKey = env["S3_SECRET_KEY"].orEmpty(),
+          publicUrl = env["S3_PUBLIC_URL"],
+          rejectDevDefaults = isProduction,
+        )
+      }
+
+      // Development mode with S3_ENABLED not specified: enabled by default only if local S3 config is valid.
+      return runCatching {
+        buildValidatedStorageConfig(
+          endpoint = env["S3_ENDPOINT"] ?: "http://localhost:9000",
+          bucket = env["S3_BUCKET"] ?: "pizzora-product-images",
+          region = env["S3_REGION"] ?: "ap-south-1",
+          accessKey = env["S3_ACCESS_KEY"] ?: "pizzora_minio_admin",
+          secretKey = env["S3_SECRET_KEY"] ?: "pizzora_minio_dev_secret",
+          publicUrl = env["S3_PUBLIC_URL"],
+          rejectDevDefaults = false,
+        )
+      }.getOrElse {
+        StorageConfig(enabled = false)
+      }
+    }
+
+    private fun buildValidatedStorageConfig(
+      endpoint: String,
+      bucket: String,
+      region: String,
+      accessKey: String,
+      secretKey: String,
+      publicUrl: String?,
+      rejectDevDefaults: Boolean,
+    ): StorageConfig {
+      val cleanEndpoint = endpoint.trim().trimEnd('/')
+      val endpointUri = parseValidatedHttpUri("S3_ENDPOINT", cleanEndpoint)
+
+      val cleanBucket = bucket.trim()
+      require(cleanBucket.isNotEmpty() && !containsPlaceholder(cleanBucket)) {
+        "S3_BUCKET must be configured with a valid non-placeholder bucket name when S3_ENABLED=true"
+      }
+
+      val cleanRegion = region.trim()
+      require(cleanRegion.isNotEmpty() && !containsPlaceholder(cleanRegion)) {
+        "S3_REGION must be configured with a valid non-placeholder region when S3_ENABLED=true"
+      }
+
+      val cleanAccessKey = accessKey.trim()
+      require(cleanAccessKey.isNotEmpty() && !containsPlaceholder(cleanAccessKey)) {
+        "S3_ACCESS_KEY must be configured when S3_ENABLED=true"
+      }
+
+      val cleanSecretKey = secretKey.trim()
+      require(cleanSecretKey.isNotEmpty() && !containsPlaceholder(cleanSecretKey)) {
+        "S3_SECRET_KEY must be configured when S3_ENABLED=true"
+      }
+
+      if (rejectDevDefaults) {
+        require(cleanAccessKey != "pizzora_minio_admin") {
+          "S3_ACCESS_KEY must not use the development default in production when S3_ENABLED=true"
+        }
+        require(cleanSecretKey != "pizzora_minio_dev_secret") {
+          "S3_SECRET_KEY must not use the development default in production when S3_ENABLED=true"
+        }
+      }
+
+      val resolvedPublicUrl = publicUrl?.trim()?.takeIf { it.isNotEmpty() }?.let { rawPublic ->
+        parseValidatedHttpUri("S3_PUBLIC_URL", rawPublic.trimEnd('/'))
+        rawPublic.trimEnd('/')
+      } ?: "$cleanEndpoint/$cleanBucket"
+
+      val host = endpointUri.host
+      val port = if (endpointUri.port > 0) {
+        endpointUri.port
+      } else if (endpointUri.scheme.equals("https", ignoreCase = true)) {
+        443
+      } else {
+        80
+      }
+
+      return StorageConfig(
+        endpoint = cleanEndpoint,
+        host = host,
+        port = port,
+        bucket = cleanBucket,
+        region = cleanRegion,
+        accessKey = cleanAccessKey,
+        secretKey = cleanSecretKey,
+        publicBaseUrl = resolvedPublicUrl,
+        enabled = true,
+      )
+    }
+
+    private fun parseValidatedHttpUri(varName: String, raw: String): URI {
+      require(raw.isNotEmpty() && !containsPlaceholder(raw)) {
+        "$varName must be configured with a valid http/https URL when S3_ENABLED=true"
+      }
+      val uri = runCatching { URI(raw) }.getOrElse { ex ->
+        throw IllegalArgumentException("$varName is not a valid URI: ${ex.message}", ex)
+      }
+      val scheme = uri.scheme?.lowercase()
+      require(scheme == "http" || scheme == "https") {
+        "$varName must use http or https scheme when S3_ENABLED=true"
+      }
+      require(!uri.host.isNullOrBlank()) {
+        "$varName must include a valid host when S3_ENABLED=true"
+      }
+      return uri
+    }
+
+    private fun containsPlaceholder(value: String): Boolean =
+      '<' in value || '>' in value
 
     private const val DEV_DEFAULT_JWT_SECRET = "pizzora-dev-only-hmac-secret-minimum-32-bytes"
     private val DISALLOWED_PRODUCTION_SECRETS = setOf(
@@ -151,14 +265,15 @@ data class RedisConfig(
 )
 
 data class StorageConfig(
-  val endpoint: String,
-  val host: String,
-  val port: Int,
-  val bucket: String,
-  val region: String,
+  val endpoint: String = "",
+  val host: String = "",
+  val port: Int = 0,
+  val bucket: String = "",
+  val region: String = "",
   val accessKey: String = "pizzora_minio_admin",
   val secretKey: String = "pizzora_minio_dev_secret",
   val publicBaseUrl: String = "${endpoint.trimEnd('/')}/$bucket",
+  val enabled: Boolean = true,
 )
 
 data class SmtpConfig(

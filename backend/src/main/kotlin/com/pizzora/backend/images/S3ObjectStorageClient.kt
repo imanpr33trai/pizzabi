@@ -31,10 +31,44 @@ class ObjectStorageUnavailableException(
 ) : RuntimeException(message, cause)
 
 interface ObjectStorageClient {
+  val isEnabled: Boolean get() = true
   fun presignPut(objectKey: String, contentType: String, expiresInSeconds: Long = 300L): String
   suspend fun inspectObject(objectKey: String): InspectedObject?
   suspend fun deleteObject(objectKey: String): Boolean
   fun publicUrlFor(objectKey: String): String
+  fun resolvePublicUrlOrNull(objectKey: String): String? {
+    val raw = runCatching { publicUrlFor(objectKey) }.getOrNull()?.trim() ?: return null
+    if (raw.isEmpty() || '<' in raw || '>' in raw) return null
+    val uri = runCatching { URI(raw) }.getOrNull() ?: return null
+    val scheme = uri.scheme?.lowercase()
+    return raw.takeIf { (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank() }
+  }
+}
+
+object UnavailableObjectStorageClient : ObjectStorageClient {
+  override val isEnabled: Boolean = false
+
+  override fun presignPut(objectKey: String, contentType: String, expiresInSeconds: Long): String {
+    throw ObjectStorageUnavailableException(
+      "Object storage is disabled. Configure S3_ENABLED=true and valid S3 credentials to upload images.",
+    )
+  }
+
+  override suspend fun inspectObject(objectKey: String): InspectedObject? {
+    throw ObjectStorageUnavailableException(
+      "Object storage is disabled. Configure S3_ENABLED=true and valid S3 credentials to confirm images.",
+    )
+  }
+
+  override suspend fun deleteObject(objectKey: String): Boolean = false
+
+  override fun publicUrlFor(objectKey: String): String {
+    throw ObjectStorageUnavailableException(
+      "Object storage is disabled; public image URLs are unavailable.",
+    )
+  }
+
+  override fun resolvePublicUrlOrNull(objectKey: String): String? = null
 }
 
 object ImageMagicBytesDetector {

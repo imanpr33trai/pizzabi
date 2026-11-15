@@ -76,25 +76,33 @@ class HealthService(
   }
 
   companion object {
-    fun defaultProbes(config: AppConfig): List<DependencyProbe> = listOf(
-      TcpDependencyProbe(
-        name = "postgres",
-        required = true,
-        host = config.database.host,
-        port = config.database.port,
-      ),
-      TcpDependencyProbe(
-        name = "redis",
-        required = false,
-        host = config.redis.host,
-        port = config.redis.port,
-      ),
-      TcpDependencyProbe(
-        name = "minio",
-        required = false,
-        host = config.storage.host,
-        port = config.storage.port,
-      ),
-    )
+    fun defaultProbes(config: AppConfig): List<DependencyProbe> = buildList {
+      add(
+        TcpDependencyProbe(
+          name = "postgres",
+          required = true,
+          host = config.database.host,
+          port = config.database.port,
+        ),
+      )
+      add(
+        TcpDependencyProbe(
+          name = "redis",
+          required = false,
+          host = config.redis.host,
+          port = config.redis.port,
+        ),
+      )
+      if (config.storage.enabled) {
+        add(
+          TcpDependencyProbe(
+            name = "minio",
+            required = false,
+            host = config.storage.host,
+            port = config.storage.port,
+          ),
+        )
+      }
+    }
   }
 }

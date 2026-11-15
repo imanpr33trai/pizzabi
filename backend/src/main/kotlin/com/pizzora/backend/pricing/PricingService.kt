@@ -28,7 +28,7 @@ import javax.sql.DataSource
 class PricingService(
   private val dataSource: DataSource,
   private val couponService: CouponService,
-  private val publicUrlResolver: (String) -> String,
+  private val publicUrlResolver: (String) -> String?,
 ) {
   suspend fun quotePrice(
     userId: UUID,
@@ -233,8 +233,10 @@ class PricingService(
     ).use { ps ->
       ps.executeQuery().use { rs ->
         while (rs.next()) {
-          productImageMap[rs.getObject("product_id", UUID::class.java)] =
-            publicUrlResolver(rs.getString("object_key"))
+          val resolvedUrl = publicUrlResolver(rs.getString("object_key"))?.trim()?.takeIf { it.isNotEmpty() }
+          if (resolvedUrl != null) {
+            productImageMap[rs.getObject("product_id", UUID::class.java)] = resolvedUrl
+          }
         }
       }
     }
