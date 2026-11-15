@@ -652,6 +652,7 @@ class CatalogService(
               createdAt = rs.getObject("created_at", java.time.OffsetDateTime::class.java).toInstant().toString(),
             )
             imagesByProduct.getOrPut(img.productId) { mutableListOf() } += img
+          }
         }
       }
     }
