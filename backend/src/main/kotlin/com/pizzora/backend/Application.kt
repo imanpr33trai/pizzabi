@@ -44,6 +44,7 @@ import com.pizzora.backend.coupons.couponsRoutes
 import com.pizzora.backend.images.ObjectStorageClient
 import com.pizzora.backend.images.ProductImagesService
 import com.pizzora.backend.images.S3ObjectStorageClient
+import com.pizzora.backend.images.UnavailableObjectStorageClient
 import com.pizzora.backend.images.productImagesRoutes
 import com.pizzora.backend.inventory.InventoryService
 import com.pizzora.backend.inventory.inventoryRoutes
@@ -344,7 +345,11 @@ fun Application.pizzoraModule(
         passwordHasher = passwordHasher,
       )
 
-      val storageClient = objectStorageClient ?: S3ObjectStorageClient(config.storage)
+      val storageClient = objectStorageClient ?: if (config.storage.enabled) {
+        S3ObjectStorageClient(config.storage)
+      } else {
+        UnavailableObjectStorageClient
+      }
       val categoriesService = CategoriesService(
         dataSource = dataSource,
         cacheStore = effectiveCacheStore,
