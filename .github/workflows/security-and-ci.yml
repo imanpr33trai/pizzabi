@@ -38,5 +38,34 @@ jobs:
         run: gradle :backend:test --no-daemon
       - name: Run Android Unit & Robolectric Suite
         run: gradle :app:testDebugUnitTest --no-daemon
+      - name: Generate Ephemeral CI Keystores for Debug & Release Verification
+        run: |
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -noprompt -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          if [ ! -f "${KEYSTORE_PATH:-my-upload-key.jks}" ]; then
+            CI_RELEASE_KS="${RUNNER_TEMP:-/tmp}/ci-upload-key.jks"
+            rm -f "$CI_RELEASE_KS"
+            keytool -genkeypair -noprompt -v \
+              -keystore "$CI_RELEASE_KS" \
+              -storepass ci-release-pass \
+              -alias upload \
+              -keypass ci-release-pass \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=CI Release,O=Android,C=US"
+            echo "KEYSTORE_PATH=$CI_RELEASE_KS" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=ci-release-pass" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=ci-release-pass" >> "$GITHUB_ENV"
+          fi
       - name: Build Debug & Release APKs for Manifest/BuildConfig Verification
         run: gradle :app:assembleDebug :app:assembleRelease --no-daemon
