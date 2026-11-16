@@ -61,10 +61,10 @@ import com.example.R
 import com.example.checkout.PriceBreakdownCard
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
+import com.example.core.domain.RustDomainBridge
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.OrderDetailDto
-import com.pizzora.contracts.OrderStateMachine
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
 import com.pizzora.contracts.PaymentMethod
@@ -487,7 +487,7 @@ private fun OrderDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
-            if (OrderStateMachine.canCustomerCancel(order.status)) {
+            if (RustDomainBridge.canCustomerCancel(order.status)) {
               Spacer(modifier = Modifier.height(4.dp))
               OutlinedButton(
                 onClick = { showCancelDialog = true },

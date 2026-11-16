@@ -4,6 +4,12 @@ import com.example.core.database.CartDao
 import com.example.core.database.CartItemEntity
 import com.example.core.database.CartItemToppingEntity
 import com.example.core.database.CartItemWithToppings
+import com.example.core.domain.CartSyncAction
+import com.example.core.domain.CartSyncPlanRequest
+import com.example.core.domain.CartSyncTrigger
+import com.example.core.domain.DomainBridge
+import com.example.core.domain.RustDomainBridge
+import com.example.core.domain.SessionIdentitySnapshot
 import com.example.core.network.PizzoraApiClient
 import com.example.core.network.PizzoraApiException
 import com.example.core.security.SessionTransitionCoordinator
@@ -59,6 +65,7 @@ class NetworkCartRepository(
   private val cartDao: CartDao,
   private val tokenStorage: TokenStorage = apiClient.sessionTokenStorage,
   private val sessionCoordinator: SessionTransitionCoordinator? = null,
+  private val domainBridge: DomainBridge = RustDomainBridge,
 ) : CartRepository {
 
   private fun captureSession(): Pair<Long, String>? {
@@ -66,6 +73,15 @@ class NetworkCartRepository(
     val userId = snapshot?.userId ?: tokenStorage.currentSession()?.user?.id ?: return null
     val epoch = snapshot?.epoch ?: 0L
     return epoch to userId
+  }
+
+  private fun activeSessionSnapshot(): SessionIdentitySnapshot? {
+    val snapshot = sessionCoordinator?.currentSnapshot()
+    if (snapshot != null) {
+      return snapshot.userId?.let { SessionIdentitySnapshot(epoch = snapshot.epoch, userId = it) }
+    }
+    val userId = tokenStorage.currentSession()?.user?.id ?: return null
+    return SessionIdentitySnapshot(epoch = 0L, userId = userId)
   }
 
   private fun isSessionActive(capturedEpoch: Long, capturedUserId: String): Boolean {
@@ -162,6 +178,7 @@ class NetworkCartRepository(
       return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
     }
     return syncAndValidateCartInternal(
+      trigger = CartSyncTrigger.EXPLICIT_MUTATION,
       persistToServer = true,
       allowEmptyReplace = false,
       capturedEpoch = capturedEpoch,
@@ -184,6 +201,7 @@ class NetworkCartRepository(
       return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
     }
     return syncAndValidateCartInternal(
+      trigger = CartSyncTrigger.EXPLICIT_MUTATION,
       persistToServer = true,
       allowEmptyReplace = false,
       capturedEpoch = capturedEpoch,
@@ -203,6 +221,7 @@ class NetworkCartRepository(
       return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
     }
     return syncAndValidateCartInternal(
+      trigger = CartSyncTrigger.EXPLICIT_CLEAR_OR_REMOVE,
       persistToServer = true,
       allowEmptyReplace = true,
       capturedEpoch = capturedEpoch,
@@ -222,6 +241,7 @@ class NetworkCartRepository(
       return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
     }
     return syncAndValidateCartInternal(
+      trigger = CartSyncTrigger.EXPLICIT_CLEAR_OR_REMOVE,
       persistToServer = true,
       allowEmptyReplace = true,
       capturedEpoch = capturedEpoch,
@@ -233,6 +253,19 @@ class NetworkCartRepository(
     val (capturedEpoch, capturedUserId) = captureSession()
       ?: return CartSyncResult(isOffline = false, unavailableCount = 0)
     val cachedLocal = cartDao.getCartItemsWithToppingsOnce(capturedUserId)
+    val action = domainBridge.planCartSync(
+      CartSyncPlanRequest(
+        activeSession = activeSessionSnapshot(),
+        capturedSession = SessionIdentitySnapshot(epoch = capturedEpoch, userId = capturedUserId),
+        trigger = CartSyncTrigger.PASSIVE_BOOTSTRAP,
+        localItemCount = cachedLocal.size,
+        persistToServer = true,
+        allowEmptyReplace = false,
+      ),
+    )
+    if (action == CartSyncAction.DISCARD_STALE_SESSION) {
+      return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
+    }
 
     return try {
       val serverCart = coroutineScope {
@@ -275,6 +308,7 @@ class NetworkCartRepository(
     val (capturedEpoch, capturedUserId) = captureSession()
       ?: return CartSyncResult(isOffline = false, unavailableCount = 0)
     return syncAndValidateCartInternal(
+      trigger = CartSyncTrigger.PERIODIC_VALIDATE,
       persistToServer = persistToServer,
       allowEmptyReplace = false,
       capturedEpoch = capturedEpoch,
@@ -283,37 +317,34 @@ class NetworkCartRepository(
   }
 
   private suspend fun syncAndValidateCartInternal(
+    trigger: CartSyncTrigger,
     persistToServer: Boolean,
     allowEmptyReplace: Boolean,
     capturedEpoch: Long,
     capturedUserId: String,
   ): CartSyncResult {
-    if (!isSessionActive(capturedEpoch, capturedUserId)) {
+    val local = cartDao.getCartItemsWithToppingsOnce(capturedUserId)
+    val plannedAction = domainBridge.planCartSync(
+      CartSyncPlanRequest(
+        activeSession = activeSessionSnapshot(),
+        capturedSession = SessionIdentitySnapshot(epoch = capturedEpoch, userId = capturedUserId),
+        trigger = trigger,
+        localItemCount = local.size,
+        persistToServer = persistToServer,
+        allowEmptyReplace = allowEmptyReplace,
+      ),
+    )
+
+    if (plannedAction == CartSyncAction.DISCARD_STALE_SESSION) {
       return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
     }
-    val local = cartDao.getCartItemsWithToppingsOnce(capturedUserId)
+    if (plannedAction == CartSyncAction.NO_OP_EMPTY_LOCAL) {
+      return CartSyncResult(isOffline = false, unavailableCount = 0)
+    }
+
     return try {
-      val serverCart: CartResponseDto = if (local.isEmpty()) {
-        when {
-          allowEmptyReplace && persistToServer -> coroutineScope {
-            coroutineContext[Job]?.let { job ->
-              sessionCoordinator?.registerInFlightJob(capturedEpoch, job)
-            }
-            if (!isSessionActive(capturedEpoch, capturedUserId)) {
-              throw CancellationException("Session changed before cart clear")
-            }
-            apiClient.replaceCart(ReplaceCartRequest(emptyList()))
-          }
-          persistToServer -> coroutineScope {
-            coroutineContext[Job]?.let { job ->
-              sessionCoordinator?.registerInFlightJob(capturedEpoch, job)
-            }
-            apiClient.getCart()
-          }
-          else -> return CartSyncResult(isOffline = false, unavailableCount = 0)
-        }
-      } else {
-        val inputs = local.map { entry ->
+      val inputs by lazy {
+        local.map { entry ->
           CartItemInputDto(
             id = entry.item.id,
             productId = entry.item.productId,
@@ -324,26 +355,52 @@ class NetworkCartRepository(
             clientUnitPricePaise = entry.item.unitPricePaise,
           )
         }
-        coroutineScope {
+      }
+      val serverCart: CartResponseDto = when (plannedAction) {
+        CartSyncAction.DISCARD_STALE_SESSION ->
+          return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
+        CartSyncAction.NO_OP_EMPTY_LOCAL ->
+          return CartSyncResult(isOffline = false, unavailableCount = 0)
+        CartSyncAction.REPLACE_SERVER_CART_EMPTY -> coroutineScope {
+          coroutineContext[Job]?.let { job ->
+            sessionCoordinator?.registerInFlightJob(capturedEpoch, job)
+          }
+          if (!isSessionActive(capturedEpoch, capturedUserId)) {
+            throw CancellationException("Session changed before cart clear")
+          }
+          apiClient.replaceCart(ReplaceCartRequest(emptyList()))
+        }
+        CartSyncAction.FETCH_SERVER_CART -> coroutineScope {
+          coroutineContext[Job]?.let { job ->
+            sessionCoordinator?.registerInFlightJob(capturedEpoch, job)
+          }
+          apiClient.getCart()
+        }
+        CartSyncAction.REPLACE_SERVER_CART_WITH_VALIDATE_FALLBACK -> coroutineScope {
           coroutineContext[Job]?.let { job ->
             sessionCoordinator?.registerInFlightJob(capturedEpoch, job)
           }
           if (!isSessionActive(capturedEpoch, capturedUserId)) {
             throw CancellationException("Session changed before cart sync")
           }
-          if (persistToServer) {
-            try {
-              apiClient.replaceCart(ReplaceCartRequest(inputs))
-            } catch (apiEx: PizzoraApiException) {
-              if (apiEx.statusCode == 422) {
-                apiClient.validateCart(ValidateCartRequest(inputs))
-              } else {
-                throw apiEx
-              }
+          try {
+            apiClient.replaceCart(ReplaceCartRequest(inputs))
+          } catch (apiEx: PizzoraApiException) {
+            if (domainBridge.fallbackOnReplaceHttpError(apiEx.statusCode) == CartSyncAction.VALIDATE_CART_ONLY) {
+              apiClient.validateCart(ValidateCartRequest(inputs))
+            } else {
+              throw apiEx
             }
-          } else {
-            apiClient.validateCart(ValidateCartRequest(inputs))
           }
+        }
+        CartSyncAction.VALIDATE_CART_ONLY -> coroutineScope {
+          coroutineContext[Job]?.let { job ->
+            sessionCoordinator?.registerInFlightJob(capturedEpoch, job)
+          }
+          if (!isSessionActive(capturedEpoch, capturedUserId)) {
+            throw CancellationException("Session changed before cart validate")
+          }
+          apiClient.validateCart(ValidateCartRequest(inputs))
         }
       }
 

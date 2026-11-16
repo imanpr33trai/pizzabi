@@ -188,6 +188,7 @@ io.ktor:ktor-websocket-serialization-jvm:3.2.3=debugCompileClasspath,debugRuntim
 io.ktor:ktor-websocket-serialization:3.2.3=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
 io.ktor:ktor-websockets-jvm:3.2.3=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
 io.ktor:ktor-websockets:3.2.3=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+net.java.dev.jna:jna:5.15.0=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
 org.jetbrains.kotlin:kotlin-android-extensions-runtime:1.9.22=debugRuntimeClasspath,releaseRuntimeClasspath
 org.jetbrains.kotlin:kotlin-parcelize-runtime:1.9.22=debugRuntimeClasspath,releaseRuntimeClasspath
 org.jetbrains.kotlin:kotlin-stdlib-common:2.2.10=debugRuntimeClasspath,releaseRuntimeClasspath

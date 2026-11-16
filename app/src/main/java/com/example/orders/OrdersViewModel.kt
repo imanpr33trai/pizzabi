@@ -2,10 +2,12 @@ package com.example.orders
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.domain.DomainBridge
+import com.example.core.domain.DomainCausalTracker
+import com.example.core.domain.RustDomainBridge
 import com.example.core.network.RealtimeEventStream
 import com.pizzora.contracts.CausalDecision
 import com.pizzora.contracts.FailPaymentAttemptRequest
-import com.pizzora.contracts.OrderCausalTracker
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderPaymentStatusResponse
 import com.pizzora.contracts.OrderStatus
@@ -60,12 +62,13 @@ class OrdersViewModel(
   private val initialPollDelayMs: Long = 250L,
   private val maxPollAttempts: Int = 20,
   private val realtimeEventStream: RealtimeEventStream? = null,
+  private val domainBridge: DomainBridge = RustDomainBridge,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(OrdersUiState())
   val uiState: StateFlow<OrdersUiState> = _uiState.asStateFlow()
 
-  private var causalTracker = OrderCausalTracker()
+  private val causalTracker: DomainCausalTracker = domainBridge.createCausalTracker()
   private val activeResyncOrderIds = mutableSetOf<String>()
   private var pollJob: Job? = null
 
@@ -806,7 +809,7 @@ class OrdersViewModel(
     synchronized(activeResyncOrderIds) {
       activeResyncOrderIds.clear()
     }
-    causalTracker = OrderCausalTracker()
+    causalTracker.clear()
     realtimeEventStream?.resetForSessionChange()
     _uiState.value = OrdersUiState()
   }

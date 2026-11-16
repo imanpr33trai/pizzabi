@@ -2,12 +2,13 @@ package com.example.kds
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.domain.DomainBridge
+import com.example.core.domain.DomainCausalTracker
+import com.example.core.domain.RustDomainBridge
 import com.example.core.network.RealtimeEventStream
 import com.example.core.security.TokenStorage
 import com.pizzora.contracts.CausalDecision
 import com.pizzora.contracts.KdsTicketDto
-import com.pizzora.contracts.OrderCausalTracker
-import com.pizzora.contracts.OrderStateMachine
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.RealtimeConnectionState
 import com.pizzora.contracts.RealtimeEventDto
@@ -86,6 +87,7 @@ class KdsViewModel(
   private val clockNowMs: () -> Long = System::currentTimeMillis,
   private val tickerIntervalMs: Long = 1_000L,
   private val enableTicker: Boolean = true,
+  private val domainBridge: DomainBridge = RustDomainBridge,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(
@@ -93,7 +95,7 @@ class KdsViewModel(
   )
   val uiState: StateFlow<KdsUiState> = _uiState.asStateFlow()
 
-  private var causalTracker = OrderCausalTracker()
+  private val causalTracker: DomainCausalTracker = domainBridge.createCausalTracker()
   private var tickerJob: Job? = null
   private var isBoardStarted: Boolean = false
 
@@ -193,7 +195,7 @@ class KdsViewModel(
   }
 
   fun advanceTicketStage(ticket: KdsTicketDto) {
-    val nextStatus = OrderStateMachine.nextKdsStatus(ticket.status, ticket.fulfillmentType) ?: return
+    val nextStatus = domainBridge.nextKdsStatus(ticket.status, ticket.fulfillmentType) ?: return
     transitionTicket(ticket.id, nextStatus)
   }
 
@@ -409,7 +411,7 @@ class KdsViewModel(
     isBoardStarted = false
     tickerJob?.cancel()
     tickerJob = null
-    causalTracker = OrderCausalTracker()
+    causalTracker.clear()
     realtimeEventStream?.resetForSessionChange()
     _uiState.value = KdsUiState(
       isMuted = _uiState.value.isMuted,

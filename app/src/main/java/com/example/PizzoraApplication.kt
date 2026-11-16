@@ -17,6 +17,7 @@ class PizzoraApplication : Application(), Configuration.Provider {
   override val workManagerConfiguration: Configuration
     get() = Configuration.Builder()
       .setWorkerFactory(appContainer.workerFactory)
+      .setDefaultProcessName(applicationInfo?.processName ?: packageName)
       .build()
 
   override fun onCreate() {

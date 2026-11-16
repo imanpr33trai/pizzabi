@@ -51,9 +51,9 @@ import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.IngredientUnit
 import com.pizzora.contracts.InventoryItemDto
 import com.pizzora.contracts.InventoryLedgerReason
+import com.example.core.domain.RustDomainBridge
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.OrderDetailDto
-import com.pizzora.contracts.OrderStateMachine
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
 import com.pizzora.contracts.PaymentMethod
@@ -746,7 +746,7 @@ private fun OwnerOrderDetailDialog(
       order.items.forEach { item ->
         Text("${item.quantity}x ${item.productName} (${item.variantSize})", style = MaterialTheme.typography.bodyMedium)
       }
-      if (nextStatus != null && OrderStateMachine.canTransition(order.status, nextStatus, order.fulfillmentType, UserRole.OWNER)) {
+      if (nextStatus != null && RustDomainBridge.canTransitionOrder(order.status, nextStatus, order.fulfillmentType, UserRole.OWNER)) {
         Button(
           onClick = { onTransition(nextStatus, "Owner console advance") },
           enabled = !isSubmitting,

@@ -130,7 +130,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run UniFFI Host Bindgen and Android Unit & Robolectric Tests
-        run: ./gradlew :app:generateUniFfiKotlinBindings :app:testDebugUnitTest --no-daemon
+        run: ./gradlew :app:generateUniFfiKotlinBindings :app:testDebugUnitTest -PpizzoraRequireRust=true --no-daemon
 
   test-android-instrumented:
     name: Android Instrumentation Tests (Emulator)
@@ -192,7 +192,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon
+          script: ./gradlew :app:connectedDebugAndroidTest -PpizzoraRequireRust=true --no-daemon
 
   build-preview-apk:
     name: Build Android Debug Preview APK
@@ -254,7 +254,7 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build Debug Preview APK
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: ./gradlew :app:assembleDebug -PpizzoraRequireRust=true --no-daemon
 
       - name: Verify UniFFI Native ABI Packaging (arm64-v8a & x86_64)
         shell: bash
@@ -445,7 +445,7 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          ./gradlew :app:assembleRelease --no-daemon \
+          ./gradlew :app:assembleRelease -PpizzoraRequireRust=true --no-daemon \
             -PpizzoraVersionCode="${{ steps.version.outputs.version_code }}" \
             -PpizzoraVersionName="${{ steps.version.outputs.version_name }}"
 

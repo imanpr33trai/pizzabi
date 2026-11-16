@@ -74,15 +74,35 @@ android {
     compose = true
     buildConfig = true
   }
+  val pizzoraRequireRust = providers.gradleProperty("pizzoraRequireRust").orNull
+    ?.toBooleanStrictOrNull() ?: false
   val rustWorkspaceDir = rootProject.layout.projectDirectory.dir("rust").asFile
-  val rustHostTargetReleaseDir = rustWorkspaceDir.resolve("target/release")
   val uniffiGeneratedKotlinDir = layout.buildDirectory.dir("generated/uniffi/kotlin")
   val uniffiAndroidJniLibsDir = layout.buildDirectory.dir("generated/uniffi/jniLibs")
+  val cargoBins = listOfNotNull(
+    System.getenv("CARGO_HOME")?.let { File(it, "bin") },
+    File(System.getProperty("user.home"), ".cargo/bin"),
+  ).filter { it.isDirectory }.map { it.absolutePath }
+  val rustSearchPath = (cargoBins + System.getenv("PATH").orEmpty())
+    .filter { it.isNotBlank() }
+    .joinToString(File.pathSeparator)
+  val hasCargoBinary = rustSearchPath.split(File.pathSeparator)
+    .filter { it.isNotBlank() }
+    .any { dir -> File(dir, "cargo").let { it.isFile && it.canExecute() } }
+  val hasCargoNdkBinary = rustSearchPath.split(File.pathSeparator)
+    .filter { it.isNotBlank() }
+    .any { dir -> File(dir, "cargo-ndk").let { it.isFile && it.canExecute() } }
+  val uniffiNativeEnabled = pizzoraRequireRust || hasCargoBinary
 
   sourceSets {
     getByName("main") {
-      kotlin.srcDir(uniffiGeneratedKotlinDir)
-      jniLibs.srcDir(uniffiAndroidJniLibsDir)
+      if (uniffiNativeEnabled) {
+        kotlin.directories.add("src/uniffiBridge/kotlin")
+        kotlin.directories.add(uniffiGeneratedKotlinDir.get().asFile.absolutePath)
+        jniLibs.directories.add(uniffiAndroidJniLibsDir.get().asFile.absolutePath)
+      } else {
+        kotlin.directories.add("src/uniffiFallback/kotlin")
+      }
     }
   }
 
@@ -90,6 +110,7 @@ android {
     unitTests {
       isIncludeAndroidResources = true
       all {
+        val rustHostTargetReleaseDir = rustWorkspaceDir.resolve("target/release")
         it.systemProperty("java.library.path", rustHostTargetReleaseDir.absolutePath)
         it.systemProperty("jna.library.path", rustHostTargetReleaseDir.absolutePath)
       }
@@ -101,6 +122,8 @@ android {
   }
 }
 
+val pizzoraRequireRust = providers.gradleProperty("pizzoraRequireRust").orNull
+  ?.toBooleanStrictOrNull() ?: false
 val rustWorkspaceDir = rootProject.layout.projectDirectory.dir("rust").asFile
 val rustHostTargetReleaseDir = rustWorkspaceDir.resolve("target/release")
 val uniffiGeneratedKotlinDir = layout.buildDirectory.dir("generated/uniffi/kotlin")
@@ -122,45 +145,69 @@ fun resolveRustPath(): String {
   return (cargoBins + existingPath).filter { it.isNotBlank() }.joinToString(File.pathSeparator)
 }
 
-fun resolveAndroidNdkHome(sdkDir: File?): String {
-  System.getenv("ANDROID_NDK_HOME")?.takeIf { it.isNotBlank() }?.let { return it }
-  System.getenv("ANDROID_NDK_ROOT")?.takeIf { it.isNotBlank() }?.let { return it }
+fun hasExecutableOnPath(binaryName: String, resolvedPath: String): Boolean =
+  resolvedPath.split(File.pathSeparator)
+    .filter { it.isNotBlank() }
+    .any { dir -> File(dir, binaryName).let { it.isFile && it.canExecute() } }
+
+fun findAndroidNdkHomeOrNull(sdkDir: File?): String? {
+  System.getenv("ANDROID_NDK_HOME")?.takeIf { it.isNotBlank() && File(it).isDirectory }?.let { return it }
+  System.getenv("ANDROID_NDK_ROOT")?.takeIf { it.isNotBlank() && File(it).isDirectory }?.let { return it }
   val sdkRoot = sdkDir
-    ?: System.getenv("ANDROID_SDK_ROOT")?.let(::File)
-    ?: System.getenv("ANDROID_HOME")?.let(::File)
-    ?: File("/opt/android/sdk")
-  val pinned = File(sdkRoot, "ndk/27.2.12479018")
-  if (pinned.isDirectory) return pinned.absolutePath
-  error("Android NDK 27.2.12479018 not found under ${sdkRoot.absolutePath}.")
+    ?: System.getenv("ANDROID_SDK_ROOT")?.takeIf { it.isNotBlank() }?.let(::File)
+    ?: System.getenv("ANDROID_HOME")?.takeIf { it.isNotBlank() }?.let(::File)
+    ?: File("/opt/android/sdk").takeIf { it.isDirectory }
+  if (sdkRoot != null) {
+    val pinned = File(sdkRoot, "ndk/27.2.12479018")
+    if (pinned.isDirectory) return pinned.absolutePath
+  }
+  return null
 }
+
+val resolvedRustPath = resolveRustPath()
+val hasCargoToolchain = hasExecutableOnPath("cargo", resolvedRustPath)
+val hasCargoNdkToolchain = hasCargoToolchain && hasExecutableOnPath("cargo-ndk", resolvedRustPath)
+val uniffiNativeBuildEnabled = pizzoraRequireRust || hasCargoToolchain
+val androidNdkRustBuildEnabled = pizzoraRequireRust ||
+  (hasCargoNdkToolchain && findAndroidNdkHomeOrNull(null) != null)
+val androidSdkDirProvider = androidComponents.sdkComponents.sdkDirectory
 
 val buildHostRustLib by tasks.registering(Exec::class) {
   group = "rust"
   description = "Builds host cdylib for UniFFI Kotlin binding generation and Robolectric tests."
+  enabled = uniffiNativeBuildEnabled
   workingDir = rustWorkspaceDir
   inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-core"))
   inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-uniffi"))
   inputs.files(
     rustWorkspaceDir.resolve("Cargo.toml"),
-    rustWorkspaceDir.resolve("Cargo.lock"),
     rustWorkspaceDir.resolve("rust-toolchain.toml"),
   )
   outputs.file(hostCdylibFile)
-  environment("PATH", resolveRustPath())
+  environment("PATH", resolvedRustPath)
   environment("CARGO_BUILD_JOBS", "2")
-  commandLine("cargo", "build", "-p", "pizzora-uniffi", "--release", "--locked")
+  doFirst {
+    if (!hasCargoToolchain) {
+      error("Rust 'cargo' toolchain is required when -PpizzoraRequireRust=true.")
+    }
+  }
+  commandLine("cargo", "build", "-p", "pizzora-uniffi", "--release")
 }
 
 val generateUniFfiKotlinBindings by tasks.registering(Exec::class) {
   group = "rust"
   description = "Generates Kotlin UniFFI bindings from the host pizzora_uniffi cdylib."
+  enabled = uniffiNativeBuildEnabled
   dependsOn(buildHostRustLib)
   workingDir = rustWorkspaceDir
   inputs.file(hostCdylibFile)
   inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-uniffi/src"))
   outputs.dir(uniffiGeneratedKotlinDir)
-  environment("PATH", resolveRustPath())
+  environment("PATH", resolvedRustPath)
   doFirst {
+    if (!hasCargoToolchain) {
+      error("Rust 'cargo' toolchain is required to run uniffi-bindgen when -PpizzoraRequireRust=true.")
+    }
     val outDir = uniffiGeneratedKotlinDir.get().asFile
     outDir.deleteRecursively()
     outDir.mkdirs()
@@ -172,7 +219,6 @@ val generateUniFfiKotlinBindings by tasks.registering(Exec::class) {
     "pizzora-uniffi",
     "--bin",
     "uniffi-bindgen",
-    "--locked",
     "--",
     "generate",
     "--library",
@@ -187,22 +233,28 @@ val generateUniFfiKotlinBindings by tasks.registering(Exec::class) {
 val buildAndroidRustLibs by tasks.registering(Exec::class) {
   group = "rust"
   description = "Cross-compiles Android arm64-v8a and x86_64 pizzora_uniffi shared libraries via cargo-ndk."
+  enabled = androidNdkRustBuildEnabled
   workingDir = rustWorkspaceDir
   inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-core"))
   inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-uniffi"))
   inputs.files(
     rustWorkspaceDir.resolve("Cargo.toml"),
-    rustWorkspaceDir.resolve("Cargo.lock"),
     rustWorkspaceDir.resolve("rust-toolchain.toml"),
   )
   outputs.dir(uniffiAndroidJniLibsDir)
-  environment("PATH", resolveRustPath())
+  environment("PATH", resolvedRustPath)
   environment("CARGO_BUILD_JOBS", "2")
   doFirst {
+    if (!hasCargoToolchain || !hasExecutableOnPath("cargo-ndk", resolvedRustPath)) {
+      error("Rust 'cargo' and 'cargo-ndk 4.1.2' are required when -PpizzoraRequireRust=true.")
+    }
     val outDir = uniffiAndroidJniLibsDir.get().asFile
     outDir.deleteRecursively()
     outDir.mkdirs()
-    environment("ANDROID_NDK_HOME", resolveAndroidNdkHome(android.sdkDirectory))
+    val sdkDir = runCatching { androidSdkDirProvider.get().asFile }.getOrNull()
+    val ndkHome = findAndroidNdkHomeOrNull(sdkDir)
+      ?: error("Android NDK 27.2.12479018 not found under ${sdkDir?.absolutePath ?: "<unknown SDK>"}.")
+    environment("ANDROID_NDK_HOME", ndkHome)
   }
   commandLine(
     "cargo",
@@ -217,20 +269,25 @@ val buildAndroidRustLibs by tasks.registering(Exec::class) {
     "-p",
     "pizzora-uniffi",
     "--release",
-    "--locked",
   )
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-  dependsOn(generateUniFfiKotlinBindings)
-}
-
-tasks.configureEach {
-  if (name.startsWith("ksp") && name.endsWith("Kotlin")) {
+if (uniffiNativeBuildEnabled) {
+  tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     dependsOn(generateUniFfiKotlinBindings)
   }
-  if (name.startsWith("merge") && name.endsWith("JniLibFolders")) {
-    dependsOn(buildAndroidRustLibs)
+  tasks.configureEach {
+    if (name.startsWith("ksp") && name.endsWith("Kotlin")) {
+      dependsOn(generateUniFfiKotlinBindings)
+    }
+  }
+}
+
+if (androidNdkRustBuildEnabled) {
+  tasks.configureEach {
+    if (name.startsWith("merge") && name.endsWith("JniLibFolders")) {
+      dependsOn(buildAndroidRustLibs)
+    }
   }
 }
 

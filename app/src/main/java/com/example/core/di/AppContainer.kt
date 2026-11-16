@@ -105,6 +105,8 @@ class AppContainer(
     WebSocketEventClient(apiClient = apiClient)
   }
 
+  val domainBridge: com.example.core.domain.DomainBridge = com.example.core.domain.RustDomainBridge
+
   val authRepository: AuthRepository by lazy {
     NetworkAuthRepository(
       apiClient = apiClient,
@@ -126,6 +128,7 @@ class AppContainer(
       cartDao = database.cartDao(),
       tokenStorage = tokenStorage,
       sessionCoordinator = sessionCoordinator,
+      domainBridge = domainBridge,
     )
   }
 
@@ -163,6 +166,7 @@ class AppContainer(
     ProductImageUploader(
       apiClient = apiClient,
       imageCompressor = imageCompressor,
+      domainBridge = domainBridge,
     )
   }
 
@@ -257,6 +261,7 @@ class AppContainer(
       return OrdersViewModel(
         orderRepository = orderRepository,
         realtimeEventStream = webSocketEventClient,
+        domainBridge = domainBridge,
       ) as T
     }
   }
@@ -272,6 +277,7 @@ class AppContainer(
         tokenStorage = tokenStorage,
         chimePlayer = kdsChimePlayer,
         realtimeEventStream = webSocketEventClient,
+        domainBridge = domainBridge,
       ) as T
     }
   }
