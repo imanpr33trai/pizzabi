@@ -31,16 +31,26 @@ pub enum ReadinessState {
     Unhealthy,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HealthLivenessResponse {
-    pub status: String,
-    pub service: String,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DependencyHealth {
+    Up,
+    Down,
+}
+
+impl From<pizzora_db::DependencyHealthStatus> for DependencyHealth {
+    fn from(value: pizzora_db::DependencyHealthStatus) -> Self {
+        match value {
+            pizzora_db::DependencyHealthStatus::Up => Self::Up,
+            pizzora_db::DependencyHealthStatus::Down => Self::Down,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HealthReadinessResponse {
     pub status: ReadinessState,
-    pub dependencies: BTreeMap<String, pizzora_db::DependencyHealthStatus>,
+    pub dependencies: BTreeMap<String, DependencyHealth>,
     pub service: String,
 }
 

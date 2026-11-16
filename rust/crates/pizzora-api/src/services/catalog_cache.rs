@@ -7,11 +7,11 @@ pub const CATALOG_TTL_SECS: u64 = 30;
 pub const CONFIG_TTL_SECS: u64 = 15;
 
 pub async fn invalidate_catalog_cache(cache: &dyn EphemeralCacheStore) {
-    cache.delete(MENU_CACHE_KEY).await;
-    cache.delete(CATEGORIES_CACHE_KEY).await;
+    cache.del(MENU_CACHE_KEY).await;
+    cache.del(CATEGORIES_CACHE_KEY).await;
 }
 
 pub async fn invalidate_all_public_caches(cache: &dyn EphemeralCacheStore) {
     invalidate_catalog_cache(cache).await;
-    cache.delete(SETTINGS_PUBLIC_CACHE_KEY).await;
+    cache.del(SETTINGS_PUBLIC_CACHE_KEY).await;
 }

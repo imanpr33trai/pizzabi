@@ -138,6 +138,8 @@ pub async fn delete_zone(
 
 #[derive(Debug, Deserialize, Default)]
 pub struct SlotsQuery {
+    #[serde(rename = "type")]
+    pub slot_type: Option<String>,
     pub fulfillment_type: Option<String>,
     pub date: Option<String>,
 }
@@ -146,12 +148,19 @@ pub async fn list_public_slots(
     State(state): State<AppState>,
     Query(query): Query<SlotsQuery>,
 ) -> Result<Json<AvailableSlotsResponse>, ApiError> {
-    let ft = match query
-        .fulfillment_type
+    let raw_type = query
+        .slot_type
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-    {
+        .or_else(|| {
+            query
+                .fulfillment_type
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        });
+    let ft = match raw_type {
         Some(raw) => parse_fulfillment_type(raw)?,
         None => FulfillmentType::Delivery,
     };
@@ -168,12 +177,19 @@ pub async fn list_owner_slots(
     Query(query): Query<SlotsQuery>,
 ) -> Result<Json<Vec<ScheduledSlotDto>>, ApiError> {
     require_permission(&state, &principal, "owner:zones_slots_manage").await?;
-    let ft = match query
-        .fulfillment_type
+    let raw_type = query
+        .slot_type
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-    {
+        .or_else(|| {
+            query
+                .fulfillment_type
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        });
+    let ft = match raw_type {
         Some(raw) => Some(parse_fulfillment_type(raw)?),
         None => None,
     };

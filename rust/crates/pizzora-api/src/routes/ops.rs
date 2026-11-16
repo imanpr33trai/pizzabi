@@ -3,12 +3,12 @@ use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 
-use crate::dto::{HealthLivenessResponse, HealthReadinessResponse};
+use crate::dto::HealthReadinessResponse;
 use crate::health::{evaluate_readiness, liveness};
 use crate::openapi::build_openapi_document;
 use crate::state::AppState;
 
-pub async fn health_live() -> Json<HealthLivenessResponse> {
+pub async fn health_live() -> Json<HealthReadinessResponse> {
     Json(liveness())
 }
 

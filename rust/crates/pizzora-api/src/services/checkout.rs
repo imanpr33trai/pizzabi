@@ -140,7 +140,7 @@ impl CheckoutService {
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| {
                     ApiError::validation(
-                        "MISSING_ADDRESS_ID",
+                        "ADDRESS_REQUIRED",
                         "address_id is required for DELIVERY orders.",
                     )
                 })?;
@@ -232,7 +232,7 @@ impl CheckoutService {
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| {
                     ApiError::validation(
-                        "MISSING_SCHEDULED_SLOT_ID",
+                        "SCHEDULED_SLOT_REQUIRED",
                         "scheduled_slot_id is required when schedule_type is SCHEDULED.",
                     )
                 })?;
@@ -289,6 +289,17 @@ impl CheckoutService {
 
             Some(slot_id)
         } else {
+            if request
+                .scheduled_slot_id
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|s| !s.is_empty())
+            {
+                return Err(ApiError::validation(
+                    "UNEXPECTED_SCHEDULED_SLOT",
+                    "scheduled_slot_id must be omitted for ASAP orders.",
+                ));
+            }
             None
         };
 

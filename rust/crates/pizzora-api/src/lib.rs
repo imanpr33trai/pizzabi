@@ -21,3 +21,6 @@ pub use state::AppState;
 pub fn crate_name() -> &'static str {
     env!("CARGO_PKG_NAME")
 }
+
+#[cfg(test)]
+mod unit_tests;

@@ -152,7 +152,7 @@ impl S3ObjectStorageClient {
         }
     }
 
-    fn presign_put_at(
+    pub(crate) fn presign_put_at(
         &self,
         object_key: &str,
         content_type: &str,

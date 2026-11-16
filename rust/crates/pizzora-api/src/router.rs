@@ -183,7 +183,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/api/v1/owner/settings",
-            get(owner_ops::get_owner_settings).patch(owner_ops::update_owner_settings),
+            get(owner_ops::get_owner_settings).put(owner_ops::update_owner_settings),
         )
         .route(
             "/api/v1/owner/orders",

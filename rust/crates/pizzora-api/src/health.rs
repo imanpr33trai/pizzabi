@@ -4,12 +4,15 @@ use std::time::Duration;
 use axum::http::StatusCode;
 use pizzora_db::{probe_postgres, DependencyHealthStatus};
 
-use crate::dto::{HealthLivenessResponse, HealthReadinessResponse, ReadinessState};
+use crate::dto::{DependencyHealth, HealthReadinessResponse, ReadinessState};
 use crate::state::AppState;
 
-pub fn liveness() -> HealthLivenessResponse {
-    HealthLivenessResponse {
-        status: "ok".to_owned(),
+pub fn liveness() -> HealthReadinessResponse {
+    let mut dependencies = BTreeMap::new();
+    dependencies.insert("server".to_owned(), DependencyHealth::Up);
+    HealthReadinessResponse {
+        status: ReadinessState::Healthy,
+        dependencies,
         service: "pizzora-api".to_owned(),
     }
 }
@@ -22,8 +25,8 @@ pub async fn evaluate_readiness(state: &AppState) -> (StatusCode, HealthReadines
     let (pg_status, redis_status, storage_status) = tokio::join!(pg_fut, redis_fut, storage_fut);
 
     let mut dependencies = BTreeMap::new();
-    dependencies.insert("postgres".to_owned(), pg_status);
-    dependencies.insert("redis".to_owned(), redis_status);
+    dependencies.insert("postgres".to_owned(), pg_status.into());
+    dependencies.insert("redis".to_owned(), redis_status.into());
 
     let mut required_down = pg_status == DependencyHealthStatus::Down;
     let mut optional_down = false;
@@ -37,7 +40,7 @@ pub async fn evaluate_readiness(state: &AppState) -> (StatusCode, HealthReadines
     }
 
     if let Some(minio_status) = storage_status {
-        dependencies.insert("minio".to_owned(), minio_status);
+        dependencies.insert("minio".to_owned(), minio_status.into());
         if minio_status == DependencyHealthStatus::Down {
             optional_down = true;
         }

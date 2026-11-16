@@ -1,5 +1,4 @@
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{FromRequestParts, Query, Request, State};
@@ -48,7 +47,12 @@ pub async fn ws_events(
     let principal =
         match authenticate_ws_parts(&parts, &state, query.ticket.as_deref()).await {
             Ok(p) => p,
-            Err(err) => return err.into_response(),
+            Err(err) => {
+                if let Some(cid) = parts.extensions.get::<crate::middleware::CorrelationId>() {
+                    return err.into_response_with_correlation(&cid.0);
+                }
+                return err.into_response();
+            }
         };
 
     let ws_upgrade = match WebSocketUpgrade::from_request_parts(&mut parts, &state).await {
@@ -62,7 +66,8 @@ pub async fn ws_events(
         }
     };
 
-    let max_frame_bytes = state.config.security.max_ws_frame_bytes;
+    let max_frame_bytes = usize::try_from(state.config.security.max_ws_frame_bytes)
+        .unwrap_or(65_536);
     let since_seq = query.since_seq;
 
     ws_upgrade.on_upgrade(move |socket| {
@@ -136,7 +141,7 @@ async fn handle_ws_connection(
     }
 
     let mut handle = state.realtime_hub.register_session(&principal, cursor_seq);
-    let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(20));
+    let mut heartbeat_interval = tokio::time::interval(state.ws_heartbeat_interval);
     heartbeat_interval.tick().await;
 
     loop {

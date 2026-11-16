@@ -19,6 +19,14 @@ pub struct CorrelationId(pub String);
 #[derive(Debug, Clone)]
 pub struct ClientIp(pub String);
 
+tokio::task_local! {
+    pub static REQUEST_CORRELATION_ID: String;
+}
+
+pub fn current_request_correlation_id() -> Option<String> {
+    REQUEST_CORRELATION_ID.try_with(Clone::clone).ok()
+}
+
 pub async fn correlation_id_middleware(mut req: Request, next: Next) -> Response {
     let incoming = req
         .headers()
@@ -34,7 +42,9 @@ pub async fn correlation_id_middleware(mut req: Request, next: Next) -> Response
     req.extensions_mut().insert(CorrelationId(cid.clone()));
     req.extensions_mut().insert(ClientIp(client_ip));
 
-    let mut resp = next.run(req).await;
+    let mut resp = REQUEST_CORRELATION_ID
+        .scope(cid.clone(), async move { next.run(req).await })
+        .await;
     if let Ok(val) = HeaderValue::from_str(&cid) {
         resp.headers_mut()
             .insert(HeaderName::from_static("x-request-id"), val);

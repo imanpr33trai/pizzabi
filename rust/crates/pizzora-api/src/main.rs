@@ -49,7 +49,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "Startup database migrations finished"
         );
     } else {
-        verify_catalog_invariants(&pool).await?;
+        let mut conn = pool.acquire().await?;
+        verify_catalog_invariants(&mut conn).await?;
     }
 
     let password_hasher = PasswordHasher::default();

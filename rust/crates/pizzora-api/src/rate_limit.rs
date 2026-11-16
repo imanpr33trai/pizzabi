@@ -88,7 +88,7 @@ impl ResilientRateLimiter {
                     || path.contains("/payments/")))
         {
             RouteGroupQuota {
-                group: "checkout_payment",
+                group: "checkout_payments",
                 max_per_minute: self.security.checkout_payment_per_minute,
             }
         } else if path.starts_with("/api/v1/owner/") || path.starts_with("/api/v1/kds/") {

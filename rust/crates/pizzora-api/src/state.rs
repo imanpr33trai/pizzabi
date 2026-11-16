@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use pizzora_auth::{
     AuthService, AuthorizationService, PasswordHasher, WsTicketService,
@@ -71,6 +72,7 @@ pub struct AppState {
     pub reporting_service: ReportingService,
     pub realtime_hub: Arc<RealtimeHub>,
     pub realtime_event_service: RealtimeEventService,
+    pub ws_heartbeat_interval: Duration,
 }
 
 impl AppState {
@@ -82,8 +84,29 @@ impl AppState {
         gateway_override: Option<Arc<dyn RazorpayGateway>>,
         storage_override: Option<Arc<dyn ObjectStorageClient>>,
     ) -> Result<Self, ApiError> {
+        Self::build_with_cache(
+            config,
+            pool,
+            redis_store,
+            None,
+            password_hasher,
+            gateway_override,
+            storage_override,
+        )
+    }
+
+    pub fn build_with_cache(
+        config: AppConfig,
+        pool: PgPool,
+        redis_store: Arc<RedisStore>,
+        cache_override: Option<Arc<dyn EphemeralCacheStore>>,
+        password_hasher: Option<PasswordHasher>,
+        gateway_override: Option<Arc<dyn RazorpayGateway>>,
+        storage_override: Option<Arc<dyn ObjectStorageClient>>,
+    ) -> Result<Self, ApiError> {
         let config = Arc::new(config);
-        let cache_store: Arc<dyn EphemeralCacheStore> = redis_store.clone();
+        let cache_store: Arc<dyn EphemeralCacheStore> =
+            cache_override.unwrap_or_else(|| redis_store.clone());
         let storage = match storage_override {
             Some(s) => s,
             None => create_object_storage_client(&config.storage)?,
@@ -179,6 +202,12 @@ impl AppState {
             reporting_service,
             realtime_hub,
             realtime_event_service,
+            ws_heartbeat_interval: Duration::from_secs(20),
         })
+    }
+
+    pub fn with_ws_heartbeat_interval(mut self, interval: Duration) -> Self {
+        self.ws_heartbeat_interval = interval;
+        self
     }
 }

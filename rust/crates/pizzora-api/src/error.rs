@@ -34,6 +34,7 @@ pub struct ApiError {
     pub message: String,
     pub details: BTreeMap<String, String>,
     pub retry_after_secs: Option<u64>,
+    pub correlation_id: Option<String>,
 }
 
 impl ApiError {
@@ -44,6 +45,7 @@ impl ApiError {
             message: message.into(),
             details: BTreeMap::new(),
             retry_after_secs: None,
+            correlation_id: None,
         }
     }
 
@@ -59,6 +61,11 @@ impl ApiError {
 
     pub fn with_retry_after(mut self, secs: u64) -> Self {
         self.retry_after_secs = Some(secs);
+        self
+    }
+
+    pub fn with_correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
+        self.correlation_id = Some(correlation_id.into());
         self
     }
 
@@ -130,8 +137,12 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let fallback_cid = new_uuid_v4().to_string();
-        self.into_response_with_correlation(&fallback_cid)
+        let resolved_cid = self
+            .correlation_id
+            .clone()
+            .or_else(crate::middleware::current_request_correlation_id)
+            .unwrap_or_else(|| new_uuid_v4().to_string());
+        self.into_response_with_correlation(&resolved_cid)
     }
 }
 

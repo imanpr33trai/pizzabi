@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::dto::{
     AvailableSlotsResponse, CreateScheduledSlotRequest, ScheduledSlotDto, UpdateScheduledSlotRequest,
 };
-use crate::error::{format_iso8601, now_iso8601, ApiError};
+use crate::error::{format_iso8601, ApiError};
 
 pub fn ist_offset() -> FixedOffset {
     FixedOffset::east_opt(5 * 3600 + 30 * 60).expect("valid IST +05:30 offset")
@@ -126,7 +126,7 @@ impl ScheduledSlotService {
         }
         if request.max_capacity <= 0 {
             return Err(ApiError::validation(
-                "INVALID_MAX_CAPACITY",
+                "INVALID_SLOT_CAPACITY",
                 "max_capacity must be positive.",
             ));
         }
@@ -163,7 +163,7 @@ impl ScheduledSlotService {
         .map_err(|err| {
             if DbError::is_unique_violation(&err) {
                 ApiError::conflict(
-                    "SLOT_EXISTS",
+                    "SLOT_ALREADY_EXISTS",
                     "A scheduled slot already exists for that date, fulfillment type, and start time.",
                 )
             } else {
@@ -221,18 +221,18 @@ impl ScheduledSlotService {
         let existing_dto = row_to_slot_dto(&existing_row, Utc::now())?;
 
         let next_cap = match request.max_capacity {
+            Some(c) if c <= 0 => {
+                return Err(ApiError::validation(
+                    "INVALID_SLOT_CAPACITY",
+                    "max_capacity must be positive.",
+                ));
+            }
             Some(c) if c < reserved_count => {
                 return Err(ApiError::conflict(
-                    "CAPACITY_BELOW_RESERVED",
+                    "SLOT_CAPACITY_BELOW_RESERVED",
                     format!(
                         "Cannot set max_capacity ({c}) below active reserved_count ({reserved_count})."
                     ),
-                ));
-            }
-            Some(c) if c <= 0 => {
-                return Err(ApiError::validation(
-                    "INVALID_MAX_CAPACITY",
-                    "max_capacity must be positive.",
                 ));
             }
             Some(c) => c,
@@ -307,26 +307,28 @@ impl ScheduledSlotService {
         })?;
         let existing_dto = row_to_slot_dto(&existing_row, Utc::now())?;
 
-        let linked: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM scheduled_slot_reservations WHERE slot_id = $1",
+        let in_use: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS(SELECT 1 FROM scheduled_slot_reservations WHERE slot_id = $1)
+                OR EXISTS(SELECT 1 FROM orders WHERE scheduled_slot_id = $1)
+            "#,
         )
         .bind(slot_id)
         .fetch_one(&mut *tx)
         .await?;
 
-        let action = if linked > 0 {
-            sqlx::query("UPDATE scheduled_slots SET is_active = FALSE WHERE id = $1")
-                .bind(slot_id)
-                .execute(&mut *tx)
-                .await?;
-            "SCHEDULED_SLOT_DEACTIVATED"
-        } else {
-            sqlx::query("DELETE FROM scheduled_slots WHERE id = $1")
-                .bind(slot_id)
-                .execute(&mut *tx)
-                .await?;
-            "SCHEDULED_SLOT_DELETED"
-        };
+        if in_use {
+            return Err(ApiError::conflict(
+                "SLOT_IN_USE",
+                "Scheduled slot already has orders or reservations; deactivate it instead.",
+            ));
+        }
+
+        sqlx::query("DELETE FROM scheduled_slots WHERE id = $1")
+            .bind(slot_id)
+            .execute(&mut *tx)
+            .await?;
+        let action = "SCHEDULED_SLOT_DELETED";
 
         let before_val = serde_json::to_value(&existing_dto).ok();
         let entity_id = slot_id.to_string();
@@ -390,7 +392,14 @@ fn resolve_cutoff_at(
                 )
             });
     }
-    let minutes_before = i64::from(cutoff_minutes_before_start.unwrap_or(15).clamp(0, 1_440));
+    let raw_minutes = cutoff_minutes_before_start.unwrap_or(30);
+    if raw_minutes < 0 {
+        return Err(ApiError::validation(
+            "INVALID_CUTOFF_MINUTES",
+            "cutoff_minutes_before_start must be non-negative.",
+        ));
+    }
+    let minutes_before = i64::from(raw_minutes.min(1_440));
     let start_naive = slot_date.and_time(start_time);
     let start_ist = start_naive
         .and_local_timezone(ist_offset())
@@ -416,16 +425,15 @@ fn row_to_slot_dto(
 
     let remaining_capacity = (max_capacity - reserved_count).max(0);
     let (is_bookable, unavailable_reason) = if !is_active {
-        (false, Some("Slot is inactive.".to_owned()))
+        (false, Some("Slot deactivated".to_owned()))
     } else if cutoff_at <= now {
-        (false, Some("Booking cutoff has passed.".to_owned()))
+        (false, Some("Booking cutoff passed".to_owned()))
     } else if remaining_capacity <= 0 {
-        (false, Some("Slot capacity is full.".to_owned()))
+        (false, Some("Slot full".to_owned()))
     } else {
         (true, None)
     };
 
-    let _ = now_iso8601();
     Ok(ScheduledSlotDto {
         id: id.to_string(),
         slot_date: slot_date.format("%Y-%m-%d").to_string(),
