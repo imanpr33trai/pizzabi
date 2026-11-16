@@ -239,6 +239,7 @@ async fn execute_locked_handoff(
         verify_flyway_history(conn).await?;
         verify_catalog_invariants(conn).await?;
         ensure_sqlx_baseline_1_to_3(conn).await?;
+        verify_existing_sqlx_migrations(conn).await?;
         MIGRATOR.run(&mut *conn).await?;
         let versions = collect_applied_versions(conn).await?;
         info!(
@@ -568,6 +569,10 @@ async fn verify_existing_sqlx_migrations(conn: &mut PgConnection) -> Result<(), 
             if existing_checksum.as_slice() != expected.checksum.as_ref() {
                 return Err(DbError::SqlxChecksumMismatch { version });
             }
+        } else {
+            return Err(DbError::UnsafeDatabaseState(format!(
+                "unknown migration version {version} present in _sqlx_migrations; manual DBA intervention required"
+            )));
         }
     }
     Ok(())
@@ -655,17 +660,264 @@ mod tests {
         assert_eq!(unique_tables.len(), 46);
     }
 
+    #[test]
+    fn canonical_v1_v3_specs_and_invalid_utf8_check() {
+        let specs = canonical_v1_v3_specs().expect("canonical V1..V3 specs");
+        assert_eq!(specs[0].0, "1");
+        assert_eq!(specs[0].1, "V1__core_schema.sql");
+        assert_eq!(specs[0].2, -1_549_990_012);
+        assert_eq!(specs[1].0, "2");
+        assert_eq!(specs[1].1, "V2__seed_rbac_and_settings.sql");
+        assert_eq!(specs[1].2, -1_701_246_598);
+        assert_eq!(specs[2].0, "3");
+        assert_eq!(specs[2].1, "V3__hot_path_indexes.sql");
+        assert_eq!(specs[2].2, -1_177_665_950);
+
+        let err = flyway_crc32(&[0xFF, 0xFE, 0xFD]).expect_err("invalid UTF-8 must fail");
+        assert!(matches!(err, DbError::FlywayHistoryInvalid(_)));
+    }
+
+    async fn count_active_migration_advisory_locks(pool: &PgPool) -> i64 {
+        sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND objid::bigint = $1",
+        )
+        .bind(MIGRATION_ADVISORY_LOCK_KEY)
+        .fetch_one(pool)
+        .await
+        .expect("query pg_locks")
+    }
+
+    async fn create_isolated_test_db(
+        admin_pool: &PgPool,
+        base_opts: &sqlx::postgres::PgConnectOptions,
+        prefix: &str,
+    ) -> (String, PgPool) {
+        let suffix = crate::error::new_uuid_v4().simple().to_string();
+        let db_name = format!("{prefix}_{}", &suffix[..12]);
+        let create_sql = format!("CREATE DATABASE \"{db_name}\"");
+        sqlx::query(&create_sql)
+            .execute(admin_pool)
+            .await
+            .expect("create isolated test database");
+        let opts = base_opts.clone().database(&db_name);
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(4)
+            .connect_with(opts)
+            .await
+            .expect("connect isolated test database");
+        (db_name, pool)
+    }
+
+    async fn drop_isolated_test_db(admin_pool: &PgPool, db_name: &str, pool: PgPool) {
+        pool.close().await;
+        let _ = sqlx::query(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+        )
+        .bind(db_name)
+        .execute(admin_pool)
+        .await;
+        let drop_sql = format!("DROP DATABASE IF EXISTS \"{db_name}\"");
+        let _ = sqlx::query(&drop_sql).execute(admin_pool).await;
+    }
+
     #[tokio::test]
-    #[ignore = "requires live PostgreSQL 18.6 (DATABASE_URL / TEST_POSTGRES_URL)"]
+    #[ignore = "requires live PostgreSQL 18.6 (TEST_POSTGRES_URL / DATABASE_URL with CREATEDB)"]
     async fn pg18_locked_handoff_fresh_adopt_tamper_and_concurrency() {
+        use pizzora_config::{AppConfig, DatabaseConfig, NormalizedDatabaseUrl};
         use sqlx::postgres::PgPoolOptions;
-        let Ok(url) = std::env::var("TEST_POSTGRES_URL").or_else(|_| std::env::var("DATABASE_URL")) else {
-            return;
+
+        let base_url = match std::env::var("TEST_POSTGRES_URL") {
+            Ok(v) if !v.trim().is_empty() => v,
+            _ => AppConfig::from_env()
+                .expect("config from env")
+                .database
+                .url
+                .normalized_postgres_url(),
         };
-        let pool = PgPoolOptions::new().max_connections(4).connect(&url).await.unwrap();
-        let outcome = run_locked_handoff(&pool).await.unwrap();
-        assert!(outcome.applied_or_verified_versions.contains(&1));
-        assert!(outcome.applied_or_verified_versions.contains(&2));
-        assert!(outcome.applied_or_verified_versions.contains(&3));
+        let normalized = NormalizedDatabaseUrl::parse(&base_url, None, None)
+            .expect("valid PostgreSQL URL");
+        let db_cfg = DatabaseConfig {
+            url: normalized,
+            max_pool_size: 4,
+            min_connections: 1,
+            connect_timeout_ms: 5_000,
+            run_migrations_on_startup: true,
+        };
+        let base_opts = crate::pool::build_pg_connect_options(&db_cfg).expect("pg connect opts");
+        let admin_pool = PgPoolOptions::new()
+            .max_connections(4)
+            .connect_with(base_opts.clone())
+            .await
+            .expect("connect PostgreSQL admin pool");
+
+        // 1. Fresh empty DB bootstrap -> idempotent ResumedSqlx
+        let (fresh_db, fresh_pool) =
+            create_isolated_test_db(&admin_pool, &base_opts, "pizzora_it_fresh").await;
+        let fresh_outcome = run_locked_handoff(&fresh_pool)
+            .await
+            .expect("fresh bootstrap succeeds");
+        assert_eq!(fresh_outcome.mode, HandoffMode::FreshBootstrap);
+        assert_eq!(fresh_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+
+        let resumed_outcome = run_locked_handoff(&fresh_pool)
+            .await
+            .expect("subsequent run resumes cleanly");
+        assert_eq!(resumed_outcome.mode, HandoffMode::ResumedSqlx);
+        assert_eq!(resumed_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+        drop_isolated_test_db(&admin_pool, &fresh_db, fresh_pool).await;
+
+        // 2. Existing Flyway V1..V3 adoption, partial baseline recovery, tamper & invariant checks
+        let (adopt_db, adopt_pool) =
+            create_isolated_test_db(&admin_pool, &base_opts, "pizzora_it_adopt").await;
+        for bytes in [CANONICAL_V1_BYTES, CANONICAL_V2_BYTES, CANONICAL_V3_BYTES] {
+            let sql_text = std::str::from_utf8(bytes).expect("UTF-8 DDL");
+            sqlx::raw_sql(sql_text)
+                .execute(&adopt_pool)
+                .await
+                .expect("apply Flyway V1-V3 SQL");
+        }
+        sqlx::query(
+            r#"
+            CREATE TABLE flyway_schema_history (
+                installed_rank INT NOT NULL PRIMARY KEY,
+                version VARCHAR(50),
+                description VARCHAR(200) NOT NULL,
+                type VARCHAR(20) NOT NULL,
+                script VARCHAR(1000) NOT NULL,
+                checksum INT,
+                installed_by VARCHAR(100) NOT NULL,
+                installed_on TIMESTAMPTZ NOT NULL DEFAULT now(),
+                execution_time INT NOT NULL,
+                success BOOLEAN NOT NULL
+            )
+            "#,
+        )
+        .execute(&adopt_pool)
+        .await
+        .expect("create flyway_schema_history");
+
+        sqlx::query(
+            r#"
+            INSERT INTO flyway_schema_history
+                (installed_rank, version, description, type, script, checksum, installed_by, execution_time, success)
+            VALUES (0, NULL, '<< Flyway Schema Creation >>', 'SCHEMA', '"public"', NULL, 'pizzora', 0, TRUE)
+            "#,
+        )
+        .execute(&adopt_pool)
+        .await
+        .expect("insert Flyway schema creation row");
+
+        for (idx, (ver, script, crc)) in canonical_v1_v3_specs()
+            .expect("specs")
+            .into_iter()
+            .enumerate()
+        {
+            sqlx::query(
+                r#"
+                INSERT INTO flyway_schema_history
+                    (installed_rank, version, description, type, script, checksum, installed_by, execution_time, success)
+                VALUES ($1, $2, $3, 'SQL', $4, $5, 'pizzora', 12, TRUE)
+                "#,
+            )
+            .bind((idx + 1) as i32)
+            .bind(ver)
+            .bind(script)
+            .bind(script)
+            .bind(crc)
+            .execute(&adopt_pool)
+            .await
+            .expect("insert Flyway V1..V3 row");
+        }
+
+        let adopt_outcome = run_locked_handoff(&adopt_pool)
+            .await
+            .expect("adopt Flyway V1..V3 without re-running DDL");
+        assert_eq!(adopt_outcome.mode, HandoffMode::AdoptedExistingFlyway);
+        assert_eq!(adopt_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        let zero_exec_rows: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM _sqlx_migrations WHERE version BETWEEN 1 AND 3 AND execution_time = 0",
+        )
+        .fetch_one(&adopt_pool)
+        .await
+        .expect("count adopted baseline rows");
+        assert_eq!(zero_exec_rows, 3);
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+
+        // Partial _sqlx_migrations baseline recovery (simulate crash after inserting 1..2)
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 3")
+            .execute(&adopt_pool)
+            .await
+            .expect("delete baseline v3");
+        let recovered = run_locked_handoff(&adopt_pool)
+            .await
+            .expect("partial baseline recovers cleanly");
+        assert_eq!(recovered.mode, HandoffMode::AdoptedExistingFlyway);
+        assert_eq!(recovered.applied_or_verified_versions, vec![1, 2, 3]);
+
+        // Tampered Flyway checksum -> MigrationChecksumMismatch & lock released
+        let original_v2_crc = canonical_v1_v3_specs().unwrap()[1].2;
+        sqlx::query("UPDATE flyway_schema_history SET checksum = 123456 WHERE version = '2'")
+            .execute(&adopt_pool)
+            .await
+            .expect("tamper checksum");
+        let err = run_locked_handoff(&adopt_pool)
+            .await
+            .expect_err("tampered checksum must fail");
+        assert!(matches!(err, DbError::MigrationChecksumMismatch { .. }));
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+        sqlx::query("UPDATE flyway_schema_history SET checksum = $1 WHERE version = '2'")
+            .bind(original_v2_crc)
+            .execute(&adopt_pool)
+            .await
+            .expect("restore checksum");
+
+        // Failed / unexpected Flyway row -> FlywayHistoryInvalid & lock released
+        sqlx::query(
+            r#"
+            INSERT INTO flyway_schema_history
+                (installed_rank, version, description, type, script, checksum, installed_by, execution_time, success)
+            VALUES (99, '99', 'rogue', 'SQL', 'V99__rogue.sql', 0, 'pizzora', 1, FALSE)
+            "#,
+        )
+        .execute(&adopt_pool)
+        .await
+        .expect("insert rogue row");
+        let err = run_locked_handoff(&adopt_pool)
+            .await
+            .expect_err("failed/unexpected Flyway row must fail");
+        assert!(matches!(err, DbError::FlywayHistoryInvalid(_)));
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+        sqlx::query("DELETE FROM flyway_schema_history WHERE installed_rank = 99")
+            .execute(&adopt_pool)
+            .await
+            .expect("cleanup rogue row");
+
+        // Missing V3 hot-path index -> CatalogInvariantViolation & lock released
+        sqlx::query("DROP INDEX idx_orders_created_at")
+            .execute(&adopt_pool)
+            .await
+            .expect("drop index to trigger catalog check");
+        let err = run_locked_handoff(&adopt_pool)
+            .await
+            .expect_err("missing index must fail catalog invariant check");
+        assert!(matches!(err, DbError::CatalogInvariantViolation(_)));
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+        drop_isolated_test_db(&admin_pool, &adopt_db, adopt_pool).await;
+
+        // 3. Existing table(s) without history -> UnsafeDatabaseState & lock released
+        let (dirty_db, dirty_pool) =
+            create_isolated_test_db(&admin_pool, &base_opts, "pizzora_it_dirty").await;
+        sqlx::query("CREATE TABLE rogue_table (id INT PRIMARY KEY)")
+            .execute(&dirty_pool)
+            .await
+            .expect("create orphan table");
+        let err = run_locked_handoff(&dirty_pool)
+            .await
+            .expect_err("tables without history must abort");
+        assert!(matches!(err, DbError::UnsafeDatabaseState(_)));
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+        drop_isolated_test_db(&admin_pool, &dirty_db, dirty_pool).await;
     }
 }

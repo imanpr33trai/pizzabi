@@ -521,7 +521,7 @@ mod tests {
         assert_eq!(consumed, principal);
         assert!(ws_svc.consume_ticket(&ticket.ticket).await.unwrap().is_none());
 
-        // Owner bootstrap + staff creation check
+        // Owner bootstrap + staff creation + forgot/reset password + logout + outbox scrub/purge
         let owner_email = format!("owner_{unique}@example.com");
         let emp_code = format!("OWN-{}", &unique.to_string()[..8]);
         let owner_id = BootstrapOwner::bootstrap(
@@ -535,8 +535,248 @@ mod tests {
         )
         .await
         .expect("bootstrap owner");
+
+        let staff_email = format!("kitchen_{unique}@example.com");
+        let staff_emp = format!("KIT-{}", &unique.to_string()[..8]);
+        let staff_dto = auth
+            .create_staff(
+                owner_id,
+                &CreateStaffRequest {
+                    email: staff_email.clone(),
+                    password: "KitchenPass123!".to_owned(),
+                    full_name: "Kitchen Staff".to_owned(),
+                    phone: "9876543211".to_owned(),
+                    role: UserRole::KitchenStaff,
+                    employee_code: staff_emp,
+                },
+                &AuditContext::new(Some(owner_id), "OWNER", "it-staff-create", Some("127.0.0.1")),
+            )
+            .await
+            .expect("create staff");
+        assert_eq!(staff_dto.role, UserRole::KitchenStaff);
+        assert!(rbac
+            .has_permission(UserRole::KitchenStaff, "kds:view")
+            .await
+            .expect("kds permission"));
+        assert!(!rbac
+            .has_permission(UserRole::KitchenStaff, "owner:staff_manage")
+            .await
+            .expect("staff must not have owner manage perm"));
+        let staff_login = auth
+            .login(
+                &LoginRequest {
+                    email: staff_email,
+                    password: "KitchenPass123!".to_owned(),
+                    device_name: "KDS-Tablet".to_owned(),
+                },
+                Some("127.0.0.1"),
+            )
+            .await
+            .expect("staff login succeeds");
+        assert_eq!(staff_login.user.role, UserRole::KitchenStaff);
+
+        // Resend verification check on unverified account vs already verified account
+        let unverified_email = format!("unv_{unique}@example.com");
+        auth.register(&RegisterRequest {
+            email: unverified_email.clone(),
+            password: "UnverifiedPass123!".to_owned(),
+            full_name: "Pending User".to_owned(),
+            phone: "9876543212".to_owned(),
+        })
+        .await
+        .expect("register pending user");
+        auth.resend_verification(&ResendVerificationRequest {
+            email: unverified_email.clone(),
+        })
+        .await
+        .expect("resend verification for unverified user");
+        let resend_row = sqlx::query(
+            "SELECT id, payload_json FROM outbox_events WHERE event_type = $1 ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(EVENT_EMAIL_DELIVERY_REQUESTED)
+        .fetch_one(&pool)
+        .await
+        .expect("resend outbox row");
+        let resend_outbox_id: Uuid = resend_row.try_get("id").unwrap();
+        let resend_payload: OutboxEmailPayload =
+            serde_json::from_value(resend_row.try_get("payload_json").unwrap()).unwrap();
+        let resend_unsealed = unseal_outbox_email_payload(
+            &cfg.outbox_encryption,
+            resend_outbox_id,
+            EVENT_EMAIL_DELIVERY_REQUESTED,
+            &resend_payload,
+        )
+        .expect("unseal resend token");
+        assert_eq!(resend_unsealed.to_email.as_str(), unverified_email);
+
+        // Logout revokes session and refresh tokens
+        assert!(rbac
+            .is_session_active(claims.user_id, claims.session_id)
+            .await
+            .expect("session active before logout"));
+        auth.logout(claims.session_id).await.expect("logout succeeds");
+        assert!(!rbac
+            .is_session_active(claims.user_id, claims.session_id)
+            .await
+            .expect("session revoked after logout"));
+        assert!(auth
+            .refresh(&RefreshTokenRequest {
+                refresh_token: fresh.refresh_token.clone(),
+            })
+            .await
+            .is_err());
+
+        // Relogin -> forgot_password -> unseal reset token -> reset_password (single-use & revokes sessions)
+        let pre_reset = auth
+            .login(
+                &LoginRequest {
+                    email: email.clone(),
+                    password: "StrongPassword123!".to_owned(),
+                    device_name: "Pixel".to_owned(),
+                },
+                Some("127.0.0.1"),
+            )
+            .await
+            .expect("login before reset");
+        let pre_reset_claims = auth
+            .jwt_provider()
+            .verify_access_token(&pre_reset.access_token)
+            .expect("valid pre-reset jwt");
+
+        auth.forgot_password(&ForgotPasswordRequest {
+            email: email.clone(),
+        })
+        .await
+        .expect("forgot password");
+        let reset_row = sqlx::query(
+            "SELECT id, payload_json FROM outbox_events WHERE event_type = $1 ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(EVENT_EMAIL_DELIVERY_REQUESTED)
+        .fetch_one(&pool)
+        .await
+        .expect("reset outbox row");
+        let reset_outbox_id: Uuid = reset_row.try_get("id").unwrap();
+        let reset_payload_val: serde_json::Value = reset_row.try_get("payload_json").unwrap();
+        let reset_payload: OutboxEmailPayload = serde_json::from_value(reset_payload_val.clone()).unwrap();
+        let reset_secrets = unseal_outbox_email_payload(
+            &cfg.outbox_encryption,
+            reset_outbox_id,
+            EVENT_EMAIL_DELIVERY_REQUESTED,
+            &reset_payload,
+        )
+        .expect("unseal reset token");
+        assert!(!reset_payload_val
+            .to_string()
+            .contains(reset_secrets.raw_token.as_str()));
+
+        auth.reset_password(&ResetPasswordRequest {
+            token: reset_secrets.raw_token.to_string(),
+            new_password: "BrandNewPassword123!".to_owned(),
+        })
+        .await
+        .expect("reset password succeeds");
+        assert!(auth
+            .reset_password(&ResetPasswordRequest {
+                token: reset_secrets.raw_token.to_string(),
+                new_password: "AnotherPassword123!".to_owned(),
+            })
+            .await
+            .is_err());
+        assert!(!rbac
+            .is_session_active(pre_reset_claims.user_id, pre_reset_claims.session_id)
+            .await
+            .expect("reset revokes sessions"));
+        assert!(auth
+            .login(
+                &LoginRequest {
+                    email: email.clone(),
+                    password: "StrongPassword123!".to_owned(),
+                    device_name: "Pixel".to_owned(),
+                },
+                Some("127.0.0.1"),
+            )
+            .await
+            .is_err());
+        auth.login(
+            &LoginRequest {
+                email: email.clone(),
+                password: "BrandNewPassword123!".to_owned(),
+                device_name: "Pixel".to_owned(),
+            },
+            Some("127.0.0.1"),
+        )
+        .await
+        .expect("login with new password succeeds");
+
+        // Dead-letter scrubbing, expired envelope scrubbing, and retention purge SQL verification
         let outbox_repo = OutboxRepository::new(pool.clone());
-        assert_eq!(outbox_repo.scrub_expired_email_envelopes().await.is_ok(), true);
-        let _ = (owner_id, AuditContext::new(None, "SYSTEM", "it", None));
+        let scrubbed_dead = scrub_outbox_email_payload(&reset_payload);
+        let scrubbed_dead_json = serde_json::to_value(&scrubbed_dead).unwrap();
+        outbox_repo
+            .mark_dead_letter(
+                reset_outbox_id,
+                "SMTP_PERMANENT_ERROR: delivery failed [REDACTED]",
+                Some(&scrubbed_dead_json),
+            )
+            .await
+            .expect("mark_dead_letter succeeds");
+        outbox_repo
+            .scrub_expired_email_envelopes()
+            .await
+            .expect("scrub_expired_email_envelopes succeeds");
+        outbox_repo
+            .purge_expired_dispatched_email_rows(7)
+            .await
+            .expect("purge_expired_dispatched_email_rows succeeds");
+    }
+
+    #[test]
+    fn password_hasher_and_smtp_validation_guard_malformed_inputs() {
+        let hasher = PasswordHasher::default();
+        assert!(!hasher.verify("StrongPass123!", ""));
+        assert!(!hasher.verify("StrongPass123!", "$2a$12$invalidbcryptstring"));
+        assert!(!hasher.verify("StrongPass123!", "$argon2id$v=19$corrupted"));
+        assert!(hasher.hash("short").is_err());
+
+        let invalid_from_provider = LettreSmtpEmailDeliveryProvider::new(SmtpConfig {
+            host: "localhost".to_owned(),
+            port: 1025,
+            from_address: "not-an-email".to_owned(),
+            username: None,
+            password: None,
+            use_starttls: false,
+        });
+        let req = OutboundEmail {
+            outbox_event_id: new_uuid_v4(),
+            template: EmailTemplateKind::Verification,
+            to_email: Zeroizing::new("user@example.com".to_owned()),
+            full_name: Zeroizing::new("User".to_owned()),
+            raw_token: Zeroizing::new("secret_tok_987".to_owned()),
+        };
+        let from_err = invalid_from_provider
+            .build_message(&req)
+            .expect_err("invalid from must fail cleanly");
+        assert_eq!(from_err.code, "SMTP_INVALID_FROM_ADDRESS");
+        assert!(!from_err.is_transient);
+        assert!(!from_err.to_string().contains("secret_tok_987"));
+
+        let valid_from_provider = LettreSmtpEmailDeliveryProvider::new(SmtpConfig {
+            host: "localhost".to_owned(),
+            port: 1025,
+            from_address: "no-reply@pizzora.local".to_owned(),
+            username: None,
+            password: None,
+            use_starttls: false,
+        });
+        let bad_recipient = OutboundEmail {
+            to_email: Zeroizing::new("invalid-recipient".to_owned()),
+            ..req
+        };
+        let to_err = valid_from_provider
+            .build_message(&bad_recipient)
+            .expect_err("invalid recipient must fail cleanly");
+        assert_eq!(to_err.code, "SMTP_INVALID_RECIPIENT");
+        assert!(!to_err.is_transient);
+        assert!(!to_err.to_string().contains("secret_tok_987"));
     }
 }

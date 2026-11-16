@@ -764,12 +764,16 @@ mod tests {
         assert!(err.to_string().contains("OUTBOX_EMAIL_KEYS"));
         assert!(!err.to_string().contains("c2hvcnQ="));
 
-        let ok = AppConfig::from_env_map(&prod_env()).expect("valid prod config");
+        let mut valid_env = prod_env();
+        valid_env.insert("SMTP_USERNAME".to_owned(), "smtp_user".to_owned());
+        valid_env.insert("SMTP_PASSWORD".to_owned(), "smtp_secret_pass_99".to_owned());
+        let ok = AppConfig::from_env_map(&valid_env).expect("valid prod config");
         let dbg = format!("{ok:?}");
         assert!(!dbg.contains("prod-signing-secret"));
         assert!(!dbg.contains("Str0ng!Pass"));
         assert!(!dbg.contains("sec_test_123"));
         assert!(!dbg.contains("whsec_test_123"));
+        assert!(!dbg.contains("smtp_secret_pass_99"));
         assert!(!dbg.contains("AQEBAQE"));
     }
 

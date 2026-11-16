@@ -308,10 +308,11 @@ impl OutboxRepository {
               AND payload_json->'sealed_envelope' <> 'null'::jsonb
               AND (
                   dispatch_status IN ('DISPATCHED', 'DEAD_LETTER')
-                  OR (
-                      NULLIF(payload_json->>'token_expires_at', '') IS NOT NULL
-                      AND (payload_json->>'token_expires_at')::timestamptz <= NOW()
-                  )
+                  OR CASE
+                      WHEN NULLIF(payload_json->>'token_expires_at', '') IS NOT NULL
+                          THEN (payload_json->>'token_expires_at')::timestamptz <= NOW()
+                      ELSE FALSE
+                  END
               )
             "#,
         )
@@ -326,7 +327,7 @@ impl OutboxRepository {
         &self,
         retention_days: i64,
     ) -> Result<u64, DbError> {
-        let days = retention_days.max(1) as f64;
+        let days = retention_days.clamp(1, i32::MAX as i64) as i32;
         let res = sqlx::query(
             r#"
             DELETE FROM outbox_events
