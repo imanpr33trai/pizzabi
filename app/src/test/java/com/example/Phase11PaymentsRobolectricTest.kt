@@ -30,6 +30,8 @@ import com.example.core.security.TokenStorage
 import com.example.navigation.PizzoraApp
 import com.example.orders.NetworkOrderRepository
 import com.example.orders.OrdersViewModel
+import com.example.orders.RazorpayCheckoutLauncher
+import com.example.orders.RazorpayCheckoutRequest
 import com.pizzora.contracts.CartItemViewDto
 import com.pizzora.contracts.CartResponseDto
 import com.pizzora.contracts.CartToppingViewDto
@@ -64,6 +66,8 @@ import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.UserRole
 import com.pizzora.contracts.VerifyRazorpayPaymentRequest
 import com.pizzora.contracts.VerifyRazorpayPaymentResponse
+import com.razorpay.Checkout
+import com.razorpay.TestPaymentDataFactory
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
@@ -173,6 +177,13 @@ class Phase11PaymentsRobolectricTest {
     }
   }
 
+  private class FakeRazorpayCheckoutLauncher : RazorpayCheckoutLauncher {
+    val launchedRequests = mutableListOf<RazorpayCheckoutRequest>()
+    override fun launch(activity: android.app.Activity, request: RazorpayCheckoutRequest) {
+      launchedRequests += request
+    }
+  }
+
   @Before
   fun setUp() {
     val context = ApplicationProvider.getApplicationContext<Context>()
@@ -220,6 +231,7 @@ class Phase11PaymentsRobolectricTest {
     var capturedVerifyReq: VerifyRazorpayPaymentRequest? = null
     var capturedFailReq: FailPaymentAttemptRequest? = null
     var capturedRetryIdempotencyKey: String? = null
+    val fakeLauncher = FakeRazorpayCheckoutLauncher()
 
     val engine = MockEngine { request ->
       val path = request.url.encodedPath
@@ -487,6 +499,7 @@ class Phase11PaymentsRobolectricTest {
         checkoutQuoteViewModel = quoteVm,
         checkoutViewModel = checkoutVm,
         ordersViewModel = ordersVm,
+        razorpayCheckoutLauncher = fakeLauncher,
       )
     }
 
@@ -515,13 +528,32 @@ class Phase11PaymentsRobolectricTest {
     composeTestRule.onNodeWithTag("place_order_button").performClick()
 
     waitUntilMainLooper(timeoutMs = 8_000) {
-      composeTestRule.onAllNodesWithTag("razorpay_gateway_order_id_text").fetchSemanticsNodes().isNotEmpty()
+      composeTestRule.onAllNodesWithTag("razorpay_gateway_order_id_text").fetchSemanticsNodes().isNotEmpty() &&
+        composeTestRule.onAllNodesWithTag("launch_razorpay_checkout_button").fetchSemanticsNodes().isNotEmpty()
     }
     composeTestRule.onNodeWithTag("razorpay_gateway_order_id_text").assertTextContains("order_gw_1", substring = true)
     composeTestRule.onNodeWithTag("razorpay_key_id_text").assertTextContains("rzp_test_pizzora", substring = true)
 
-    // Report payment failure on attempt #1 -> sheet dismisses, order stays PENDING_PAYMENT, retry button shown
-    composeTestRule.onNodeWithTag("fail_razorpay_payment_button").performScrollTo().performClick()
+    // Placeholder manual fields must NOT exist
+    assertTrue(composeTestRule.onAllNodesWithTag("razorpay_payment_id_input").fetchSemanticsNodes().isEmpty())
+    assertTrue(composeTestRule.onAllNodesWithTag("razorpay_signature_input").fetchSemanticsNodes().isEmpty())
+
+    // Launch official Razorpay Checkout for attempt #1
+    composeTestRule.onNodeWithTag("launch_razorpay_checkout_button").performClick()
+    assertEquals(1, fakeLauncher.launchedRequests.size)
+    val req1 = fakeLauncher.launchedRequests[0]
+    assertEquals("ord-p11-1", req1.orderId)
+    assertEquals("order_gw_1", req1.gatewayOrderId)
+    assertEquals("rzp_test_pizzora", req1.razorpayKeyId)
+    assertEquals(breakdown.totalPaise, req1.amountPaise)
+    assertEquals(customerSession.user.email, req1.customerEmail)
+
+    // Simulate SDK payment error callback -> calls /payments/fail, dismisses sheet, enables retry
+    ordersVm.onRazorpaySdkError(
+      code = Checkout.NETWORK_ERROR,
+      description = "Bank declined transaction",
+      paymentData = TestPaymentDataFactory.create(orderId = "order_gw_1"),
+    )
     waitUntilMainLooper(
       debugMessage = {
         "attempt=${ordersVm.uiState.value.paymentStatus?.payment?.latestAttempt?.status}, " +
@@ -535,6 +567,7 @@ class Phase11PaymentsRobolectricTest {
     }
     assertNotNull(capturedFailReq)
     assertEquals("order_gw_1", capturedFailReq?.gatewayOrderId)
+    assertEquals("RAZORPAY_SDK_${Checkout.NETWORK_ERROR}", capturedFailReq?.failureCode)
 
     composeTestRule.mainClock.advanceTimeBy(5_000)
     composeTestRule.waitForIdle()
@@ -551,20 +584,29 @@ class Phase11PaymentsRobolectricTest {
           "isPolling=${st.isPollingGatewayOrder}, sheetOpen=${st.isPaymentSheetOpen}, " +
           "attemptStatus=${st.paymentStatus?.payment?.latestAttempt?.status}, " +
           "gwOrderId=${st.paymentStatus?.payment?.latestAttempt?.gatewayOrderId}, " +
-          "nodes=${composeTestRule.onAllNodesWithTag("razorpay_payment_id_input").fetchSemanticsNodes().size}, " +
           "error=${st.paymentError}"
       },
     ) {
       ordersVm.uiState.value.paymentStatus?.payment?.latestAttempt?.gatewayOrderId == "order_gw_2" &&
-        composeTestRule.onAllNodesWithTag("razorpay_payment_id_input").fetchSemanticsNodes().isNotEmpty()
+        composeTestRule.onAllNodesWithTag("launch_razorpay_checkout_button").fetchSemanticsNodes().isNotEmpty()
     }
     assertEquals(1, retryCount)
     assertFalse(capturedRetryIdempotencyKey.isNullOrBlank())
 
     composeTestRule.onNodeWithTag("razorpay_gateway_order_id_text").performScrollTo().assertTextContains("order_gw_2", substring = true)
-    composeTestRule.onNodeWithTag("razorpay_payment_id_input").performScrollTo().performTextInput("pay_rzp_ok_2")
-    composeTestRule.onNodeWithTag("razorpay_signature_input").performScrollTo().performTextInput("sig_valid_p11")
-    composeTestRule.onNodeWithTag("verify_razorpay_payment_button").performClick()
+    composeTestRule.onNodeWithTag("launch_razorpay_checkout_button").performClick()
+    assertEquals(2, fakeLauncher.launchedRequests.size)
+    assertEquals("order_gw_2", fakeLauncher.launchedRequests[1].gatewayOrderId)
+
+    // Simulate official SDK payment success callback -> calls /payments/razorpay/verify into PLACED + CAPTURED
+    ordersVm.onRazorpaySdkSuccess(
+      razorpayPaymentId = "pay_rzp_ok_2",
+      paymentData = TestPaymentDataFactory.create(
+        orderId = "order_gw_2",
+        paymentId = "pay_rzp_ok_2",
+        signature = "sig_valid_p11",
+      ),
+    )
 
     waitUntilMainLooper {
       ordersVm.uiState.value.selectedOrder?.status == OrderStatus.PLACED &&

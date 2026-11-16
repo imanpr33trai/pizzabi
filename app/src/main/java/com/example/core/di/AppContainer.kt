@@ -38,17 +38,25 @@ import com.example.notifications.NotificationRepository
 import com.example.notifications.NotificationsViewModel
 import com.example.notifications.OrderSyncScheduler
 import com.example.notifications.PizzoraWorkerFactory
+import com.example.orders.AndroidRazorpayCheckoutLauncher
 import com.example.orders.NetworkOrderRepository
 import com.example.orders.OrderRepository
 import com.example.orders.OrdersViewModel
+import com.example.orders.RazorpayCheckoutLauncher
 import com.example.owner.NetworkOwnerRepository
 import com.example.owner.OwnerRepository
 import com.example.owner.OwnerViewModel
 import com.example.profile.NetworkProfileRepository
 import com.example.profile.ProfileRepository
 import com.example.profile.ProfileViewModel
+import io.ktor.client.engine.HttpClientEngine
 
-class AppContainer(context: Context) {
+class AppContainer(
+  context: Context,
+  private val httpClientEngineOverride: HttpClientEngine? = null,
+  razorpayCheckoutLauncherOverride: RazorpayCheckoutLauncher? = null,
+  private val tokenStorageOverride: TokenStorage? = null,
+) {
   private val appContext = context.applicationContext
 
   val database: PizzoraDatabase by lazy {
@@ -56,7 +64,7 @@ class AppContainer(context: Context) {
   }
 
   val tokenStorage: TokenStorage by lazy {
-    TokenManager(appContext)
+    tokenStorageOverride ?: TokenManager(appContext)
   }
 
   val sessionScopeCleaner: SessionScopeCleaner by lazy {
@@ -77,11 +85,20 @@ class AppContainer(context: Context) {
   }
 
   val apiClient: PizzoraApiClient by lazy {
-    PizzoraApiClient(
-      baseUrl = BuildConfig.API_BASE_URL,
-      tokenStorage = tokenStorage,
-      sessionCoordinatorProvider = { sessionCoordinator },
-    )
+    if (httpClientEngineOverride != null) {
+      PizzoraApiClient(
+        baseUrl = BuildConfig.API_BASE_URL,
+        tokenStorage = tokenStorage,
+        engine = httpClientEngineOverride,
+        sessionCoordinatorProvider = { sessionCoordinator },
+      )
+    } else {
+      PizzoraApiClient(
+        baseUrl = BuildConfig.API_BASE_URL,
+        tokenStorage = tokenStorage,
+        sessionCoordinatorProvider = { sessionCoordinator },
+      )
+    }
   }
 
   val webSocketEventClient: WebSocketEventClient by lazy {
@@ -122,6 +139,10 @@ class AppContainer(context: Context) {
     NetworkOrderRepository(
       apiClient = apiClient,
     )
+  }
+
+  val razorpayCheckoutLauncher: RazorpayCheckoutLauncher by lazy {
+    razorpayCheckoutLauncherOverride ?: AndroidRazorpayCheckoutLauncher()
   }
 
   val kdsRepository: KdsRepository by lazy {

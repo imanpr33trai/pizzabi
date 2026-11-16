@@ -89,8 +89,10 @@ import com.example.kds.KdsViewModel
 import com.example.notifications.NotificationsScreen
 import com.example.notifications.NotificationsViewModel
 import com.example.notifications.OrderSyncScheduler
+import com.example.orders.AndroidRazorpayCheckoutLauncher
 import com.example.orders.OrdersScreen
 import com.example.orders.OrdersViewModel
+import com.example.orders.RazorpayCheckoutLauncher
 import com.example.owner.OwnerCatalogScreen
 import com.example.owner.OwnerDashboardScreen
 import com.example.owner.OwnerOperationsScreen
@@ -140,6 +142,7 @@ fun PizzoraApp(
   ownerViewModel: OwnerViewModel? = null,
   profileViewModel: ProfileViewModel? = null,
   notificationsViewModel: NotificationsViewModel? = null,
+  razorpayCheckoutLauncher: RazorpayCheckoutLauncher = AndroidRazorpayCheckoutLauncher(),
   openNotificationsRequested: Boolean = false,
   onNotificationsRequestHandled: () -> Unit = {},
 ) {
@@ -273,6 +276,7 @@ fun PizzoraApp(
               ordersViewModel = ordersViewModel,
               profileViewModel = profileViewModel,
               notificationsViewModel = notificationsViewModel,
+              razorpayCheckoutLauncher = razorpayCheckoutLauncher,
               openNotificationsRequested = openNotificationsRequested,
               onNotificationsRequestHandled = onNotificationsRequestHandled,
               onSignOut = authViewModel::logout,
@@ -325,6 +329,7 @@ fun CustomerRoleShell(
   ordersViewModel: OrdersViewModel? = null,
   profileViewModel: ProfileViewModel? = null,
   notificationsViewModel: NotificationsViewModel? = null,
+  razorpayCheckoutLauncher: RazorpayCheckoutLauncher = AndroidRazorpayCheckoutLauncher(),
   openNotificationsRequested: Boolean = false,
   onNotificationsRequestHandled: () -> Unit = {},
   onSignOut: () -> Unit,
@@ -625,8 +630,12 @@ fun CustomerRoleShell(
               onOpenPaymentSheet = ordersViewModel::openPaymentSheet,
               onDismissPaymentSheet = ordersViewModel::dismissPaymentSheet,
               onRetryPayment = { ordersViewModel.retryPayment() },
-              onVerifyRazorpayPayment = ordersViewModel::verifyRazorpayPayment,
-              onReportPaymentFailure = ordersViewModel::reportPaymentFailure,
+              customerName = session.user.fullName,
+              customerEmail = session.user.email,
+              customerPhone = session.user.phone,
+              razorpayCheckoutLauncher = razorpayCheckoutLauncher,
+              onRazorpayLaunchStarted = ordersViewModel::markRazorpayLaunchStarted,
+              onRazorpaySdkError = { code, desc -> ordersViewModel.onRazorpaySdkError(code, desc, null) },
               modifier = Modifier.weight(1f),
             )
           }

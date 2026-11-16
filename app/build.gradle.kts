@@ -47,7 +47,7 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      isMinifyEnabled = true
       val releaseApiBaseUrl = (System.getenv("PIZZORA_API_BASE_URL") ?: "https://api.pizzora.app")
         .replace("\"", "")
       buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
@@ -79,6 +79,18 @@ android {
 
 ksp {
   arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+configurations.configureEach {
+  if (name in setOf(
+      "debugCompileClasspath",
+      "debugRuntimeClasspath",
+      "releaseCompileClasspath",
+      "releaseRuntimeClasspath",
+    )
+  ) {
+    resolutionStrategy.activateDependencyLocking()
+  }
 }
 
 dependencies {
@@ -113,6 +125,7 @@ dependencies {
   implementation(libs.ktor.client.websockets)
   implementation(libs.ktor.serialization.kotlinx.json)
   implementation(libs.okhttp)
+  implementation(libs.razorpay.checkout)
 
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)

@@ -28,6 +28,17 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 
+# Razorpay Android Checkout SDK
+-keep class com.razorpay.** { *; }
+-dontwarn com.razorpay.**
+-keepclasseswithmembers class * implements com.razorpay.PaymentResultWithDataListener {
+    public void onPaymentSuccess(...);
+    public void onPaymentError(...);
+}
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
 # Strip verbose debug logs in release builds
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);
