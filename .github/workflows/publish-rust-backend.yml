@@ -1,0 +1,183 @@
+name: Publish Rust Backend Container
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "Image build mode: validate (no push), preview (preview tags), or release (semver tags)"
+        required: true
+        type: string
+      push:
+        description: "Whether to push the built image to GHCR"
+        required: true
+        type: boolean
+      tag_name:
+        description: "Git tag name for release mode (e.g., v1.0.0)"
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: "Push preview tags to GHCR (false = build validation only)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: rust-backend-image-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  verify-rust-for-manual-dispatch:
+    name: Security Audit & Rust Workspace Check (Manual Dispatch)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Run security and policy audit
+        run: bash infra/security-check.sh
+
+      - name: Install Rust toolchain (from rust/rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          components: rustfmt, clippy
+
+      - name: Verify formatting and run Rust workspace unit tests
+        working-directory: rust
+        run: |
+          set -euo pipefail
+          LOCK_FLAG=""
+          if [ -f Cargo.lock ]; then LOCK_FLAG="--locked"; fi
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --all-features $LOCK_FLAG -- -D warnings
+          cargo test --workspace --all-features $LOCK_FLAG
+
+  build-and-publish-rust:
+    name: Build & Publish Rust Backend Docker Image
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || needs.verify-rust-for-manual-dispatch.result == 'success') }}
+    needs: [verify-rust-for-manual-dispatch]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Resolve image publishing mode and tags
+        id: mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.mode }}" ]; then
+            MODE="${{ inputs.mode }}"
+            SHOULD_PUSH="${{ inputs.push }}"
+            TAG_NAME="${{ inputs.tag_name }}"
+          else
+            MODE="preview"
+            if [ "${{ inputs.publish_preview }}" = "true" ]; then
+              SHOULD_PUSH="true"
+            else
+              SHOULD_PUSH="false"
+            fi
+            TAG_NAME=""
+          fi
+
+          if [ "$MODE" != "validate" ] && [ "$MODE" != "preview" ] && [ "$MODE" != "release" ]; then
+            echo "ERROR: Invalid Rust backend image mode '$MODE'." >&2
+            exit 1
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "$SHOULD_PUSH" = "true" ]; then
+            echo "ERROR: Pull requests must never push Docker images." >&2
+            exit 1
+          fi
+          if [ "$MODE" = "validate" ] && [ "$SHOULD_PUSH" = "true" ]; then
+            echo "ERROR: Validate mode must never push Docker images." >&2
+            exit 1
+          fi
+          if [ "$MODE" = "preview" ] && [ "$SHOULD_PUSH" = "true" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "ERROR: Preview Docker tags can only be published from main (current ref: '${{ github.ref }}')." >&2
+            exit 1
+          fi
+
+          if [ "$MODE" = "release" ]; then
+            if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.ref_type }}" != "tag" ]; then
+              echo "ERROR: Release Docker image tags can only be published from a version tag." >&2
+              exit 1
+            fi
+            if [[ ! "$TAG_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z.-]+))?$ ]]; then
+              echo "ERROR: Tag '$TAG_NAME' does not match semantic version format vMAJOR.MINOR.PATCH[-PRERELEASE]." >&2
+              exit 1
+            fi
+            if [ -n "${BASH_REMATCH[4]:-}" ]; then
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "should_push=$SHOULD_PUSH" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: steps.mode.outputs.should_push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate preview image metadata
+        if: steps.mode.outputs.mode != 'release'
+        id: meta_preview
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/imanpr33trai/pizzora-rust-backend
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=preview-main,enable=${{ github.ref == 'refs/heads/main' && steps.mode.outputs.mode == 'preview' }}
+            type=raw,value=preview-${{ steps.mode.outputs.short_sha }},enable=${{ steps.mode.outputs.mode == 'preview' }}
+            type=raw,value=pr-${{ github.event.pull_request.number || steps.mode.outputs.short_sha }},enable=${{ steps.mode.outputs.mode == 'validate' }}
+
+      - name: Generate production release image metadata
+        if: steps.mode.outputs.mode == 'release'
+        id: meta_release
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/imanpr33trai/pizzora-rust-backend
+          flavor: |
+            latest=${{ steps.mode.outputs.is_prerelease == 'false' }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build (and optionally push) Rust backend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/Dockerfile.rust
+          push: ${{ steps.mode.outputs.should_push == 'true' }}
+          tags: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.tags || steps.meta_preview.outputs.tags }}
+          labels: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.labels || steps.meta_preview.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

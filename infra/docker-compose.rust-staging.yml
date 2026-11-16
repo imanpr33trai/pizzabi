@@ -1,0 +1,180 @@
+# Isolated Rust Staging Stack (PostgreSQL 18.6 + Redis 7 + Mailpit + Rust Migrate/API/Worker)
+# Usage:
+#   cp infra/.env.rust-staging.example infra/.env.rust-staging  # or export staging secrets in environment
+#   docker compose -f infra/docker-compose.rust-staging.yml up -d --build
+#
+# Never reuse production DB, Redis, JWT, Razorpay live keys, or production outbox keyring here.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: pizzora-rust-staging-pg18
+    environment:
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:-pizzora_staging}
+      POSTGRES_USER: ${STAGING_DATABASE_USER:-pizzora_staging}
+      POSTGRES_PASSWORD: ${STAGING_DATABASE_PASSWORD:-pizzora_staging_change_me}
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - log_min_duration_statement=500
+    ports:
+      - "127.0.0.1:${STAGING_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pizzora_rust_staging_pg18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAGING_DATABASE_USER:-pizzora_staging} -d ${STAGING_POSTGRES_DB:-pizzora_staging}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: pizzora-rust-staging-redis
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:${STAGING_REDIS_PORT:-6380}:6379"
+    volumes:
+      - pizzora_rust_staging_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.22
+    container_name: pizzora-rust-staging-mailpit
+    ports:
+      - "127.0.0.1:${STAGING_SMTP_PORT:-1026}:1025"
+      - "127.0.0.1:${STAGING_MAILPIT_UI_PORT:-8026}:8025"
+
+  # Separate pre-deploy migration task holding single-connection PostgreSQL advisory lock 884210001.
+  rust-migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.rust
+    image: ${RUST_BACKEND_IMAGE:-pizzora-rust-backend:staging}
+    container_name: pizzora-rust-staging-migrate
+    restart: "no"
+    env_file:
+      - path: .env.rust-staging
+        required: false
+    environment:
+      PIZZORA_ENV: ${PIZZORA_ENV:-production}
+      DATABASE_URL: postgresql://postgres:5432/${STAGING_POSTGRES_DB:-pizzora_staging}
+      DATABASE_USER: ${STAGING_DATABASE_USER:-pizzora_staging}
+      DATABASE_PASSWORD: ${STAGING_DATABASE_PASSWORD:-pizzora_staging_change_me}
+      DATABASE_MAX_POOL_SIZE: "4"
+      DATABASE_MIN_CONNECTIONS: "1"
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      S3_ENABLED: "false"
+      JWT_SECRET: ${STAGING_JWT_SECRET:?Set STAGING_JWT_SECRET (>=32 chars) before starting production-mode staging}
+      OUTBOX_EMAIL_KEY_CURRENT_ID: ${STAGING_OUTBOX_KEY_CURRENT_ID:-k_staging_2026_01}
+      OUTBOX_EMAIL_KEYS: ${STAGING_OUTBOX_EMAIL_KEYS:?Set STAGING_OUTBOX_EMAIL_KEYS (<kid>:<base64_32byte_key>)}
+      RAZORPAY_KEY_ID: ${STAGING_RAZORPAY_KEY_ID:-rzp_test_staging_placeholder}
+      RAZORPAY_KEY_SECRET: ${STAGING_RAZORPAY_KEY_SECRET:?Set STAGING_RAZORPAY_KEY_SECRET (sandbox/test key)}
+      RAZORPAY_WEBHOOK_SECRET: ${STAGING_RAZORPAY_WEBHOOK_SECRET:?Set STAGING_RAZORPAY_WEBHOOK_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["/usr/local/bin/pizzora-api", "--migrate-only"]
+
+  rust-api:
+    image: ${RUST_BACKEND_IMAGE:-pizzora-rust-backend:staging}
+    container_name: pizzora-rust-staging-api
+    restart: unless-stopped
+    stop_grace_period: 20s
+    env_file:
+      - path: .env.rust-staging
+        required: false
+    environment:
+      PIZZORA_ENV: ${PIZZORA_ENV:-production}
+      RUN_MIGRATIONS_ON_STARTUP: "false"
+      PORT: "8080"
+      SHUTDOWN_TIMEOUT_SECS: "15"
+      DATABASE_URL: postgresql://postgres:5432/${STAGING_POSTGRES_DB:-pizzora_staging}
+      DATABASE_USER: ${STAGING_DATABASE_USER:-pizzora_staging}
+      DATABASE_PASSWORD: ${STAGING_DATABASE_PASSWORD:-pizzora_staging_change_me}
+      DATABASE_MAX_POOL_SIZE: "${API_DATABASE_MAX_POOL_SIZE:-15}"
+      DATABASE_MIN_CONNECTIONS: "2"
+      REDIS_URL: redis://redis:6379
+      REDIS_REQUIRED: "false"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      S3_ENABLED: "${STAGING_S3_ENABLED:-false}"
+      JWT_SECRET: ${STAGING_JWT_SECRET:?Set STAGING_JWT_SECRET (>=32 chars)}
+      OUTBOX_EMAIL_KEY_CURRENT_ID: ${STAGING_OUTBOX_KEY_CURRENT_ID:-k_staging_2026_01}
+      OUTBOX_EMAIL_KEYS: ${STAGING_OUTBOX_EMAIL_KEYS:?Set STAGING_OUTBOX_EMAIL_KEYS}
+      RAZORPAY_KEY_ID: ${STAGING_RAZORPAY_KEY_ID:-rzp_test_staging_placeholder}
+      RAZORPAY_KEY_SECRET: ${STAGING_RAZORPAY_KEY_SECRET:?Set STAGING_RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${STAGING_RAZORPAY_WEBHOOK_SECRET:?Set STAGING_RAZORPAY_WEBHOOK_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rust-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${STAGING_API_PORT:-8080}:8080"
+    command: ["/usr/local/bin/pizzora-api"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/v1/health/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+      start_period: 15s
+
+  rust-worker:
+    image: ${RUST_BACKEND_IMAGE:-pizzora-rust-backend:staging}
+    container_name: pizzora-rust-staging-worker
+    restart: unless-stopped
+    stop_grace_period: 20s
+    env_file:
+      - path: .env.rust-staging
+        required: false
+    environment:
+      PIZZORA_ENV: ${PIZZORA_ENV:-production}
+      RUN_MIGRATIONS_ON_STARTUP: "false"
+      WORKER_HEALTH_PORT: "8081"
+      SHUTDOWN_TIMEOUT_SECS: "15"
+      DATABASE_URL: postgresql://postgres:5432/${STAGING_POSTGRES_DB:-pizzora_staging}
+      DATABASE_USER: ${STAGING_DATABASE_USER:-pizzora_staging}
+      DATABASE_PASSWORD: ${STAGING_DATABASE_PASSWORD:-pizzora_staging_change_me}
+      DATABASE_MAX_POOL_SIZE: "${WORKER_DATABASE_MAX_POOL_SIZE:-5}"
+      DATABASE_MIN_CONNECTIONS: "1"
+      REDIS_URL: redis://redis:6379
+      REDIS_REQUIRED: "false"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      S3_ENABLED: "${STAGING_S3_ENABLED:-false}"
+      JWT_SECRET: ${STAGING_JWT_SECRET:?Set STAGING_JWT_SECRET (>=32 chars)}
+      OUTBOX_EMAIL_KEY_CURRENT_ID: ${STAGING_OUTBOX_KEY_CURRENT_ID:-k_staging_2026_01}
+      OUTBOX_EMAIL_KEYS: ${STAGING_OUTBOX_EMAIL_KEYS:?Set STAGING_OUTBOX_EMAIL_KEYS}
+      RAZORPAY_KEY_ID: ${STAGING_RAZORPAY_KEY_ID:-rzp_test_staging_placeholder}
+      RAZORPAY_KEY_SECRET: ${STAGING_RAZORPAY_KEY_SECRET:?Set STAGING_RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${STAGING_RAZORPAY_WEBHOOK_SECRET:?Set STAGING_RAZORPAY_WEBHOOK_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rust-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${STAGING_WORKER_PORT:-8081}:8081"
+    command: ["/usr/local/bin/pizzora-workers"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health/worker >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+      start_period: 15s
+
+volumes:
+  pizzora_rust_staging_pg18:
+  pizzora_rust_staging_redis:

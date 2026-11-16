@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.7
+
+FROM rust:1.88.0-bookworm AS chef
+WORKDIR /workspace/rust
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config \
+    && rm -rf /var/lib/apt/lists/* \
+    && cargo install cargo-chef --version 0.1.71 --locked
+
+FROM chef AS planner
+COPY rust/Cargo.* rust/rust-toolchain.toml /workspace/rust/
+COPY rust/crates /workspace/rust/crates
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /workspace/rust/recipe.json /workspace/rust/recipe.json
+COPY rust/rust-toolchain.toml /workspace/rust/rust-toolchain.toml
+RUN cargo chef cook --release --recipe-path recipe.json
+
+COPY rust/Cargo.* /workspace/rust/
+COPY rust/crates /workspace/rust/crates
+RUN set -eux; \
+    LOCK_FLAG=""; \
+    if [ -f /workspace/rust/Cargo.lock ]; then LOCK_FLAG="--locked"; fi; \
+    cargo build --release ${LOCK_FLAG} --bin pizzora-api --bin pizzora-workers; \
+    strip /workspace/rust/target/release/pizzora-api /workspace/rust/target/release/pizzora-workers
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 pizzora \
+    && useradd --system --uid 10001 --gid pizzora --home-dir /app --shell /sbin/nologin pizzora \
+    && mkdir -p /app \
+    && chown pizzora:pizzora /app
+
+WORKDIR /app
+COPY --from=builder --chown=pizzora:pizzora /workspace/rust/target/release/pizzora-api /usr/local/bin/pizzora-api
+COPY --from=builder --chown=pizzora:pizzora /workspace/rust/target/release/pizzora-workers /usr/local/bin/pizzora-workers
+
+USER pizzora
+
+ENV PIZZORA_ENV=production \
+    PORT=8080 \
+    WORKER_HEALTH_PORT=8081 \
+    RUST_LOG=info,sqlx::query=warn,tower_http=info
+
+EXPOSE 8080 8081
+
+CMD ["/usr/local/bin/pizzora-api"]

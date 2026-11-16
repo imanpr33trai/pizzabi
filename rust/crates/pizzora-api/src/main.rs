@@ -115,7 +115,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    let redis_store = Arc::new(RedisStore::new(&config.redis.url, config.redis.timeout_ms));
+    let redis_store = Arc::new(RedisStore::new(config.redis.url(), config.redis.timeout_ms));
     if let Err(err) = redis_store.connect_now().await {
         if config.redis.required {
             error!(error = %err, "Redis is required (REDIS_REQUIRED=true) and unavailable");

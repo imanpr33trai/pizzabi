@@ -77,7 +77,11 @@ jobs:
 
       - name: Run Clippy across workspace with warnings denied
         working-directory: rust
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        run: |
+          set -euo pipefail
+          LOCK_FLAG=""
+          if [ -f Cargo.lock ]; then LOCK_FLAG="--locked"; fi
+          cargo clippy --workspace --all-targets --all-features $LOCK_FLAG -- -D warnings
 
       - name: Verify pizzora-core purity (no I/O, runtime, crypto, or FFI dependencies)
         working-directory: rust
@@ -90,13 +94,73 @@ jobs:
             exit 1
           fi
 
-      - name: Run every Rust workspace test
+      - name: Run every Rust workspace unit test
         working-directory: rust
-        run: cargo test --workspace --all-features --locked
+        run: |
+          set -euo pipefail
+          LOCK_FLAG=""
+          if [ -f Cargo.lock ]; then LOCK_FLAG="--locked"; fi
+          cargo test --workspace --all-features $LOCK_FLAG
 
       - name: Check full 8-crate Rust workspace
         working-directory: rust
-        run: cargo check --workspace --all-features --locked
+        run: |
+          set -euo pipefail
+          LOCK_FLAG=""
+          if [ -f Cargo.lock ]; then LOCK_FLAG="--locked"; fi
+          cargo check --workspace --all-features $LOCK_FLAG
+
+  test-rust-pg18-integration:
+    name: Rust PostgreSQL 18.6 & Redis Integration
+    needs: [security-audit, test-rust-core]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: pizzora
+          POSTGRES_PASSWORD: pizzora_dev_password
+          POSTGRES_DB: pizzora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U pizzora -d pizzora"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (from rust/rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          components: rustfmt, clippy
+
+      - name: Run Rust PostgreSQL 18.6 & Redis integration suites
+        working-directory: rust
+        env:
+          PIZZORA_ENV: "development"
+          DATABASE_URL: "postgres://pizzora:pizzora_dev_password@127.0.0.1:5432/pizzora"
+          TEST_POSTGRES_URL: "postgres://pizzora:pizzora_dev_password@127.0.0.1:5432/pizzora"
+          REDIS_URL: "redis://127.0.0.1:6379"
+        run: |
+          set -euo pipefail
+          LOCK_FLAG=""
+          if [ -f Cargo.lock ]; then LOCK_FLAG="--locked"; fi
+          cargo test --workspace --all-features $LOCK_FLAG -- --ignored --test-threads=1
 
   test-android:
     name: Android Unit & Robolectric Tests
@@ -316,6 +380,18 @@ jobs:
       push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
       tag_name: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
 
+  rust-docker:
+    name: Rust Backend Docker Image (${{ github.ref_type == 'tag' && 'Release' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'Preview Push' || 'Validate Only') }})
+    needs: [security-audit, test-rust-core, test-rust-pg18-integration]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-rust-backend.yml
+    with:
+      mode: ${{ (github.event_name == 'push' && github.ref_type == 'tag') && 'release' || ((github.event_name == 'push' && github.ref == 'refs/heads/main') && 'preview' || 'validate') }}
+      push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
+      tag_name: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
   build-release-apk:
     name: Build Signed Production Release APK
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
@@ -504,7 +580,7 @@ jobs:
   publish-github-release:
     name: Create GitHub Release
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-    needs: [build-release-apk, backend-docker]
+    needs: [build-release-apk, backend-docker, rust-docker]
     runs-on: ubuntu-latest
     permissions:
       contents: write
