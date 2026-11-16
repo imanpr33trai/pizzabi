@@ -395,9 +395,16 @@ class Phase2PaymentReceiptIdempotencyTest {
 
       pg.postgresDatabase.connection.use { conn ->
         conn.prepareStatement(
-          "SELECT COUNT(*), MAX(attempt_number), MAX(idempotency_receipt) FROM payment_attempts WHERE payment_id = ?::uuid",
+          """
+          SELECT COUNT(*),
+                 MAX(attempt_number),
+                 (SELECT pa2.idempotency_receipt FROM payment_attempts pa2 WHERE pa2.payment_id = ?::uuid AND pa2.attempt_number = 2)
+          FROM payment_attempts
+          WHERE payment_id = ?::uuid
+          """.trimIndent(),
         ).use { ps ->
           ps.setString(1, order1.payment.id)
+          ps.setString(2, order1.payment.id)
           ps.executeQuery().use { rs ->
             assertTrue(rs.next())
             assertEquals(2, rs.getInt(1)) // Attempt #1 + exactly ONE Attempt #2
