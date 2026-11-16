@@ -39,6 +39,20 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
+# JNA & UniFFI Native Bindings
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.Structure {
+    public *;
+}
+-keepclassmembers class * implements com.sun.jna.Callback {
+    <methods>;
+}
+-dontwarn java.awt.**
+-dontwarn javax.naming.**
+-dontwarn com.sun.jna.**
+-keep class uniffi.pizzora_uniffi.** { *; }
+
 # Strip verbose debug logs in release builds
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);

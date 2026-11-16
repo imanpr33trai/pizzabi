@@ -56,6 +56,51 @@ jobs:
           PIZZORA_ENV: "development"
         run: ./gradlew -PbackendOnly=true :backend:test --no-daemon
 
+  test-rust-core:
+    name: Rust Workspace & Core Parity
+    needs: security-audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (from rust/rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          components: rustfmt, clippy
+
+      - name: Verify Rust formatting
+        working-directory: rust
+        run: cargo fmt --check
+
+      - name: Run Clippy across workspace with warnings denied
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Verify pizzora-core purity (no I/O, runtime, crypto, or FFI dependencies)
+        working-directory: rust
+        run: |
+          set -euo pipefail
+          TREE="$(cargo tree -p pizzora-core -e no-dev)"
+          echo "$TREE"
+          if echo "$TREE" | grep -E '\b(tokio|sqlx|reqwest|uniffi|argon2|aes-gcm|lettre|axum|redis)\b'; then
+            echo "ERROR: Prohibited runtime/IO/crypto/FFI dependency found in pizzora-core." >&2
+            exit 1
+          fi
+
+      - name: Run pizzora-core and pizzora-uniffi unit, property, and parity tests
+        working-directory: rust
+        run: |
+          cargo test -p pizzora-core --locked
+          cargo test -p pizzora-uniffi --locked
+
+      - name: Check full 8-crate Rust workspace
+        working-directory: rust
+        run: cargo check --workspace --locked
+
   test-android:
     name: Android Unit & Robolectric Tests
     needs: security-audit
@@ -78,11 +123,17 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Install Rust toolchain (1.88.0 host for UniFFI bindgen & Robolectric)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          targets: x86_64-unknown-linux-gnu
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run Android Unit & Robolectric Tests
-        run: ./gradlew :app:testDebugUnitTest --no-daemon
+      - name: Run UniFFI Host Bindgen and Android Unit & Robolectric Tests
+        run: ./gradlew :app:generateUniFfiKotlinBindings :app:testDebugUnitTest --no-daemon
 
   build-preview-apk:
     name: Build Android Debug Preview APK
@@ -107,6 +158,25 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Install Rust toolchain & cargo-ndk 4.1.2 for Android targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          targets: x86_64-unknown-linux-gnu,aarch64-linux-android,x86_64-linux-android
+
+      - name: Install cargo-ndk 4.1.2 and Android NDK 27.2.12479018
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v cargo-ndk >/dev/null 2>&1; then
+            cargo install cargo-ndk --version 4.1.2 --locked
+          fi
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK_ROOT/ndk/27.2.12479018" ]; then
+            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null || true
+          fi
+          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -126,6 +196,23 @@ jobs:
 
       - name: Build Debug Preview APK
         run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Verify UniFFI Native ABI Packaging (arm64-v8a & x86_64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          ZIP_LIST="$(unzip -l "$APK_SRC")"
+          for entry in \
+            "lib/arm64-v8a/libpizzora_uniffi.so" \
+            "lib/x86_64/libpizzora_uniffi.so" \
+            "lib/arm64-v8a/libjnidispatch.so" \
+            "lib/x86_64/libjnidispatch.so"; do
+            if ! echo "$ZIP_LIST" | grep -q "$entry"; then
+              echo "ERROR: Expected native library '$entry' missing from preview APK." >&2
+              exit 1
+            fi
+          done
 
       - name: Stage Preview APK Artifact
         id: stage
@@ -270,6 +357,25 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Install Rust toolchain & cargo-ndk 4.1.2 for Android targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          targets: x86_64-unknown-linux-gnu,aarch64-linux-android,x86_64-linux-android
+
+      - name: Install cargo-ndk 4.1.2 and Android NDK 27.2.12479018
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v cargo-ndk >/dev/null 2>&1; then
+            cargo install cargo-ndk --version 4.1.2 --locked
+          fi
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK_ROOT/ndk/27.2.12479018" ]; then
+            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null || true
+          fi
+          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -284,7 +390,7 @@ jobs:
             -PpizzoraVersionCode="${{ steps.version.outputs.version_code }}" \
             -PpizzoraVersionName="${{ steps.version.outputs.version_name }}"
 
-      - name: Verify release APK signature and stage versioned asset
+      - name: Verify release APK signature, native ABIs, and stage versioned asset
         id: package
         shell: bash
         run: |
@@ -294,6 +400,17 @@ jobs:
             echo "ERROR: Expected signed release APK at $APK_SRC was not generated." >&2
             exit 1
           fi
+          ZIP_LIST="$(unzip -l "$APK_SRC")"
+          for entry in \
+            "lib/arm64-v8a/libpizzora_uniffi.so" \
+            "lib/x86_64/libpizzora_uniffi.so" \
+            "lib/arm64-v8a/libjnidispatch.so" \
+            "lib/x86_64/libjnidispatch.so"; do
+            if ! echo "$ZIP_LIST" | grep -q "$entry"; then
+              echo "ERROR: Expected native library '$entry' missing from release APK." >&2
+              exit 1
+            fi
+          done
 
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           APKSIGNER="$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"

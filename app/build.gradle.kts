@@ -8,11 +8,15 @@ plugins {
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
+  ndkVersion = "27.2.12479018"
 
   defaultConfig {
     applicationId = "com.aistudio.pizzora.xkqzmw"
     minSdk = 24
     targetSdk = 36
+    ndk {
+      abiFilters += listOf("arm64-v8a", "x86_64")
+    }
     val resolvedVersionCode = providers.gradleProperty("pizzoraVersionCode").orNull?.toIntOrNull()
       ?: providers.environmentVariable("ANDROID_VERSION_CODE").orNull?.toIntOrNull()
       ?: 1
@@ -70,10 +74,163 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  val rustWorkspaceDir = rootProject.layout.projectDirectory.dir("rust").asFile
+  val rustHostTargetReleaseDir = rustWorkspaceDir.resolve("target/release")
+  val uniffiGeneratedKotlinDir = layout.buildDirectory.dir("generated/uniffi/kotlin")
+  val uniffiAndroidJniLibsDir = layout.buildDirectory.dir("generated/uniffi/jniLibs")
+
+  sourceSets {
+    getByName("main") {
+      kotlin.srcDir(uniffiGeneratedKotlinDir)
+      jniLibs.srcDir(uniffiAndroidJniLibsDir)
+    }
+  }
+
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all {
+        it.systemProperty("java.library.path", rustHostTargetReleaseDir.absolutePath)
+        it.systemProperty("jna.library.path", rustHostTargetReleaseDir.absolutePath)
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
+  }
+}
+
+val rustWorkspaceDir = rootProject.layout.projectDirectory.dir("rust").asFile
+val rustHostTargetReleaseDir = rustWorkspaceDir.resolve("target/release")
+val uniffiGeneratedKotlinDir = layout.buildDirectory.dir("generated/uniffi/kotlin")
+val uniffiAndroidJniLibsDir = layout.buildDirectory.dir("generated/uniffi/jniLibs")
+val hostOsLower = System.getProperty("os.name").lowercase()
+val hostCdylibName = when {
+  hostOsLower.contains("mac") -> "libpizzora_uniffi.dylib"
+  hostOsLower.contains("win") -> "pizzora_uniffi.dll"
+  else -> "libpizzora_uniffi.so"
+}
+val hostCdylibFile = rustHostTargetReleaseDir.resolve(hostCdylibName)
+
+fun resolveRustPath(): String {
+  val cargoBins = listOfNotNull(
+    System.getenv("CARGO_HOME")?.let { File(it, "bin") },
+    File(System.getProperty("user.home"), ".cargo/bin"),
+  ).filter { it.isDirectory }.map { it.absolutePath }
+  val existingPath = System.getenv("PATH").orEmpty()
+  return (cargoBins + existingPath).filter { it.isNotBlank() }.joinToString(File.pathSeparator)
+}
+
+fun resolveAndroidNdkHome(sdkDir: File?): String {
+  System.getenv("ANDROID_NDK_HOME")?.takeIf { it.isNotBlank() }?.let { return it }
+  System.getenv("ANDROID_NDK_ROOT")?.takeIf { it.isNotBlank() }?.let { return it }
+  val sdkRoot = sdkDir
+    ?: System.getenv("ANDROID_SDK_ROOT")?.let(::File)
+    ?: System.getenv("ANDROID_HOME")?.let(::File)
+    ?: File("/opt/android/sdk")
+  val pinned = File(sdkRoot, "ndk/27.2.12479018")
+  if (pinned.isDirectory) return pinned.absolutePath
+  error("Android NDK 27.2.12479018 not found under ${sdkRoot.absolutePath}.")
+}
+
+val buildHostRustLib by tasks.registering(Exec::class) {
+  group = "rust"
+  description = "Builds host cdylib for UniFFI Kotlin binding generation and Robolectric tests."
+  workingDir = rustWorkspaceDir
+  inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-core"))
+  inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-uniffi"))
+  inputs.files(
+    rustWorkspaceDir.resolve("Cargo.toml"),
+    rustWorkspaceDir.resolve("Cargo.lock"),
+    rustWorkspaceDir.resolve("rust-toolchain.toml"),
+  )
+  outputs.file(hostCdylibFile)
+  environment("PATH", resolveRustPath())
+  environment("CARGO_BUILD_JOBS", "2")
+  commandLine("cargo", "build", "-p", "pizzora-uniffi", "--release", "--locked")
+}
+
+val generateUniFfiKotlinBindings by tasks.registering(Exec::class) {
+  group = "rust"
+  description = "Generates Kotlin UniFFI bindings from the host pizzora_uniffi cdylib."
+  dependsOn(buildHostRustLib)
+  workingDir = rustWorkspaceDir
+  inputs.file(hostCdylibFile)
+  inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-uniffi/src"))
+  outputs.dir(uniffiGeneratedKotlinDir)
+  environment("PATH", resolveRustPath())
+  doFirst {
+    val outDir = uniffiGeneratedKotlinDir.get().asFile
+    outDir.deleteRecursively()
+    outDir.mkdirs()
+  }
+  commandLine(
+    "cargo",
+    "run",
+    "-p",
+    "pizzora-uniffi",
+    "--bin",
+    "uniffi-bindgen",
+    "--locked",
+    "--",
+    "generate",
+    "--library",
+    hostCdylibFile.absolutePath,
+    "--language",
+    "kotlin",
+    "--out-dir",
+    uniffiGeneratedKotlinDir.get().asFile.absolutePath,
+  )
+}
+
+val buildAndroidRustLibs by tasks.registering(Exec::class) {
+  group = "rust"
+  description = "Cross-compiles Android arm64-v8a and x86_64 pizzora_uniffi shared libraries via cargo-ndk."
+  workingDir = rustWorkspaceDir
+  inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-core"))
+  inputs.dir(rustWorkspaceDir.resolve("crates/pizzora-uniffi"))
+  inputs.files(
+    rustWorkspaceDir.resolve("Cargo.toml"),
+    rustWorkspaceDir.resolve("Cargo.lock"),
+    rustWorkspaceDir.resolve("rust-toolchain.toml"),
+  )
+  outputs.dir(uniffiAndroidJniLibsDir)
+  environment("PATH", resolveRustPath())
+  environment("CARGO_BUILD_JOBS", "2")
+  doFirst {
+    val outDir = uniffiAndroidJniLibsDir.get().asFile
+    outDir.deleteRecursively()
+    outDir.mkdirs()
+    environment("ANDROID_NDK_HOME", resolveAndroidNdkHome(android.sdkDirectory))
+  }
+  commandLine(
+    "cargo",
+    "ndk",
+    "-t",
+    "arm64-v8a",
+    "-t",
+    "x86_64",
+    "-o",
+    uniffiAndroidJniLibsDir.get().asFile.absolutePath,
+    "build",
+    "-p",
+    "pizzora-uniffi",
+    "--release",
+    "--locked",
+  )
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+  dependsOn(generateUniFfiKotlinBindings)
+}
+
+tasks.configureEach {
+  if (name.startsWith("ksp") && name.endsWith("Kotlin")) {
+    dependsOn(generateUniFfiKotlinBindings)
+  }
+  if (name.startsWith("merge") && name.endsWith("JniLibFolders")) {
+    dependsOn(buildAndroidRustLibs)
   }
 }
 
@@ -126,10 +283,12 @@ dependencies {
   implementation(libs.ktor.serialization.kotlinx.json)
   implementation(libs.okhttp)
   implementation(libs.razorpay.checkout)
+  implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
 
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
+  testImplementation(libs.jna)
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.ktor.client.mock)

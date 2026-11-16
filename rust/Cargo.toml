@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/pizzora-core",
+  "crates/pizzora-uniffi",
+  "crates/pizzora-config",
+  "crates/pizzora-db",
+  "crates/pizzora-auth",
+  "crates/pizzora-payments",
+  "crates/pizzora-workers",
+  "crates/pizzora-api",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+pizzora-core = { path = "crates/pizzora-core" }
+pizzora-config = { path = "crates/pizzora-config" }
+pizzora-db = { path = "crates/pizzora-db" }
+pizzora-auth = { path = "crates/pizzora-auth" }
+pizzora-payments = { path = "crates/pizzora-payments" }
+
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+thiserror = "2.0.12"
+uuid = { version = "1.11.0", default-features = false, features = ["std", "serde"] }
+uniffi = { version = "=0.29.3", features = ["cli"] }
+url = "2.5.4"
+sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring", "postgres", "uuid", "chrono", "json", "migrate"] }
+crc32fast = "1.4.2"
+redis = { version = "0.29.5", features = ["tokio-comp", "connection-manager"] }
+chrono = { version = "0.4.41", features = ["serde"] }
+tokio = { version = "1.45.1", features = ["full"] }
+tokio-util = "0.7.15"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
+argon2 = "0.5.3"
+jsonwebtoken = "9.3.1"
+sha2 = "0.10.9"
+aes-gcm = "0.10.3"
+zeroize = { version = "1.8.1", features = ["derive"] }
+base64 = "0.22.1"
+hex = "0.4.3"
+rand = "0.8.5"
+lettre = { version = "0.11.15", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder", "hostname"] }
+reqwest = { version = "0.12.15", default-features = false, features = ["json", "rustls-tls"] }
+hmac = "0.12.1"
+subtle = "2.6.1"
+axum = { version = "0.8.4", features = ["ws", "macros"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.4", features = ["cors", "limit", "trace", "set-header"] }
+metrics = "0.24.2"
+metrics-exporter-prometheus = "0.17.0"

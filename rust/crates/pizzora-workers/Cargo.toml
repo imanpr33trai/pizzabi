@@ -1,0 +1,27 @@
+[package]
+name = "pizzora-workers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "pizzora_workers"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pizzora-workers"
+path = "src/main.rs"
+
+[dependencies]
+pizzora-core.workspace = true
+pizzora-config.workspace = true
+pizzora-db.workspace = true
+pizzora-auth.workspace = true
+pizzora-payments.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+metrics.workspace = true
+serde_json.workspace = true
+tracing-subscriber.workspace = true
