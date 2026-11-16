@@ -267,6 +267,96 @@ impl InventoryService {
         Ok(item)
     }
 
+    pub async fn update_ingredient(
+        &self,
+        ingredient_id: Uuid,
+        request: &UpdateIngredientRequest,
+        audit: &AuditContext,
+    ) -> Result<InventoryItemDto, DbError> {
+        let mut tx = self.pool.begin().await?;
+        let existing = load_single_inventory_item(&mut tx, ingredient_id)
+            .await?
+            .ok_or_else(|| DbError::NotFound {
+                code: "INGREDIENT_NOT_FOUND",
+                message: format!("Ingredient {ingredient_id} not found."),
+            })?;
+
+        let next_name = match request.name.as_deref() {
+            Some(raw) => {
+                let trimmed = raw.trim();
+                if trimmed.is_empty() || trimmed.len() > 100 {
+                    return Err(DbError::Validation {
+                        code: "INVALID_INGREDIENT_NAME",
+                        message: "Ingredient name must be 1..100 characters.".to_owned(),
+                    });
+                }
+                trimmed.to_owned()
+            }
+            None => existing.name.clone(),
+        };
+        let next_unit = request.unit.unwrap_or(existing.unit);
+        let next_threshold = match request.low_stock_threshold {
+            Some(threshold) if threshold < 0 => {
+                return Err(DbError::Validation {
+                    code: "INVALID_THRESHOLD",
+                    message: "low_stock_threshold must be non-negative.".to_owned(),
+                });
+            }
+            Some(threshold) => threshold,
+            None => existing.low_stock_threshold,
+        };
+        let next_active = request.is_active.unwrap_or(existing.is_active);
+
+        sqlx::query(
+            r#"
+            UPDATE ingredients
+            SET name = $1, unit = $2, low_stock_threshold = $3, is_active = $4
+            WHERE id = $5
+            "#,
+        )
+        .bind(&next_name)
+        .bind(next_unit.as_str())
+        .bind(next_threshold)
+        .bind(next_active)
+        .bind(ingredient_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| {
+            if DbError::is_unique_violation(&err) {
+                DbError::Conflict {
+                    code: "INGREDIENT_EXISTS",
+                    message: format!("Ingredient '{next_name}' already exists."),
+                }
+            } else {
+                DbError::Sqlx(err)
+            }
+        })?;
+
+        let after = load_single_inventory_item(&mut tx, ingredient_id)
+            .await?
+            .ok_or_else(|| DbError::NotFound {
+                code: "INGREDIENT_NOT_FOUND",
+                message: format!("Ingredient {ingredient_id} not found."),
+            })?;
+
+        let before_val = serde_json::to_value(&existing).ok();
+        let after_val = serde_json::to_value(&after).ok();
+        let entity_id = ingredient_id.to_string();
+        record_audit_log(
+            &mut tx,
+            audit,
+            "INGREDIENT_UPDATED",
+            "ingredient",
+            &entity_id,
+            before_val.as_ref(),
+            after_val.as_ref(),
+        )
+        .await?;
+
+        tx.commit().await?;
+        Ok(after)
+    }
+
     pub async fn adjust_inventory(
         &self,
         request: &AdjustInventoryRequest,

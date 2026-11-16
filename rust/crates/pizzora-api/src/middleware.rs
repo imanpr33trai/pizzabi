@@ -130,6 +130,7 @@ pub async fn body_size_limit_middleware(
                     "PAYLOAD_TOO_LARGE",
                     format!("Request payload exceeds maximum limit of {max_bytes} bytes."),
                 )
+                .with_detail("max_bytes", max_bytes.to_string())
                 .into_response_with_correlation(&cid);
             }
             Some(_) => {}
@@ -147,6 +148,7 @@ pub async fn body_size_limit_middleware(
             "PAYLOAD_TOO_LARGE",
             format!("Request payload exceeds maximum limit of {max_bytes} bytes."),
         )
+        .with_detail("max_bytes", max_bytes.to_string())
         .into_response_with_correlation(&cid),
     }
 }
@@ -167,7 +169,9 @@ pub async fn rate_limit_middleware(
         .map(|ip| ip.0.clone())
         .unwrap_or_else(|| "unknown".to_owned());
 
-    let quota = state.rate_limiter.classify_route_group(&path);
+    let Some(quota) = state.rate_limiter.classify_route_group(&path) else {
+        return next.run(req).await;
+    };
     let key = format!("group:{}:{client_ip}", quota.group);
     match state.rate_limiter.check(&key, quota.max_per_minute, 60).await {
         RateLimitDecision::Allowed => next.run(req).await,
@@ -184,6 +188,8 @@ pub async fn rate_limit_middleware(
                 format!("Too many requests for '{}'. Please try again later.", quota.group),
                 retry_after_secs,
             )
+            .with_detail("group", quota.group)
+            .with_detail("retry_after_seconds", retry_after_secs.to_string())
             .into_response_with_correlation(&cid)
         }
     }

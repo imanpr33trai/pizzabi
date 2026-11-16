@@ -16,6 +16,8 @@ use crate::outbox::{OutboxRepository, EVENT_REFUND_REQUESTED};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeliveryAddressSnapshotDto {
+    #[serde(default)]
+    pub address_id: String,
     pub label: String,
     pub line1: String,
     #[serde(default)]

@@ -39,13 +39,23 @@ impl ResilientRateLimiter {
         self.enabled
     }
 
-    pub fn classify_route_group(&self, path: &str) -> RouteGroupQuota {
-        if path.starts_with("/api/v1/health/") || path == "/metrics" {
-            RouteGroupQuota {
-                group: "ops",
-                max_per_minute: self.security.ops_per_minute,
-            }
-        } else if path == "/api/v1/webhooks/razorpay" {
+    pub fn classify_route_group(&self, path: &str) -> Option<RouteGroupQuota> {
+        if !path.starts_with("/api/v1/")
+            || path == "/api/v1/health/live"
+            || path == "/api/v1/health/ready"
+            || path == "/api/v1/openapi.json"
+            || matches!(
+                path,
+                "/api/v1/auth/register"
+                    | "/api/v1/auth/resend-verification"
+                    | "/api/v1/auth/login"
+                    | "/api/v1/auth/forgot-password"
+            )
+        {
+            return None;
+        }
+
+        let quota = if path.starts_with("/api/v1/webhooks/") {
             RouteGroupQuota {
                 group: "webhooks",
                 max_per_minute: self.security.webhooks_per_minute,
@@ -71,19 +81,25 @@ impl ResilientRateLimiter {
                 max_per_minute: self.security.auth_ws_ticket_per_minute,
             }
         } else if path == "/api/v1/checkout"
-            || path == "/api/v1/payments/razorpay/verify"
+            || path.starts_with("/api/v1/payments/")
             || (path.starts_with("/api/v1/orders/")
-                && (path.ends_with("/payments/retry") || path.ends_with("/payments/fail")))
+                && (path.ends_with("/payments/retry")
+                    || path.ends_with("/payments/fail")
+                    || path.contains("/payments/")))
         {
             RouteGroupQuota {
                 group: "checkout_payment",
                 max_per_minute: self.security.checkout_payment_per_minute,
             }
+        } else if path.starts_with("/api/v1/owner/") || path.starts_with("/api/v1/kds/") {
+            RouteGroupQuota {
+                group: "ops",
+                max_per_minute: self.security.ops_per_minute,
+            }
         } else if path.starts_with("/api/v1/catalog/")
             || path.starts_with("/api/v1/delivery-zones/")
-            || path == "/api/v1/slots"
+            || path.starts_with("/api/v1/slots")
             || path == "/api/v1/config/public"
-            || path == "/api/v1/openapi.json"
         {
             RouteGroupQuota {
                 group: "public",
@@ -94,7 +110,9 @@ impl ResilientRateLimiter {
                 group: "api",
                 max_per_minute: self.security.api_default_per_minute,
             }
-        }
+        };
+
+        Some(quota)
     }
 
     pub async fn check(&self, key: &str, max_requests: u32, window_seconds: u64) -> RateLimitDecision {
