@@ -220,15 +220,10 @@ class NotificationsViewModel(
   }
 
   fun clearSessionState() {
-    realtimeEventStream?.stop()
-    _uiState.update {
-      it.copy(
-        unreadOnlyFilter = false,
-        isLoading = false,
-        isUpdatingPreferences = false,
-        preferences = null,
-        errorMessage = null,
-        actionMessage = null,
+    realtimeEventStream?.resetForSessionChange()
+    _uiState.update { state ->
+      NotificationsUiState(
+        hasNotificationPermission = state.hasNotificationPermission,
       )
     }
     viewModelScope.launch {

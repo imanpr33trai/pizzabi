@@ -48,13 +48,13 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run Shared Contracts Tests
-        run: gradle -PbackendOnly=true :shared:contracts:test --no-daemon
+        run: ./gradlew -PbackendOnly=true :shared:contracts:test --no-daemon
 
       - name: Run Backend Test Suite (S3 disabled by default)
         env:
           S3_ENABLED: "false"
           PIZZORA_ENV: "development"
-        run: gradle -PbackendOnly=true :backend:test --no-daemon
+        run: ./gradlew -PbackendOnly=true :backend:test --no-daemon
 
   test-android:
     name: Android Unit & Robolectric Tests
@@ -82,7 +82,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run Android Unit & Robolectric Tests
-        run: gradle :app:testDebugUnitTest --no-daemon
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
 
   build-preview-apk:
     name: Build Android Debug Preview APK
@@ -125,7 +125,7 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build Debug Preview APK
-        run: gradle :app:assembleDebug --no-daemon
+        run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Stage Preview APK Artifact
         id: stage
@@ -280,7 +280,7 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          gradle :app:assembleRelease --no-daemon \
+          ./gradlew :app:assembleRelease --no-daemon \
             -PpizzoraVersionCode="${{ steps.version.outputs.version_code }}" \
             -PpizzoraVersionName="${{ steps.version.outputs.version_name }}"
 

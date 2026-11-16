@@ -93,7 +93,7 @@ class KdsViewModel(
   )
   val uiState: StateFlow<KdsUiState> = _uiState.asStateFlow()
 
-  private val causalTracker = OrderCausalTracker()
+  private var causalTracker = OrderCausalTracker()
   private var tickerJob: Job? = null
   private var isBoardStarted: Boolean = false
 
@@ -403,6 +403,18 @@ class KdsViewModel(
 
   fun clearMessages() {
     _uiState.update { it.copy(errorMessage = null, actionMessage = null) }
+  }
+
+  fun clearSessionState() {
+    isBoardStarted = false
+    tickerJob?.cancel()
+    tickerJob = null
+    causalTracker = OrderCausalTracker()
+    realtimeEventStream?.resetForSessionChange()
+    _uiState.value = KdsUiState(
+      isMuted = _uiState.value.isMuted,
+      currentDeviceEpochMs = clockNowMs(),
+    )
   }
 
   override fun onCleared() {

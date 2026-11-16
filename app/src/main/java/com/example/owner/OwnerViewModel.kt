@@ -1058,4 +1058,8 @@ class OwnerViewModel(
   fun loadMoreAuditLogs() {
     loadAuditLogs(entityType = _uiState.value.auditEntityFilter, reset = false)
   }
+
+  fun clearSessionState() {
+    _uiState.value = OwnerUiState()
+  }
 }

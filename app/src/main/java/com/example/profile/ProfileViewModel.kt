@@ -339,4 +339,8 @@ class ProfileViewModel(
         }
     }
   }
+
+  fun clearSessionState() {
+    _uiState.value = ProfileUiState()
+  }
 }

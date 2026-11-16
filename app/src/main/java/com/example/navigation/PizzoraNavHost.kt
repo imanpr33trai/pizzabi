@@ -52,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -151,12 +152,29 @@ fun PizzoraApp(
     val navController = rememberNavController()
     val appContext = LocalContext.current
 
-    var wasSignedIn by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(session != null) }
+    var wasSignedIn by remember { mutableStateOf(session != null) }
+    var lastActiveUserId by remember { mutableStateOf(session?.user?.id) }
+
+    fun resetSessionUiAndSync() {
+      cartViewModel?.clearSessionState()
+      checkoutQuoteViewModel?.clearSessionState()
+      checkoutViewModel?.clearSessionState()
+      ordersViewModel?.clearSessionState()
+      profileViewModel?.clearSessionState()
+      kdsViewModel?.clearSessionState()
+      ownerViewModel?.clearSessionState()
+      notificationsViewModel?.clearSessionState()
+      OrderSyncScheduler.cancelSync(appContext)
+    }
 
     LaunchedEffect(session?.user?.id, session?.user?.role) {
       val current = session
       if (current != null) {
+        if (lastActiveUserId != null && lastActiveUserId != current.user.id) {
+          resetSessionUiAndSync()
+        }
         wasSignedIn = true
+        lastActiveUserId = current.user.id
         val target: Any = when (current.user.role) {
           UserRole.CUSTOMER -> CustomerShellRoute
           UserRole.KITCHEN_STAFF -> KdsShellRoute
@@ -166,10 +184,10 @@ fun PizzoraApp(
           popUpTo(0) { inclusive = true }
           launchSingleTop = true
         }
-      } else if (wasSignedIn) {
+      } else if (wasSignedIn || lastActiveUserId != null) {
         wasSignedIn = false
-        notificationsViewModel?.clearSessionState()
-        OrderSyncScheduler.cancelSync(appContext)
+        lastActiveUserId = null
+        resetSessionUiAndSync()
         navController.navigate(LoginRoute) {
           popUpTo(0) { inclusive = true }
           launchSingleTop = true
@@ -245,45 +263,51 @@ fun PizzoraApp(
 
       composable<CustomerShellRoute> {
         session?.let { active ->
-          CustomerRoleShell(
-            session = active,
-            catalogViewModel = catalogViewModel,
-            cartViewModel = cartViewModel,
-            checkoutQuoteViewModel = checkoutQuoteViewModel,
-            checkoutViewModel = checkoutViewModel,
-            ordersViewModel = ordersViewModel,
-            profileViewModel = profileViewModel,
-            notificationsViewModel = notificationsViewModel,
-            openNotificationsRequested = openNotificationsRequested,
-            onNotificationsRequestHandled = onNotificationsRequestHandled,
-            onSignOut = authViewModel::logout,
-          )
+          key(active.user.id) {
+            CustomerRoleShell(
+              session = active,
+              catalogViewModel = catalogViewModel,
+              cartViewModel = cartViewModel,
+              checkoutQuoteViewModel = checkoutQuoteViewModel,
+              checkoutViewModel = checkoutViewModel,
+              ordersViewModel = ordersViewModel,
+              profileViewModel = profileViewModel,
+              notificationsViewModel = notificationsViewModel,
+              openNotificationsRequested = openNotificationsRequested,
+              onNotificationsRequestHandled = onNotificationsRequestHandled,
+              onSignOut = authViewModel::logout,
+            )
+          }
         }
       }
 
       composable<KdsShellRoute> {
         session?.let { active ->
-          KdsRoleShell(
-            session = active,
-            kdsViewModel = kdsViewModel,
-            isMuted = kdsMuted,
-            onToggleMute = { authViewModel.setKdsSoundMuted(!kdsMuted) },
-            onSignOut = authViewModel::logout,
-          )
+          key(active.user.id) {
+            KdsRoleShell(
+              session = active,
+              kdsViewModel = kdsViewModel,
+              isMuted = kdsMuted,
+              onToggleMute = { authViewModel.setKdsSoundMuted(!kdsMuted) },
+              onSignOut = authViewModel::logout,
+            )
+          }
         }
       }
 
       composable<OwnerShellRoute> {
         session?.let { active ->
-          OwnerRoleShell(
-            session = active,
-            kdsViewModel = kdsViewModel,
-            ownerViewModel = ownerViewModel,
-            notificationsViewModel = notificationsViewModel,
-            openNotificationsRequested = openNotificationsRequested,
-            onNotificationsRequestHandled = onNotificationsRequestHandled,
-            onSignOut = authViewModel::logout,
-          )
+          key(active.user.id) {
+            OwnerRoleShell(
+              session = active,
+              kdsViewModel = kdsViewModel,
+              ownerViewModel = ownerViewModel,
+              notificationsViewModel = notificationsViewModel,
+              openNotificationsRequested = openNotificationsRequested,
+              onNotificationsRequestHandled = onNotificationsRequestHandled,
+              onSignOut = authViewModel::logout,
+            )
+          }
         }
       }
     }

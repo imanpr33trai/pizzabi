@@ -25,14 +25,14 @@ class OrderNotificationSyncer(
   private val notificationPoster: LocalNotificationPoster,
 ) {
   suspend fun syncUnreadAndNotify(): ListenableWorker.Result {
-    if (tokenStorage.currentSession() == null) {
-      return ListenableWorker.Result.success()
-    }
+    val activeSession = tokenStorage.awaitSession() ?: return ListenableWorker.Result.success()
     return notificationRepository.syncInbox(unreadOnly = true, limit = 50).fold(
       onSuccess = { outcome ->
-        val unreadNew = outcome.newlyInserted.filter { !it.isRead }
-        if (unreadNew.isNotEmpty()) {
-          notificationPoster.showNotifications(unreadNew)
+        if (tokenStorage.currentSession()?.user?.id == activeSession.user.id) {
+          val unreadNew = outcome.newlyInserted.filter { !it.isRead }
+          if (unreadNew.isNotEmpty()) {
+            notificationPoster.showNotifications(unreadNew)
+          }
         }
         ListenableWorker.Result.success()
       },

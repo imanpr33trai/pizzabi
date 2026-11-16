@@ -22,6 +22,9 @@ import com.example.core.media.ImageCompressor
 import com.example.core.media.ProductImageUploader
 import com.example.core.network.PizzoraApiClient
 import com.example.core.network.WebSocketEventClient
+import com.example.core.security.DefaultSessionScopeCleaner
+import com.example.core.security.SessionScopeCleaner
+import com.example.core.security.SessionTransitionCoordinator
 import com.example.core.security.TokenManager
 import com.example.core.security.TokenStorage
 import com.example.kds.KdsChimePlayer
@@ -33,6 +36,7 @@ import com.example.notifications.NetworkNotificationRepository
 import com.example.notifications.NotificationHelper
 import com.example.notifications.NotificationRepository
 import com.example.notifications.NotificationsViewModel
+import com.example.notifications.OrderSyncScheduler
 import com.example.notifications.PizzoraWorkerFactory
 import com.example.orders.NetworkOrderRepository
 import com.example.orders.OrderRepository
@@ -55,10 +59,28 @@ class AppContainer(context: Context) {
     TokenManager(appContext)
   }
 
+  val sessionScopeCleaner: SessionScopeCleaner by lazy {
+    DefaultSessionScopeCleaner(
+      cartDao = database.cartDao(),
+      notificationInboxDao = database.notificationInboxDao(),
+      realtimeEventStreamProvider = { webSocketEventClient },
+      onAuthCacheClear = { apiClient.clearAuthTokenCache() },
+      onAdditionalCleanup = { OrderSyncScheduler.cancelSync(appContext) },
+    )
+  }
+
+  val sessionCoordinator: SessionTransitionCoordinator by lazy {
+    SessionTransitionCoordinator(
+      tokenStorage = tokenStorage,
+      scopeCleanerProvider = { sessionScopeCleaner },
+    )
+  }
+
   val apiClient: PizzoraApiClient by lazy {
     PizzoraApiClient(
       baseUrl = BuildConfig.API_BASE_URL,
       tokenStorage = tokenStorage,
+      sessionCoordinatorProvider = { sessionCoordinator },
     )
   }
 
@@ -70,6 +92,7 @@ class AppContainer(context: Context) {
     NetworkAuthRepository(
       apiClient = apiClient,
       tokenStorage = tokenStorage,
+      sessionCoordinator = sessionCoordinator,
     )
   }
 
@@ -84,6 +107,8 @@ class AppContainer(context: Context) {
     NetworkCartRepository(
       apiClient = apiClient,
       cartDao = database.cartDao(),
+      tokenStorage = tokenStorage,
+      sessionCoordinator = sessionCoordinator,
     )
   }
 
@@ -139,6 +164,8 @@ class AppContainer(context: Context) {
     NetworkNotificationRepository(
       apiClient = apiClient,
       notificationInboxDao = database.notificationInboxDao(),
+      tokenStorage = tokenStorage,
+      sessionCoordinator = sessionCoordinator,
     )
   }
 

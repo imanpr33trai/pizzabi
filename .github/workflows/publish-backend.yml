@@ -59,7 +59,7 @@ jobs:
         env:
           S3_ENABLED: "false"
           PIZZORA_ENV: "development"
-        run: gradle -PbackendOnly=true :shared:contracts:test :backend:test --no-daemon
+        run: ./gradlew -PbackendOnly=true :shared:contracts:test :backend:test --no-daemon
 
   build-and-publish:
     name: Build & Publish Backend Docker Image

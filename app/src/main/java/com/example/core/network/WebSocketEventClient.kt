@@ -27,6 +27,9 @@ interface RealtimeEventStream {
   val lastHighWaterSeq: StateFlow<Long>
   fun start(sessionUserId: String, initialSinceSeq: Long = 0L)
   fun stop()
+  fun resetForSessionChange() {
+    stop()
+  }
   fun updateHighWaterSeq(seq: Long)
 }
 
@@ -53,6 +56,9 @@ class WebSocketEventClient(
 
   @Synchronized
   override fun start(sessionUserId: String, initialSinceSeq: Long) {
+    if (activeUserId != null && activeUserId != sessionUserId) {
+      _lastHighWaterSeq.value = 0L
+    }
     if (initialSinceSeq > _lastHighWaterSeq.value) {
       _lastHighWaterSeq.value = initialSinceSeq
     }
@@ -72,6 +78,12 @@ class WebSocketEventClient(
     connectionJob?.cancel()
     connectionJob = null
     _connectionState.value = RealtimeConnectionState.DISCONNECTED
+  }
+
+  @Synchronized
+  override fun resetForSessionChange() {
+    stop()
+    _lastHighWaterSeq.value = 0L
   }
 
   override fun updateHighWaterSeq(seq: Long) {

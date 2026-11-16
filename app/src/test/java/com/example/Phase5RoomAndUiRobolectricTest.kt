@@ -106,9 +106,11 @@ class Phase5RoomAndUiRobolectricTest {
 
   @Test
   fun `room relational cart_item_toppings cascades cleanly and notification inbox deduplicates event_id`() = runBlocking {
+    val userId = "u-1"
     val cartDao = db.cartDao()
     val item = CartItemEntity(
       id = "ci-1",
+      userId = userId,
       productId = "prod-margherita",
       productName = "Margherita",
       variantId = "var-med",
@@ -124,17 +126,18 @@ class Phase5RoomAndUiRobolectricTest {
     )
     cartDao.upsertItemWithToppings(item, toppings)
 
-    val loaded = cartDao.observeCartItemsWithToppings().first()
+    val loaded = cartDao.observeCartItemsWithToppings(userId).first()
     assertEquals(1, loaded.size)
     assertEquals(2, loaded.first().toppings.size)
-    assertEquals(2, cartDao.observeCartBadgeCount().first())
+    assertEquals(2, cartDao.observeCartBadgeCount(userId).first())
 
-    cartDao.deleteItemById("ci-1")
-    assertEquals(0, cartDao.observeCartItemsWithToppings().first().size)
+    cartDao.deleteItemById(userId, "ci-1")
+    assertEquals(0, cartDao.observeCartItemsWithToppings(userId).first().size)
 
     val notifDao = db.notificationInboxDao()
     val n1 = NotificationInboxEntity(
       id = "n-1",
+      userId = userId,
       eventId = "evt-100",
       title = "Order Placed",
       body = "Kitchen received #PZ-1",
@@ -144,7 +147,7 @@ class Phase5RoomAndUiRobolectricTest {
       createdAtIso = "2026-11-13T10:00:00Z",
     )
     notifDao.insertIgnore(listOf(n1, n1.copy(id = "n-2")))
-    assertEquals(1, notifDao.observeNotifications().first().size)
+    assertEquals(1, notifDao.observeNotifications(userId).first().size)
   }
 
   @Test

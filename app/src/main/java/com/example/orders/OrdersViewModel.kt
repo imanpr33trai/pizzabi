@@ -57,7 +57,7 @@ class OrdersViewModel(
   private val _uiState = MutableStateFlow(OrdersUiState())
   val uiState: StateFlow<OrdersUiState> = _uiState.asStateFlow()
 
-  private val causalTracker = OrderCausalTracker()
+  private var causalTracker = OrderCausalTracker()
   private val activeResyncOrderIds = mutableSetOf<String>()
   private var pollJob: Job? = null
 
@@ -634,6 +634,17 @@ class OrdersViewModel(
 
   fun clearActionMessage() {
     _uiState.update { it.copy(actionMessage = null) }
+  }
+
+  fun clearSessionState() {
+    pollJob?.cancel()
+    pollJob = null
+    synchronized(activeResyncOrderIds) {
+      activeResyncOrderIds.clear()
+    }
+    causalTracker = OrderCausalTracker()
+    realtimeEventStream?.resetForSessionChange()
+    _uiState.value = OrdersUiState()
   }
 
   override fun onCleared() {

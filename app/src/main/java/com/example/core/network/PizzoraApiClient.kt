@@ -1,6 +1,7 @@
 package com.example.core.network
 
 import com.example.core.security.AuthSession
+import com.example.core.security.SessionTransitionCoordinator
 import com.example.core.security.TokenStorage
 import com.example.core.security.TransportSecurityPolicy
 import com.pizzora.contracts.AddressDto
@@ -98,18 +99,21 @@ import com.pizzora.contracts.VerifyEmailRequest
 import com.pizzora.contracts.VerifyRazorpayPaymentRequest
 import com.pizzora.contracts.VerifyRazorpayPaymentResponse
 import com.pizzora.contracts.WsTicketResponse
-import io.ktor.client.request.header
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.auth.Auth
+import io.ktor.client.plugins.auth.authProvider
+import io.ktor.client.plugins.auth.providers.BearerAuthProvider
 import io.ktor.client.plugins.auth.providers.BearerTokens
 import io.ktor.client.plugins.auth.providers.bearer
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.request.HttpRequestPipeline
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
@@ -117,6 +121,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.encodeURLParameter
@@ -138,7 +143,9 @@ class PizzoraApiClient(
   baseUrl: String,
   private val tokenStorage: TokenStorage,
   engine: HttpClientEngine = OkHttp.create(),
+  private val sessionCoordinatorProvider: () -> SessionTransitionCoordinator? = { null },
 ) {
+  internal val sessionTokenStorage: TokenStorage get() = tokenStorage
   private val normalizedBaseUrl = TransportSecurityPolicy.requireValidEndpointUrl(baseUrl)
   val apiBaseUrl: String get() = normalizedBaseUrl
   private val json = Json {
@@ -147,6 +154,7 @@ class PizzoraApiClient(
   }
   val wireJson: Json get() = json
   private val refreshMutex = Mutex()
+  @Volatile private var lastLoadedAccessToken: String? = null
 
   // Separate client without Auth plugin to execute /auth/refresh without recursive 401 interception
   private val refreshClient = HttpClient(engine) {
@@ -164,17 +172,34 @@ class PizzoraApiClient(
     install(Auth) {
       bearer {
         loadTokens {
-          tokenStorage.awaitSession()?.let { BearerTokens(it.accessToken, it.refreshToken) }
+          tokenStorage.awaitSession()?.let {
+            lastLoadedAccessToken = it.accessToken
+            BearerTokens(it.accessToken, it.refreshToken)
+          }
         }
         refreshTokens {
+          val coordinator = sessionCoordinatorProvider()
+          if (coordinator?.isLogoutInProgress() == true) {
+            return@refreshTokens null
+          }
           val attemptedAccessToken = oldTokens?.accessToken
           refreshMutex.withLock {
             val latest = tokenStorage.awaitSession() ?: return@withLock null
             if (attemptedAccessToken != null && latest.accessToken != attemptedAccessToken) {
+              lastLoadedAccessToken = latest.accessToken
               return@withLock BearerTokens(latest.accessToken, latest.refreshToken)
             }
             val refreshed = executeRefresh(latest.refreshToken)
             if (refreshed != null) {
+              if (refreshed.user.id != latest.user.id) {
+                if (coordinator != null) {
+                  coordinator.onRefreshFailure(expectedUserId = latest.user.id)
+                } else {
+                  tokenStorage.clearSession()
+                }
+                clearAuthTokenCache()
+                return@withLock null
+              }
               tokenStorage.saveSession(
                 AuthSession(
                   accessToken = refreshed.accessToken,
@@ -182,9 +207,15 @@ class PizzoraApiClient(
                   user = refreshed.user,
                 ),
               )
+              lastLoadedAccessToken = refreshed.accessToken
               BearerTokens(refreshed.accessToken, refreshed.refreshToken)
             } else {
-              tokenStorage.clearSession()
+              if (coordinator != null) {
+                coordinator.onRefreshFailure(expectedUserId = latest.user.id)
+              } else {
+                tokenStorage.clearSession()
+              }
+              clearAuthTokenCache()
               null
             }
           }
@@ -201,6 +232,22 @@ class PizzoraApiClient(
         }
       }
     }
+  }
+
+  init {
+    httpClient.requestPipeline.intercept(HttpRequestPipeline.Before) {
+      val currentAccess = tokenStorage.awaitSession()?.accessToken
+      if (lastLoadedAccessToken != null && currentAccess != lastLoadedAccessToken) {
+        clearAuthTokenCache()
+        context.headers.remove(HttpHeaders.Authorization)
+      }
+      proceed()
+    }
+  }
+
+  fun clearAuthTokenCache() {
+    lastLoadedAccessToken = null
+    runCatching { httpClient.authProvider<BearerAuthProvider>()?.clearToken() }
   }
 
   private suspend fun executeRefresh(refreshToken: String): AuthTokensResponse? {
