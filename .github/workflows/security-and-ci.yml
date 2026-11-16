@@ -2,10 +2,9 @@ name: PIZZORA Security, CI & Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ '**' ]
     tags: [ 'v[0-9]*.[0-9]*.[0-9]*' ]
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -74,11 +73,11 @@ jobs:
 
       - name: Verify Rust formatting
         working-directory: rust
-        run: cargo fmt --check
+        run: cargo fmt --all -- --check
 
       - name: Run Clippy across workspace with warnings denied
         working-directory: rust
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Verify pizzora-core purity (no I/O, runtime, crypto, or FFI dependencies)
         working-directory: rust
@@ -91,15 +90,13 @@ jobs:
             exit 1
           fi
 
-      - name: Run pizzora-core and pizzora-uniffi unit, property, and parity tests
+      - name: Run every Rust workspace test
         working-directory: rust
-        run: |
-          cargo test -p pizzora-core --locked
-          cargo test -p pizzora-uniffi --locked
+        run: cargo test --workspace --all-features --locked
 
       - name: Check full 8-crate Rust workspace
         working-directory: rust
-        run: cargo check --workspace --locked
+        run: cargo check --workspace --all-features --locked
 
   test-android:
     name: Android Unit & Robolectric Tests
@@ -135,10 +132,72 @@ jobs:
       - name: Run UniFFI Host Bindgen and Android Unit & Robolectric Tests
         run: ./gradlew :app:generateUniFfiKotlinBindings :app:testDebugUnitTest --no-daemon
 
+  test-android-instrumented:
+    name: Android Instrumentation Tests (Emulator)
+    needs: security-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Rust toolchain and Android targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          targets: x86_64-unknown-linux-gnu,aarch64-linux-android,x86_64-linux-android
+
+      - name: Install cargo-ndk 4.1.2
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Install pinned Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -d "$SDK_ROOT/ndk/27.2.12479018" ]; then
+            yes | "$SDKMANAGER" "ndk;27.2.12479018"
+          fi
+          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Create temporary debug keystore
+        run: |
+          keytool -genkeypair -noprompt \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Run Android instrumentation tests on API 36 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon
+
   build-preview-apk:
     name: Build Android Debug Preview APK
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    needs: [security-audit, test-contracts-and-backend, test-android]
+    needs: [security-audit, test-contracts-and-backend, test-android, test-android-instrumented]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -260,7 +319,7 @@ jobs:
   build-release-apk:
     name: Build Signed Production Release APK
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-    needs: [security-audit, test-contracts-and-backend, test-android]
+    needs: [security-audit, test-contracts-and-backend, test-android, test-android-instrumented]
     runs-on: ubuntu-latest
     permissions:
       contents: read
