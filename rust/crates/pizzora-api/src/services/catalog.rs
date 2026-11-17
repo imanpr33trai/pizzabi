@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use pizzora_core::SizeCode;
-use pizzora_db::{
-    new_uuid_v4, record_audit_log, AuditContext, DbError, EphemeralCacheStore,
-};
+use pizzora_db::{new_uuid_v4, record_audit_log, AuditContext, DbError, EphemeralCacheStore};
 use sqlx::{PgPool, Row as _};
 use uuid::Uuid;
 
@@ -17,9 +15,7 @@ use crate::dto::{
 };
 use crate::error::{format_iso8601, ApiError};
 use crate::extractors::parse_uuid_param;
-use crate::services::catalog_cache::{
-    invalidate_catalog_cache, CATALOG_TTL_SECS, MENU_CACHE_KEY,
-};
+use crate::services::catalog_cache::{invalidate_catalog_cache, CATALOG_TTL_SECS, MENU_CACHE_KEY};
 use crate::storage::ObjectStorageClient;
 
 pub fn size_code_as_str(size: SizeCode) -> &'static str {
@@ -229,10 +225,11 @@ impl CatalogService {
         let next_category_id = match request.category_id.as_deref() {
             Some(raw) => {
                 let cid = parse_uuid_param(raw, "category_id")?;
-                let exists: Option<i32> = sqlx::query_scalar("SELECT 1 FROM categories WHERE id = $1")
-                    .bind(cid)
-                    .fetch_optional(&mut *tx)
-                    .await?;
+                let exists: Option<i32> =
+                    sqlx::query_scalar("SELECT 1 FROM categories WHERE id = $1")
+                        .bind(cid)
+                        .fetch_optional(&mut *tx)
+                        .await?;
                 if exists.is_none() {
                     return Err(ApiError::not_found(
                         "CATEGORY_NOT_FOUND",
@@ -629,7 +626,10 @@ impl CatalogService {
         .await
         .map_err(|err| {
             if DbError::is_unique_violation(&err) {
-                ApiError::conflict("CRUST_EXISTS", format!("Crust '{next_name}' already exists."))
+                ApiError::conflict(
+                    "CRUST_EXISTS",
+                    format!("Crust '{next_name}' already exists."),
+                )
             } else {
                 ApiError::from(DbError::Sqlx(err))
             }
@@ -941,17 +941,20 @@ impl CatalogService {
             let product_id: Uuid = ir.try_get("product_id")?;
             let status_raw: String = ir.try_get("status")?;
             let created_at: DateTime<Utc> = ir.try_get("created_at")?;
-            images_by_prod.entry(product_id).or_default().push(ProductImageDto {
-                id: id.to_string(),
-                product_id: product_id.to_string(),
-                object_key,
-                public_url,
-                mime_type: ir.try_get("mime_type")?,
-                size_bytes: ir.try_get("size_bytes")?,
-                status: parse_image_status(&status_raw),
-                sort_order: ir.try_get("sort_order")?,
-                created_at: format_iso8601(created_at),
-            });
+            images_by_prod
+                .entry(product_id)
+                .or_default()
+                .push(ProductImageDto {
+                    id: id.to_string(),
+                    product_id: product_id.to_string(),
+                    object_key,
+                    public_url,
+                    mime_type: ir.try_get("mime_type")?,
+                    size_bytes: ir.try_get("size_bytes")?,
+                    status: parse_image_status(&status_raw),
+                    sort_order: ir.try_get("sort_order")?,
+                    created_at: format_iso8601(created_at),
+                });
         }
 
         let mut products = Vec::with_capacity(prod_rows.len());

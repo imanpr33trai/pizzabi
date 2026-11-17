@@ -36,19 +36,15 @@ async fn pg18_concurrent_retry_receipt_idempotency_and_conflicts() {
                 correlation_id: new_uuid_v4().to_string(),
                 ip_address: None,
             };
-            svc.retry_payment(oid, cid, Some(&k), Some(&r), &audit).await
+            svc.retry_payment(oid, cid, Some(&k), Some(&r), &audit)
+                .await
         }));
     }
 
     let mut attempt_ids = std::collections::HashSet::new();
     for h in handles {
         let resp = h.await.expect("join").expect("concurrent retry succeeds");
-        attempt_ids.insert(
-            resp.payment
-                .latest_attempt
-                .expect("latest_attempt")
-                .id,
-        );
+        attempt_ids.insert(resp.payment.latest_attempt.expect("latest_attempt").id);
     }
     assert_eq!(attempt_ids.len(), 1);
 

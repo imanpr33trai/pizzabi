@@ -42,7 +42,11 @@ impl StorageConfig {
         env: &HashMap<String, String>,
         is_production: bool,
     ) -> Result<Self, ConfigError> {
-        let explicit_s3_enabled = match env.get("S3_ENABLED").map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let explicit_s3_enabled = match env
+            .get("S3_ENABLED")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        {
             Some(raw) => {
                 if raw.eq_ignore_ascii_case("true") {
                     Some(true)
@@ -119,7 +123,14 @@ impl fmt::Debug for StorageConfig {
             .field("bucket", &self.bucket)
             .field("region", &self.region)
             .field("access_key_present", &(!self.access_key.is_empty()))
-            .field("secret_key", &if self.secret_key.is_empty() { "" } else { "***" })
+            .field(
+                "secret_key",
+                &if self.secret_key.is_empty() {
+                    ""
+                } else {
+                    "***"
+                },
+            )
             .field("public_base_url", &self.public_base_url)
             .finish()
     }
@@ -147,7 +158,9 @@ fn build_validated_storage_config(
     if clean_bucket.is_empty() || contains_placeholder(&clean_bucket) {
         return Err(ConfigError::InvalidValue {
             var: "S3_BUCKET",
-            reason: "must be configured with a valid non-placeholder bucket name when S3_ENABLED=true".to_owned(),
+            reason:
+                "must be configured with a valid non-placeholder bucket name when S3_ENABLED=true"
+                    .to_owned(),
         });
     }
 
@@ -155,7 +168,8 @@ fn build_validated_storage_config(
     if clean_region.is_empty() || contains_placeholder(&clean_region) {
         return Err(ConfigError::InvalidValue {
             var: "S3_REGION",
-            reason: "must be configured with a valid non-placeholder region when S3_ENABLED=true".to_owned(),
+            reason: "must be configured with a valid non-placeholder region when S3_ENABLED=true"
+                .to_owned(),
         });
     }
 
@@ -179,13 +193,15 @@ fn build_validated_storage_config(
         if clean_access_key == "pizzora_minio_admin" {
             return Err(ConfigError::InvalidValue {
                 var: "S3_ACCESS_KEY",
-                reason: "must not use development default in production when S3_ENABLED=true".to_owned(),
+                reason: "must not use development default in production when S3_ENABLED=true"
+                    .to_owned(),
             });
         }
         if clean_secret_key.as_str() == "pizzora_minio_dev_secret" {
             return Err(ConfigError::InvalidValue {
                 var: "S3_SECRET_KEY",
-                reason: "must not use development default in production when S3_ENABLED=true".to_owned(),
+                reason: "must not use development default in production when S3_ENABLED=true"
+                    .to_owned(),
             });
         }
     }
@@ -226,7 +242,8 @@ fn parse_validated_http_uri(var: &'static str, raw: &str) -> Result<Url, ConfigE
     if raw.is_empty() || contains_placeholder(raw) {
         return Err(ConfigError::InvalidValue {
             var,
-            reason: "must be configured with a valid http/https URL when S3_ENABLED=true".to_owned(),
+            reason: "must be configured with a valid http/https URL when S3_ENABLED=true"
+                .to_owned(),
         });
     }
     let uri = Url::parse(raw).map_err(|_| ConfigError::InvalidValue {

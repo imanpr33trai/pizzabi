@@ -53,8 +53,7 @@ impl InMemoryRazorpayGateway {
     }
 
     pub fn set_fail_next_orders(&self, count: u64, transient: bool) {
-        self.fail_order_transient
-            .store(transient, Ordering::SeqCst);
+        self.fail_order_transient.store(transient, Ordering::SeqCst);
         self.fail_order_remaining.store(count, Ordering::SeqCst);
     }
 

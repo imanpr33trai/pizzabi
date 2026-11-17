@@ -136,10 +136,7 @@ pub fn build_router(state: AppState) -> Router {
             post(orders_payments::razorpay_webhook),
         )
         // Notifications
-        .route(
-            "/api/v1/notifications",
-            get(owner_ops::list_notifications),
-        )
+        .route("/api/v1/notifications", get(owner_ops::list_notifications))
         .route(
             "/api/v1/notifications/{id}/read",
             post(owner_ops::mark_notification_read),
@@ -229,7 +226,10 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/owner/products/{id}/images/{imgId}",
             delete(catalog::delete_product_image),
         )
-        .route("/api/v1/owner/variants/{id}", patch(catalog::update_variant))
+        .route(
+            "/api/v1/owner/variants/{id}",
+            patch(catalog::update_variant),
+        )
         .route(
             "/api/v1/owner/crusts",
             get(catalog::list_owner_crusts).post(catalog::create_crust),
@@ -239,7 +239,10 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/owner/toppings",
             get(catalog::list_owner_toppings).post(catalog::create_topping),
         )
-        .route("/api/v1/owner/toppings/{id}", patch(catalog::update_topping))
+        .route(
+            "/api/v1/owner/toppings/{id}",
+            patch(catalog::update_topping),
+        )
         .route(
             "/api/v1/owner/coupons",
             get(commerce::list_owner_coupons).post(commerce::create_coupon),
@@ -292,10 +295,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/owner/reports/operations",
             get(owner_ops::get_operations_report),
         )
-        .route(
-            "/api/v1/owner/audit-logs",
-            get(owner_ops::list_audit_logs),
-        )
+        .route("/api/v1/owner/audit-logs", get(owner_ops::list_audit_logs))
         .fallback(json_not_found)
         .method_not_allowed_fallback(json_method_not_allowed)
         .layer(DefaultBodyLimit::disable())

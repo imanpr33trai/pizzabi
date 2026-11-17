@@ -10,9 +10,7 @@ use sqlx::{PgConnection, Row as _};
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::dto::{
-    FailPaymentAttemptRequest, OrderPaymentStatusResponse, RetryPaymentRequest,
-};
+use crate::dto::{FailPaymentAttemptRequest, OrderPaymentStatusResponse, RetryPaymentRequest};
 use crate::error::PaymentError;
 use crate::receipts::{compute_retry_fingerprint, format_razorpay_receipt};
 use crate::repo::{
@@ -84,7 +82,10 @@ impl PaymentService {
         if order.expires_at.is_some_and(|exp| exp <= now) {
             return Err(PaymentError::Conflict {
                 code: "PAYMENT_WINDOW_EXPIRED",
-                message: format!("Payment window for order {} has expired.", order.order_number),
+                message: format!(
+                    "Payment window for order {} has expired.",
+                    order.order_number
+                ),
             });
         }
 
@@ -412,11 +413,13 @@ async fn find_target_attempt_for_failure(
         .filter(|s| !s.is_empty());
 
     let row = if let Some(aid) = parsed_attempt_id {
-        sqlx::query("SELECT id, status FROM payment_attempts WHERE id = $1 AND payment_id = $2 FOR UPDATE")
-            .bind(aid)
-            .bind(payment_id)
-            .fetch_optional(&mut *conn)
-            .await?
+        sqlx::query(
+            "SELECT id, status FROM payment_attempts WHERE id = $1 AND payment_id = $2 FOR UPDATE",
+        )
+        .bind(aid)
+        .bind(payment_id)
+        .fetch_optional(&mut *conn)
+        .await?
     } else if let Some(gw_oid) = gateway_order_id {
         sqlx::query(
             "SELECT id, status FROM payment_attempts WHERE gateway_order_id = $1 AND payment_id = $2 FOR UPDATE",

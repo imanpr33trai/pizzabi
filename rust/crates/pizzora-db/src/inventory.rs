@@ -362,12 +362,11 @@ impl InventoryService {
         request: &AdjustInventoryRequest,
         audit: &AuditContext,
     ) -> Result<InventoryItemDto, DbError> {
-        let ingredient_id = Uuid::parse_str(request.ingredient_id.trim()).map_err(|_| {
-            DbError::Validation {
+        let ingredient_id =
+            Uuid::parse_str(request.ingredient_id.trim()).map_err(|_| DbError::Validation {
                 code: "INVALID_UUID",
                 message: format!("Invalid ingredient_id UUID: {}", request.ingredient_id),
-            }
-        })?;
+            })?;
         let operation_id = request.operation_id.trim();
         if operation_id.is_empty() || operation_id.len() > 128 {
             return Err(DbError::Validation {
@@ -455,12 +454,13 @@ impl InventoryService {
             return Ok(item);
         }
 
-        let new_on_hand = on_hand_qty
-            .checked_add(request.delta_qty)
-            .ok_or_else(|| DbError::Validation {
-                code: "OVERFLOW",
-                message: "Inventory quantity overflow.".to_owned(),
-            })?;
+        let new_on_hand =
+            on_hand_qty
+                .checked_add(request.delta_qty)
+                .ok_or_else(|| DbError::Validation {
+                    code: "OVERFLOW",
+                    message: "Inventory quantity overflow.".to_owned(),
+                })?;
         if new_on_hand < 0 || new_on_hand < reserved_qty {
             return Err(DbError::Unprocessable {
                 code: "INSUFFICIENT_AVAILABLE_STOCK",
@@ -580,10 +580,12 @@ impl InventoryService {
         let locked_map = lock_inventory_rows_ordered(&mut *conn, &sorted_ids).await?;
 
         for (ingredient_id, required_qty) in sorted_reqs.values() {
-            let stock = locked_map.get(ingredient_id).ok_or_else(|| DbError::Unprocessable {
-                code: "INGREDIENT_NOT_FOUND",
-                message: format!("Ingredient {ingredient_id} is missing from inventory."),
-            })?;
+            let stock = locked_map
+                .get(ingredient_id)
+                .ok_or_else(|| DbError::Unprocessable {
+                    code: "INGREDIENT_NOT_FOUND",
+                    message: format!("Ingredient {ingredient_id} is missing from inventory."),
+                })?;
             if !stock.is_active {
                 return Err(DbError::Unprocessable {
                     code: "INGREDIENT_UNAVAILABLE",
@@ -612,7 +614,11 @@ impl InventoryService {
         } else {
             "ACTIVE"
         };
-        let op_prefix = if immediate_commit { "commit" } else { "reserve" };
+        let op_prefix = if immediate_commit {
+            "commit"
+        } else {
+            "reserve"
+        };
 
         for (ingredient_id, required_qty) in sorted_reqs.into_values() {
             let operation_id = format!("{op_prefix}:{order_id}:{ingredient_id}");

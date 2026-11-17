@@ -44,16 +44,15 @@ pub async fn ws_events(
     req: Request,
 ) -> Response {
     let (mut parts, _body) = req.into_parts();
-    let principal =
-        match authenticate_ws_parts(&parts, &state, query.ticket.as_deref()).await {
-            Ok(p) => p,
-            Err(err) => {
-                if let Some(cid) = parts.extensions.get::<crate::middleware::CorrelationId>() {
-                    return err.into_response_with_correlation(&cid.0);
-                }
-                return err.into_response();
+    let principal = match authenticate_ws_parts(&parts, &state, query.ticket.as_deref()).await {
+        Ok(p) => p,
+        Err(err) => {
+            if let Some(cid) = parts.extensions.get::<crate::middleware::CorrelationId>() {
+                return err.into_response_with_correlation(&cid.0);
             }
-        };
+            return err.into_response();
+        }
+    };
 
     let ws_upgrade = match WebSocketUpgrade::from_request_parts(&mut parts, &state).await {
         Ok(ws) => ws,
@@ -66,8 +65,8 @@ pub async fn ws_events(
         }
     };
 
-    let max_frame_bytes = usize::try_from(state.config.security.max_ws_frame_bytes)
-        .unwrap_or(65_536);
+    let max_frame_bytes =
+        usize::try_from(state.config.security.max_ws_frame_bytes).unwrap_or(65_536);
     let since_seq = query.since_seq;
 
     ws_upgrade.on_upgrade(move |socket| {

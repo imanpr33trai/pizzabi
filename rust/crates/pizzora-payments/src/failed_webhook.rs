@@ -75,7 +75,8 @@ impl PaymentService {
             return Ok(());
         }
 
-        if PaymentStateMachine::can_transition_attempt(attempt.status, PaymentAttemptStatus::Failed) {
+        if PaymentStateMachine::can_transition_attempt(attempt.status, PaymentAttemptStatus::Failed)
+        {
             let eff_code: String = failure_code
                 .map(str::trim)
                 .filter(|s| !s.is_empty())

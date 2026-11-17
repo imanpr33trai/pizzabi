@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use pizzora_core::{
-    CartValidation, FulfillmentType, PricedLineInput, PricingEngine,
-};
+use pizzora_core::{CartValidation, FulfillmentType, PricedLineInput, PricingEngine};
 use pizzora_db::{AppliedCouponSummaryDto, CouponService};
 use sqlx::{PgPool, Row as _};
 use uuid::Uuid;
@@ -62,8 +60,11 @@ impl PricingService {
         let mut delivery_fee_paise: i64 = 0;
 
         if request.fulfillment_type == FulfillmentType::Delivery {
-            let pincode_from_addr = if let Some(addr_raw) =
-                request.address_id.as_deref().map(str::trim).filter(|s| !s.is_empty())
+            let pincode_from_addr = if let Some(addr_raw) = request
+                .address_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
             {
                 let address_id = parse_uuid_param(addr_raw, "address_id")?;
                 let addr_row = sqlx::query("SELECT user_id, pincode FROM addresses WHERE id = $1")

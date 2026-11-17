@@ -9,18 +9,20 @@ use pizzora_core::{
     FulfillmentType, OrderStatus, PaymentMethod, PaymentStatus, ScheduleType, SizeCode,
     StorageKeyValidator, UserRole,
 };
-use pizzora_db::{connect_pg_pool_lazy, new_uuid_v4, InMemoryCacheStore, IngredientUnit, RedisStore};
+use pizzora_db::{
+    connect_pg_pool_lazy, new_uuid_v4, InMemoryCacheStore, IngredientUnit, RedisStore,
+};
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::dto::{
-    AvailableSlotsResponse, CartResponseDto, CategoryDto, CheckoutResponse,
-    CouponRoiDto, DailySalesBucketDto, DependencyHealth, EventsReplayResponse,
-    HealthReadinessResponse, KdsTicketDto, KdsTicketItemDto, KdsTicketsResponse,
-    OperationsReportResponse, OperationalStockMovementDto, PriceBreakdownDto,
-    PricingQuoteResponse, PublicMenuResponse, ReadinessState, RealtimeEventDto,
-    SalesReportResponse, ScheduledSlotDto, TopSellingProductDto, WsEventsFrame,
+    AvailableSlotsResponse, CartResponseDto, CategoryDto, CheckoutResponse, CouponRoiDto,
+    DailySalesBucketDto, DependencyHealth, EventsReplayResponse, HealthReadinessResponse,
+    KdsTicketDto, KdsTicketItemDto, KdsTicketsResponse, OperationalStockMovementDto,
+    OperationsReportResponse, PriceBreakdownDto, PricingQuoteResponse, PublicMenuResponse,
+    ReadinessState, RealtimeEventDto, SalesReportResponse, ScheduledSlotDto, TopSellingProductDto,
+    WsEventsFrame,
 };
 use crate::error::ApiErrorEnvelope;
 use crate::openapi::build_openapi_document;
@@ -366,7 +368,10 @@ fn openapi_document_contains_version_bearer_security_and_contract_paths() {
         "/api/v1/owner/reports/sales",
         "/ws/v1/events",
     ] {
-        assert!(paths.contains_key(expected), "Missing OpenAPI path {expected}");
+        assert!(
+            paths.contains_key(expected),
+            "Missing OpenAPI path {expected}"
+        );
     }
     assert!(paths["/api/v1/owner/settings"]
         .as_object()
@@ -385,18 +390,29 @@ async fn rate_limiter_classification_and_redis_unavailable_fallback_work() {
     let limiter = ResilientRateLimiter::new(cache.clone(), cfg.security.clone());
 
     assert!(limiter.is_enabled());
-    assert!(limiter.classify_route_group("/api/v1/health/live").is_none());
-    assert!(limiter.classify_route_group("/api/v1/health/ready").is_none());
-    assert!(limiter.classify_route_group("/api/v1/openapi.json").is_none());
+    assert!(limiter
+        .classify_route_group("/api/v1/health/live")
+        .is_none());
+    assert!(limiter
+        .classify_route_group("/api/v1/health/ready")
+        .is_none());
+    assert!(limiter
+        .classify_route_group("/api/v1/openapi.json")
+        .is_none());
     assert!(limiter.classify_route_group("/metrics").is_none());
     assert!(limiter.classify_route_group("/api/v1/auth/login").is_none());
-    assert!(limiter.classify_route_group("/api/v1/auth/register").is_none());
+    assert!(limiter
+        .classify_route_group("/api/v1/auth/register")
+        .is_none());
 
     let checkout_group = limiter
         .classify_route_group("/api/v1/checkout")
         .expect("checkout group");
     assert_eq!(checkout_group.group, "checkout_payments");
-    assert_eq!(checkout_group.max_per_minute, cfg.security.checkout_payment_per_minute);
+    assert_eq!(
+        checkout_group.max_per_minute,
+        cfg.security.checkout_payment_per_minute
+    );
 
     let pay_verify_group = limiter
         .classify_route_group("/api/v1/payments/razorpay/verify")
@@ -428,8 +444,10 @@ async fn rate_limiter_classification_and_redis_unavailable_fallback_work() {
 
 #[tokio::test]
 async fn storage_key_validation_unavailable_client_sigv4_and_magic_bytes() {
-    StorageKeyValidator::validate_object_key("products/11111111-2222-4333-8444-555555555555/img.jpg")
-        .expect("valid object key");
+    StorageKeyValidator::validate_object_key(
+        "products/11111111-2222-4333-8444-555555555555/img.jpg",
+    )
+    .expect("valid object key");
     assert!(StorageKeyValidator::validate_object_key("../etc/passwd").is_err());
     assert!(StorageKeyValidator::validate_object_key("/leading/slash.png").is_err());
 
@@ -538,7 +556,9 @@ fn realtime_hub_rooms_filtering_fanout_and_monotonic_dedup() {
         ])
     );
 
-    assert!(is_internal_worker_command("PAYMENT_GATEWAY_ORDER_REQUESTED"));
+    assert!(is_internal_worker_command(
+        "PAYMENT_GATEWAY_ORDER_REQUESTED"
+    ));
     assert!(is_internal_worker_command("REFUND_REQUESTED"));
     assert!(is_internal_worker_command("EMAIL_DELIVERY_REQUESTED"));
     assert!(!is_internal_worker_command("ORDER_PLACED"));
@@ -667,10 +687,16 @@ async fn http_middleware_health_openapi_correlation_errors_and_security_headers(
             .and_then(|v| v.to_str().ok()),
         Some("DENY")
     );
-    assert!(live_resp.headers().get("strict-transport-security").is_none());
+    assert!(live_resp
+        .headers()
+        .get("strict-transport-security")
+        .is_none());
     let live_body: HealthReadinessResponse = live_resp.json().await.expect("live JSON");
     assert_eq!(live_body.status, ReadinessState::Healthy);
-    assert_eq!(live_body.dependencies.get("server"), Some(&DependencyHealth::Up));
+    assert_eq!(
+        live_body.dependencies.get("server"),
+        Some(&DependencyHealth::Up)
+    );
     assert_eq!(live_body.service, "pizzora-api");
 
     // 2. OpenAPI spec endpoint + invalid x-request-id replaced
@@ -762,10 +788,7 @@ async fn http_middleware_health_openapi_correlation_errors_and_security_headers(
             "DATABASE_URL",
             "postgresql://prod_u:Str0ng!Pass@127.0.0.1:5432/pizzora",
         ),
-        (
-            "JWT_SECRET",
-            "prod-signing-secret-with-more-than-32-chars",
-        ),
+        ("JWT_SECRET", "prod-signing-secret-with-more-than-32-chars"),
         ("OUTBOX_EMAIL_KEY_CURRENT_ID", "k2026_01"),
         (
             "OUTBOX_EMAIL_KEYS",
@@ -844,9 +867,15 @@ async fn http_body_size_limits_chunked_overflow_and_rate_limit_429() {
                       Content-Type: application/json\r\n\
                       Content-Length: not_a_number\r\n\
                       Connection: close\r\n\r\n{}";
-    bad_cl_stream.write_all(bad_cl_req.as_bytes()).await.unwrap();
+    bad_cl_stream
+        .write_all(bad_cl_req.as_bytes())
+        .await
+        .unwrap();
     let mut bad_cl_resp = String::new();
-    bad_cl_stream.read_to_string(&mut bad_cl_resp).await.unwrap();
+    bad_cl_stream
+        .read_to_string(&mut bad_cl_resp)
+        .await
+        .unwrap();
     assert!(
         bad_cl_resp.starts_with("HTTP/1.1 400 "),
         "Expected 400 for invalid Content-Length, got: {bad_cl_resp}"

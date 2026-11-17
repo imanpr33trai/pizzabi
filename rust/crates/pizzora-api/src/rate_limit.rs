@@ -115,13 +115,22 @@ impl ResilientRateLimiter {
         Some(quota)
     }
 
-    pub async fn check(&self, key: &str, max_requests: u32, window_seconds: u64) -> RateLimitDecision {
+    pub async fn check(
+        &self,
+        key: &str,
+        max_requests: u32,
+        window_seconds: u64,
+    ) -> RateLimitDecision {
         if !self.enabled {
             return RateLimitDecision::Allowed;
         }
         let window_secs = window_seconds.max(1);
         let full_key = format!("rl:{key}");
-        let count = match self.cache.increment_within_window(&full_key, window_secs).await {
+        let count = match self
+            .cache
+            .increment_within_window(&full_key, window_secs)
+            .await
+        {
             Some(c) => c,
             None => self.increment_local_window(&full_key, window_secs),
         };
@@ -151,10 +160,7 @@ impl ResilientRateLimiter {
                 *count
             }
             _ => {
-                map.insert(
-                    key.to_owned(),
-                    (1, now + Duration::from_secs(window_secs)),
-                );
+                map.insert(key.to_owned(), (1, now + Duration::from_secs(window_secs)));
                 1
             }
         }

@@ -14,9 +14,9 @@ pub mod sequencer;
 
 pub use broadcast::{
     build_inbox_notifications, is_internal_worker_command, map_broadcast_event,
-    resolve_target_rooms, to_wire_event_type, BroadcastDispatchOutcome,
-    BroadcastOutboxDispatcher, MappedBroadcastEvent, PendingInboxNotification, RealtimeEventDto,
-    RedisRealtimePubSubMessage, PUBSUB_CHANNEL, ROOM_KDS_KITCHEN, ROOM_OWNER_DASHBOARD,
+    resolve_target_rooms, to_wire_event_type, BroadcastDispatchOutcome, BroadcastOutboxDispatcher,
+    MappedBroadcastEvent, PendingInboxNotification, RealtimeEventDto, RedisRealtimePubSubMessage,
+    PUBSUB_CHANNEL, ROOM_KDS_KITCHEN, ROOM_OWNER_DASHBOARD,
 };
 pub use dispatcher::{DispatchBatchSummary, OutboxDispatcherWorker};
 pub use email_dispatch::{
@@ -224,9 +224,13 @@ mod unit_tests {
             .unwrap_or_default()
             .to_owned();
         assert!(content_type.contains("text/plain"));
-        let metrics_body =
-            String::from_utf8(to_bytes(metrics_resp.into_body(), usize::MAX).await.unwrap().to_vec())
-                .unwrap();
+        let metrics_body = String::from_utf8(
+            to_bytes(metrics_resp.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
         assert!(metrics_body.contains("pizzora_worker_uptime_seconds"));
         assert!(metrics_body.contains("pizzora_worker_dispatched_total{lane=\"email\"} 2"));
 
@@ -246,9 +250,12 @@ mod unit_tests {
             .await
             .unwrap();
         assert_eq!(unhealthy_resp.status(), StatusCode::SERVICE_UNAVAILABLE);
-        let unhealthy_body: WorkerHealthResponse =
-            serde_json::from_slice(&to_bytes(unhealthy_resp.into_body(), usize::MAX).await.unwrap())
-                .unwrap();
+        let unhealthy_body: WorkerHealthResponse = serde_json::from_slice(
+            &to_bytes(unhealthy_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(unhealthy_body.status, WorkerReadinessState::Unhealthy);
         assert_eq!(
             unhealthy_body.dependencies.get(LOOP_DISPATCHER),

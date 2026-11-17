@@ -86,13 +86,15 @@ impl LettreSmtpEmailDeliveryProvider {
     }
 
     pub fn build_message(&self, email: &OutboundEmail) -> Result<Message, EmailDeliveryError> {
-        let from_mailbox: Mailbox = self.config.from_address.parse().map_err(|_| {
-            EmailDeliveryError {
-                is_transient: false,
-                code: "SMTP_INVALID_FROM_ADDRESS".to_owned(),
-                sanitized_message: "Configured SMTP sender address is invalid.".to_owned(),
-            }
-        })?;
+        let from_mailbox: Mailbox =
+            self.config
+                .from_address
+                .parse()
+                .map_err(|_| EmailDeliveryError {
+                    is_transient: false,
+                    code: "SMTP_INVALID_FROM_ADDRESS".to_owned(),
+                    sanitized_message: "Configured SMTP sender address is invalid.".to_owned(),
+                })?;
         let to_mailbox: Mailbox = email.to_email.parse().map_err(|_| EmailDeliveryError {
             is_transient: false,
             code: "SMTP_INVALID_RECIPIENT".to_owned(),
@@ -118,8 +120,7 @@ impl LettreSmtpEmailDeliveryProvider {
             ),
         };
 
-        let message_id =
-            format_outbox_message_id(email.outbox_event_id, self.config.from_domain());
+        let message_id = format_outbox_message_id(email.outbox_event_id, self.config.from_domain());
 
         Message::builder()
             .from(from_mailbox)
@@ -151,10 +152,8 @@ impl LettreSmtpEmailDeliveryProvider {
         if let (Some(username), Some(password)) =
             (self.config.username.as_deref(), self.config.password())
         {
-            builder = builder.credentials(Credentials::new(
-                username.to_owned(),
-                password.to_owned(),
-            ));
+            builder =
+                builder.credentials(Credentials::new(username.to_owned(), password.to_owned()));
         }
 
         Ok(builder.build())
@@ -246,24 +245,22 @@ impl InMemoryEmailDeliveryProvider {
     }
 
     pub fn inject_failure_before_send(&self, is_transient: bool, code: &str, msg: &str) {
-        *self.next_fault.lock().expect("fault mutex") = Some(InjectedEmailFault::FailBeforeSend(
-            EmailDeliveryError {
+        *self.next_fault.lock().expect("fault mutex") =
+            Some(InjectedEmailFault::FailBeforeSend(EmailDeliveryError {
                 is_transient,
                 code: code.to_owned(),
                 sanitized_message: msg.to_owned(),
-            },
-        ));
+            }));
     }
 
     /// Simulates a crash/DB failure immediately AFTER SMTP 250 OK acceptance.
     pub fn inject_failure_after_accept(&self, is_transient: bool, code: &str, msg: &str) {
-        *self.next_fault.lock().expect("fault mutex") = Some(InjectedEmailFault::FailAfterRecord(
-            EmailDeliveryError {
+        *self.next_fault.lock().expect("fault mutex") =
+            Some(InjectedEmailFault::FailAfterRecord(EmailDeliveryError {
                 is_transient,
                 code: code.to_owned(),
                 sanitized_message: msg.to_owned(),
-            },
-        ));
+            }));
     }
 
     pub fn sent_emails(&self) -> Vec<SentEmailRecord> {

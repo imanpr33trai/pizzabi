@@ -5,7 +5,8 @@ use sqlx::{PgPool, Row as _};
 use uuid::Uuid;
 
 use crate::dto::{
-    AvailableSlotsResponse, CreateScheduledSlotRequest, ScheduledSlotDto, UpdateScheduledSlotRequest,
+    AvailableSlotsResponse, CreateScheduledSlotRequest, ScheduledSlotDto,
+    UpdateScheduledSlotRequest,
 };
 use crate::error::{format_iso8601, ApiError};
 
@@ -209,7 +210,10 @@ impl ScheduledSlotService {
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| {
-            ApiError::not_found("SLOT_NOT_FOUND", format!("Scheduled slot {slot_id} not found."))
+            ApiError::not_found(
+                "SLOT_NOT_FOUND",
+                format!("Scheduled slot {slot_id} not found."),
+            )
         })?;
 
         let slot_date: NaiveDate = existing_row.try_get("slot_date")?;
@@ -239,18 +243,17 @@ impl ScheduledSlotService {
             None => existing_cap,
         };
 
-        let next_cutoff = if request.cutoff_at.is_some()
-            || request.cutoff_minutes_before_start.is_some()
-        {
-            resolve_cutoff_at(
-                slot_date,
-                start_time,
-                request.cutoff_at.as_deref(),
-                request.cutoff_minutes_before_start,
-            )?
-        } else {
-            existing_cutoff
-        };
+        let next_cutoff =
+            if request.cutoff_at.is_some() || request.cutoff_minutes_before_start.is_some() {
+                resolve_cutoff_at(
+                    slot_date,
+                    start_time,
+                    request.cutoff_at.as_deref(),
+                    request.cutoff_minutes_before_start,
+                )?
+            } else {
+                existing_cutoff
+            };
         let next_active = request.is_active.unwrap_or(existing_active);
 
         let updated_row = sqlx::query(
@@ -303,7 +306,10 @@ impl ScheduledSlotService {
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| {
-            ApiError::not_found("SLOT_NOT_FOUND", format!("Scheduled slot {slot_id} not found."))
+            ApiError::not_found(
+                "SLOT_NOT_FOUND",
+                format!("Scheduled slot {slot_id} not found."),
+            )
         })?;
         let existing_dto = row_to_slot_dto(&existing_row, Utc::now())?;
 
@@ -357,10 +363,7 @@ fn parse_optional_date(raw: Option<&str>) -> Result<NaiveDate, ApiError> {
 
 fn parse_date(raw: &str) -> Result<NaiveDate, ApiError> {
     NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").map_err(|_| {
-        ApiError::validation(
-            "INVALID_DATE",
-            format!("Invalid YYYY-MM-DD date '{raw}'."),
-        )
+        ApiError::validation("INVALID_DATE", format!("Invalid YYYY-MM-DD date '{raw}'."))
     })
 }
 

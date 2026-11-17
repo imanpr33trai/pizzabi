@@ -100,7 +100,10 @@ async fn assert_only_heartbeats(ws: &mut TestWsClient, window: Duration) {
     })
     .await;
     assert!(res.is_err(), "heartbeat assertion loop exited unexpectedly");
-    assert!(hb_count >= 1, "expected at least 1 periodic heartbeat frame");
+    assert!(
+        hb_count >= 1,
+        "expected at least 1 periodic heartbeat frame"
+    );
 }
 
 async fn wait_for_session_count(srv: &TestServer, expected: usize) {
@@ -139,10 +142,7 @@ async fn pg18_ws_ticket_bearer_auth_single_use_and_revocation() {
     let bad_ticket = TestWsClient::connect(srv.addr, "/ws/v1/events?ticket=bogus-ticket", None)
         .await
         .expect_err("bogus ticket must fail");
-    assert!(
-        bad_ticket.starts_with("HTTP/1.1 401 "),
-        "got: {bad_ticket}"
-    );
+    assert!(bad_ticket.starts_with("HTTP/1.1 401 "), "got: {bad_ticket}");
 
     // 2. Single-use ws-ticket connect succeeds, second use rejected with 401
     let ticket_resp: WsTicketResponse = srv
@@ -240,7 +240,8 @@ async fn pg18_events_replay_and_ws_resume_with_room_isolation() {
     let (_, kds_tokens) = srv
         .create_and_login_kitchen_staff(&owner_tokens.access_token, tag)
         .await;
-    let (cust_a_id, _, cust_a_tokens) = srv.register_and_verify_customer(&format!("ca-{tag}")).await;
+    let (cust_a_id, _, cust_a_tokens) =
+        srv.register_and_verify_customer(&format!("ca-{tag}")).await;
     let (_, _, cust_b_tokens) = srv.register_and_verify_customer(&format!("cb-{tag}")).await;
     let seeded =
         seed_full_storefront_via_owner_api(&srv, &owner_tokens.access_token, tag, &pincode).await;
@@ -382,11 +383,9 @@ async fn pg18_events_replay_and_ws_resume_with_room_isolation() {
         .events
         .iter()
         .any(|e| e.aggregate_id == cod_order_id && e.event_type == "order.status_changed"));
-    assert!(replay_a
-        .events
-        .iter()
-        .any(|e| e.event_id == notif_event_id.to_string()
-            && e.event_type == "notification.created"));
+    assert!(replay_a.events.iter().any(
+        |e| e.event_id == notif_event_id.to_string() && e.event_type == "notification.created"
+    ));
     assert!(!replay_a.events.iter().any(|e| {
         e.event_type.contains("payment_gateway_order_requested")
             || e.event_type.contains("email_delivery_requested")
@@ -499,7 +498,8 @@ async fn pg18_ws_live_hub_fanout_heartbeat_ping_pong_and_oversized_frame() {
     let (_, kds_tokens) = srv
         .create_and_login_kitchen_staff(&owner_tokens.access_token, tag)
         .await;
-    let (cust_a_id, _, cust_a_tokens) = srv.register_and_verify_customer(&format!("la-{tag}")).await;
+    let (cust_a_id, _, cust_a_tokens) =
+        srv.register_and_verify_customer(&format!("la-{tag}")).await;
     let (_, _, cust_b_tokens) = srv.register_and_verify_customer(&format!("lb-{tag}")).await;
 
     let baseline_sessions = srv.state.realtime_hub.connected_session_count();
@@ -523,7 +523,8 @@ async fn pg18_ws_live_hub_fanout_heartbeat_ping_pong_and_oversized_frame() {
 
     // Consume initial HEARTBEAT frames and wait for server registration
     for ws in [&mut ws_a, &mut ws_b, &mut ws_kds, &mut ws_owner] {
-        let init: WsEventsFrame = serde_json::from_str(&ws.next_text_frame().await.unwrap()).unwrap();
+        let init: WsEventsFrame =
+            serde_json::from_str(&ws.next_text_frame().await.unwrap()).unwrap();
         assert_eq!(init.frame_type, "HEARTBEAT");
     }
     wait_for_session_count(&srv, baseline_sessions + 4).await;

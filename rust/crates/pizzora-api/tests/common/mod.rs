@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use pizzora_api::dto::{
     CategoryDto, CreateCategoryRequest, CreateCrustRequest, CreateDeliveryZoneRequest,
-    CreateScheduledSlotRequest, CreateToppingRequest, CreateVariantRequest, CrustOptionDto,
-    DeliveryZoneDto, ProductDto, PutRecipeRequest, RecipeIngredientLineRequest,
-    RecipeTargetType, ScheduledSlotDto, ToppingDto, CreateProductRequest,
+    CreateProductRequest, CreateScheduledSlotRequest, CreateToppingRequest, CreateVariantRequest,
+    CrustOptionDto, DeliveryZoneDto, ProductDto, PutRecipeRequest, RecipeIngredientLineRequest,
+    RecipeTargetType, ScheduledSlotDto, ToppingDto,
 };
 use pizzora_api::error::ApiError;
 use pizzora_api::router::build_router;
@@ -27,9 +27,7 @@ use pizzora_db::{
     connect_pg_pool, new_uuid_v4, run_locked_handoff, EphemeralCacheStore, InMemoryCacheStore,
     InventoryItemDto, OutboxRepository, RedisStore, EVENT_EMAIL_DELIVERY_REQUESTED,
 };
-use pizzora_payments::{
-    InMemoryRazorpayGateway, RazorpayGateway, RazorpayReconciliationService,
-};
+use pizzora_payments::{InMemoryRazorpayGateway, RazorpayGateway, RazorpayReconciliationService};
 use sqlx::{PgPool, Row as _};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -46,10 +44,10 @@ impl MockObjectStorageClient {
     }
 
     pub fn put_mock_object(&self, key: &str, bytes: Vec<u8>, content_type: Option<&str>) {
-        self.objects.lock().unwrap().insert(
-            key.to_owned(),
-            (bytes, content_type.map(ToOwned::to_owned)),
-        );
+        self.objects
+            .lock()
+            .unwrap()
+            .insert(key.to_owned(), (bytes, content_type.map(ToOwned::to_owned)));
     }
 
     pub fn get_mock_object(&self, key: &str) -> Option<(Vec<u8>, Option<String>)> {
@@ -171,7 +169,9 @@ impl TestServer {
         ws_heartbeat_interval: Option<Duration>,
     ) -> Self {
         let mut env_map: HashMap<String, String> = std::env::vars().collect();
-        env_map.entry("RATE_LIMIT_ENABLED".to_owned()).or_insert_with(|| "false".to_owned());
+        env_map
+            .entry("RATE_LIMIT_ENABLED".to_owned())
+            .or_insert_with(|| "false".to_owned());
         env_map
             .entry("RAZORPAY_KEY_ID".to_owned())
             .or_insert_with(|| "rzp_test_pizzora_api".to_owned());
@@ -226,7 +226,8 @@ impl TestServer {
             .await
             .expect("bind TestServer ephemeral port");
         let addr = listener.local_addr().expect("local_addr");
-        let router = build_router(state.clone()).into_make_service_with_connect_info::<SocketAddr>();
+        let router =
+            build_router(state.clone()).into_make_service_with_connect_info::<SocketAddr>();
         tokio::spawn(async move {
             let _ = axum::serve(listener, router).await;
         });
@@ -808,7 +809,9 @@ impl TestWsClient {
         }
 
         match opcode {
-            0x01 => Ok(WsFrame::Text(String::from_utf8_lossy(&payload).into_owned())),
+            0x01 => Ok(WsFrame::Text(
+                String::from_utf8_lossy(&payload).into_owned(),
+            )),
             0x02 => Ok(WsFrame::Binary(payload)),
             0x08 => {
                 let code = if payload.len() >= 2 {

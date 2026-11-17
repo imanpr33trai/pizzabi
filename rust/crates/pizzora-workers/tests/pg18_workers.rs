@@ -16,12 +16,9 @@ use pizzora_db::{
     connect_pg_pool, new_uuid_v4, run_locked_handoff, InMemoryCacheStore, OutboxRepository,
     EVENT_EMAIL_DELIVERY_REQUESTED, EVENT_PAYMENT_GATEWAY_ORDER_REQUESTED,
 };
-use pizzora_payments::{
-    format_razorpay_receipt, GatewayPaymentResult, InMemoryRazorpayGateway,
-};
+use pizzora_payments::{format_razorpay_receipt, GatewayPaymentResult, InMemoryRazorpayGateway};
 use pizzora_workers::{
-    EventSequencerWorker, WorkerHealthResponse, WorkerReadinessState, WorkerRuntime,
-    LOOP_SEQUENCER,
+    EventSequencerWorker, WorkerHealthResponse, WorkerReadinessState, WorkerRuntime, LOOP_SEQUENCER,
 };
 use sqlx::{PgPool, Row as _};
 use tower::ServiceExt as _;
@@ -203,7 +200,11 @@ async fn pg18_email_post_smtp_crash_window_recovers_and_keeps_single_use_tokens(
     );
 
     // 1st attempt: delivers email via mock SMTP, injects post-250 failure -> row scheduled for retry
-    runtime.dispatcher.run_once().await.expect("dispatch pass 1");
+    runtime
+        .dispatcher
+        .run_once()
+        .await
+        .expect("dispatch pass 1");
     let first_batch = email_provider.sent_emails();
     let matching_first: Vec<_> = first_batch
         .iter()
@@ -233,7 +234,11 @@ async fn pg18_email_post_smtp_crash_window_recovers_and_keeps_single_use_tokens(
     .unwrap();
 
     // 2nd attempt recovers lease, re-sends idempotently with same outbox_event_id & Message-ID, marks DISPATCHED & scrubs envelope
-    runtime.dispatcher.run_once().await.expect("dispatch pass 2");
+    runtime
+        .dispatcher
+        .run_once()
+        .await
+        .expect("dispatch pass 2");
     let second_batch = email_provider.sent_emails();
     let matching_second: Vec<_> = second_batch
         .iter()
@@ -273,7 +278,8 @@ async fn pg18_email_post_smtp_crash_window_recovers_and_keeps_single_use_tokens(
 
 #[tokio::test]
 #[ignore = "Requires live PostgreSQL 18.6 at DATABASE_URL"]
-async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and_zero_log_leakage() {
+async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and_zero_log_leakage()
+{
     let (mut cfg, pool) = setup_pool_and_config().await;
     let captured_logs = Arc::new(Mutex::new(Vec::new()));
     let subscriber = Registry::default().with(CapturingLayer(captured_logs.clone()));
@@ -380,11 +386,13 @@ async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and
     tx.commit().await.unwrap();
 
     // Pause expired-envelope test row from immediate dispatch so ExpirySweepWorker scrubs it in PENDING state
-    sqlx::query("UPDATE outbox_events SET next_attempt_at = NOW() + INTERVAL '1 hour' WHERE id = $1")
-        .bind(exp_event_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "UPDATE outbox_events SET next_attempt_at = NOW() + INTERVAL '1 hour' WHERE id = $1",
+    )
+    .bind(exp_event_id)
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let email_provider = Arc::new(InMemoryEmailDeliveryProvider::new("pizzora.local"));
     let runtime = WorkerRuntime::from_components(
@@ -396,7 +404,11 @@ async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and
         None,
     );
 
-    runtime.dispatcher.run_once().await.expect("dispatch rot + tamper");
+    runtime
+        .dispatcher
+        .run_once()
+        .await
+        .expect("dispatch rot + tamper");
 
     // Verify rotated key delivered cleanly & scrubbed
     assert!(email_provider
@@ -419,14 +431,23 @@ async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(tamper_row.get::<String, _>("dispatch_status"), "DEAD_LETTER");
+    assert_eq!(
+        tamper_row.get::<String, _>("dispatch_status"),
+        "DEAD_LETTER"
+    );
     assert!(tamper_row
         .get::<Option<chrono::DateTime<Utc>>, _>("published_at")
         .is_none());
     let tamper_payload_db: serde_json::Value = tamper_row.try_get("payload_json").unwrap();
-    assert_eq!(tamper_payload_db["sealed_envelope"], serde_json::Value::Null);
+    assert_eq!(
+        tamper_payload_db["sealed_envelope"],
+        serde_json::Value::Null
+    );
     assert_eq!(tamper_payload_db["redacted"], serde_json::Value::Bool(true));
-    let tamper_err: String = tamper_row.try_get::<Option<String>, _>("last_error").unwrap().unwrap_or_default();
+    let tamper_err: String = tamper_row
+        .try_get::<Option<String>, _>("last_error")
+        .unwrap()
+        .unwrap_or_default();
     assert!(!tamper_err.contains(secret_tok_tamper));
     assert!(!tamper_err.contains(&email));
 
@@ -473,7 +494,11 @@ async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and
         "SMTP_550",
         &format!("Mailbox unavailable for {email} token={secret_tok_perm}"),
     );
-    runtime.dispatcher.run_once().await.expect("dispatch perm fail");
+    runtime
+        .dispatcher
+        .run_once()
+        .await
+        .expect("dispatch perm fail");
     let perm_row = sqlx::query(
         "SELECT dispatch_status, last_error, payload_json FROM outbox_events WHERE id = $1",
     )
@@ -482,8 +507,13 @@ async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and
     .await
     .unwrap();
     assert_eq!(perm_row.get::<String, _>("dispatch_status"), "DEAD_LETTER");
-    assert_eq!(perm_row.get::<serde_json::Value, _>("payload_json")["sealed_envelope"], serde_json::Value::Null);
-    let perm_err = perm_row.get::<Option<String>, _>("last_error").unwrap_or_default();
+    assert_eq!(
+        perm_row.get::<serde_json::Value, _>("payload_json")["sealed_envelope"],
+        serde_json::Value::Null
+    );
+    let perm_err = perm_row
+        .get::<Option<String>, _>("last_error")
+        .unwrap_or_default();
     assert!(!perm_err.contains(secret_tok_perm));
     assert!(!perm_err.contains(&email));
 
@@ -507,17 +537,22 @@ async fn pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and
     assert_eq!(exp_payload_db["sealed_envelope"], serde_json::Value::Null);
     assert_eq!(exp_payload_db["redacted"], serde_json::Value::Bool(true));
 
-    let purged_exists: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM outbox_events WHERE id = $1")
-            .bind(rot_event_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let purged_exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM outbox_events WHERE id = $1")
+        .bind(rot_event_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(purged_exists, 0);
 
     // 6. Assert zero plaintext tokens or emails ever reached tracing logs
     let all_logs = captured_logs.lock().unwrap().join("\n");
-    for secret in [secret_tok_rot, secret_tok_tamper, secret_tok_perm, secret_tok_exp, &email] {
+    for secret in [
+        secret_tok_rot,
+        secret_tok_tamper,
+        secret_tok_perm,
+        secret_tok_exp,
+        &email,
+    ] {
         assert!(
             !all_logs.contains(secret),
             "Captured tracing logs leaked sensitive value!"
@@ -838,7 +873,10 @@ async fn pg18_expiry_sweep_reconciler_broadcast_health_metrics_and_graceful_shut
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(reconciled_att_status, PaymentAttemptStatus::Captured.as_str());
+    assert_eq!(
+        reconciled_att_status,
+        PaymentAttemptStatus::Captured.as_str()
+    );
 
     // Spawn background loops -> verify HTTP /health/worker + /metrics -> graceful shutdown_and_drain
     let handles = runtime.spawn_background_loops();
@@ -872,9 +910,13 @@ async fn pg18_expiry_sweep_reconciler_broadcast_health_metrics_and_graceful_shut
         .await
         .unwrap();
     assert_eq!(metrics_resp.status(), StatusCode::OK);
-    let metrics_text =
-        String::from_utf8(to_bytes(metrics_resp.into_body(), usize::MAX).await.unwrap().to_vec())
-            .unwrap();
+    let metrics_text = String::from_utf8(
+        to_bytes(metrics_resp.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
     assert!(metrics_text.contains("pizzora_worker_uptime_seconds"));
     assert!(metrics_text.contains("pizzora_stream_last_seq"));
 
@@ -883,5 +925,8 @@ async fn pg18_expiry_sweep_reconciler_broadcast_health_metrics_and_graceful_shut
     assert_eq!(loop_snapshot.get(LOOP_SEQUENCER), Some(&false));
 
     // Keep RefundStatus / HashMap referenced cleanly
-    let _: (&str, usize) = (RefundStatus::Failed.as_str(), HashMap::<String, String>::new().len());
+    let _: (&str, usize) = (
+        RefundStatus::Failed.as_str(),
+        HashMap::<String, String>::new().len(),
+    );
 }

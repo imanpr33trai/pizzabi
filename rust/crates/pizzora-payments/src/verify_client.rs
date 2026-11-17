@@ -22,8 +22,9 @@ impl PaymentService {
         if gateway_order_id.is_empty() || gateway_payment_id.is_empty() || signature.is_empty() {
             return Err(PaymentError::Validation {
                 code: "INVALID_VERIFY_PAYLOAD",
-                message: "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required."
-                    .to_owned(),
+                message:
+                    "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required."
+                        .to_owned(),
             });
         }
 

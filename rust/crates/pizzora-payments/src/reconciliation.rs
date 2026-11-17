@@ -128,10 +128,7 @@ impl RazorpayReconciliationService {
                     .gateway_refund_id
                     .as_deref()
                     .is_some_and(|gid| gid == remote.gateway_refund_id)
-                    || remote
-                        .notes
-                        .get("idempotency_key")
-                        .map(String::as_str)
+                    || remote.notes.get("idempotency_key").map(String::as_str)
                         == Some(candidate.idempotency_key.as_str())
             });
 

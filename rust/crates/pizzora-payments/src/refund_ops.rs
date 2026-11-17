@@ -1,7 +1,6 @@
 use pizzora_core::{PaymentMethod, PaymentStateMachine, PaymentStatus, RefundStatus};
 use pizzora_db::{
-    new_uuid_v4, record_audit_log, AuditContext, DbError, OutboxRepository,
-    EVENT_REFUND_REQUESTED,
+    new_uuid_v4, record_audit_log, AuditContext, DbError, OutboxRepository, EVENT_REFUND_REQUESTED,
 };
 use sqlx::Row as _;
 use uuid::Uuid;
@@ -9,10 +8,9 @@ use uuid::Uuid;
 use crate::dto::{OwnerRefundRequest, RefundDto};
 use crate::error::PaymentError;
 use crate::repo::{
-    find_captured_attempt_id, insert_payment_event_idempotent,
-    insert_refund_and_outbox_if_absent, lock_order, lock_payment_by_order, lock_refund_by_id,
-    mark_refund_processed_and_update_payment, notify_owners, resolve_gateway_payment_id,
-    row_to_refund_dto,
+    find_captured_attempt_id, insert_payment_event_idempotent, insert_refund_and_outbox_if_absent,
+    lock_order, lock_payment_by_order, lock_refund_by_id, mark_refund_processed_and_update_payment,
+    notify_owners, resolve_gateway_payment_id, row_to_refund_dto,
 };
 use crate::service::PaymentService;
 
@@ -68,12 +66,12 @@ impl PaymentService {
 
         let order = lock_order(&mut tx, order_uuid).await?;
         let payment = lock_payment_by_order(&mut tx, order.id).await?;
-        let refund = lock_refund_by_id(&mut tx, refund_uuid).await?.ok_or_else(|| {
-            PaymentError::NotFound {
+        let refund = lock_refund_by_id(&mut tx, refund_uuid)
+            .await?
+            .ok_or_else(|| PaymentError::NotFound {
                 code: "REFUND_NOT_FOUND",
                 message: format!("Refund {refund_uuid} not found."),
-            }
-        })?;
+            })?;
 
         let attempt_uuid = refund
             .payment_attempt_id
@@ -183,7 +181,10 @@ impl PaymentService {
         if payment.captured_paise <= 0 {
             return Err(PaymentError::Conflict {
                 code: "NO_CAPTURED_FUNDS",
-                message: format!("Order {} has no captured funds to refund.", order.order_number),
+                message: format!(
+                    "Order {} has no captured funds to refund.",
+                    order.order_number
+                ),
             });
         }
 
@@ -324,7 +325,10 @@ impl PaymentService {
         if remaining_refundable <= 0 {
             return Err(PaymentError::Conflict {
                 code: "ALREADY_REFUNDED",
-                message: format!("No remaining refundable balance on order {}.", order.order_number),
+                message: format!(
+                    "No remaining refundable balance on order {}.",
+                    order.order_number
+                ),
             });
         }
 
@@ -372,10 +376,12 @@ impl PaymentService {
                 PaymentStatus::RefundPending,
             )
         {
-            sqlx::query("UPDATE payments SET status = 'REFUND_PENDING', updated_at = NOW() WHERE id = $1")
-                .bind(payment.id)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "UPDATE payments SET status = 'REFUND_PENDING', updated_at = NOW() WHERE id = $1",
+            )
+            .bind(payment.id)
+            .execute(&mut *tx)
+            .await?;
         }
 
         let audit_after = serde_json::json!({
@@ -393,12 +399,12 @@ impl PaymentService {
         )
         .await?;
 
-        let refund_dto = lock_refund_by_id(&mut tx, inserted_id).await?.ok_or_else(|| {
-            PaymentError::NotFound {
+        let refund_dto = lock_refund_by_id(&mut tx, inserted_id)
+            .await?
+            .ok_or_else(|| PaymentError::NotFound {
                 code: "REFUND_NOT_FOUND",
                 message: format!("Refund {inserted_id} was not found after insert."),
-            }
-        })?;
+            })?;
         tx.commit().await?;
         Ok(refund_dto)
     }

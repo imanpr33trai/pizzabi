@@ -73,10 +73,11 @@ impl WebhookService {
             });
         }
 
-        let root: JsonValue = serde_json::from_slice(raw_body).map_err(|_| PaymentError::Validation {
-            code: "MALFORMED_WEBHOOK_JSON",
-            message: "Invalid JSON payload in Razorpay webhook.".to_owned(),
-        })?;
+        let root: JsonValue =
+            serde_json::from_slice(raw_body).map_err(|_| PaymentError::Validation {
+                code: "MALFORMED_WEBHOOK_JSON",
+                message: "Invalid JSON payload in Razorpay webhook.".to_owned(),
+            })?;
 
         let event_type = root
             .get("event")
@@ -106,20 +107,21 @@ impl WebhookService {
                             .to_owned(),
                     })?;
 
-                let gateway_payment_id = entity
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| PaymentError::Validation {
-                        code: "MISSING_GATEWAY_PAYMENT_ID",
-                        message: "payment.captured missing payment entity id.".to_owned(),
+                let gateway_payment_id =
+                    entity.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
+                        PaymentError::Validation {
+                            code: "MISSING_GATEWAY_PAYMENT_ID",
+                            message: "payment.captured missing payment entity id.".to_owned(),
+                        }
                     })?;
-                let gateway_order_id = entity
-                    .get("order_id")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| PaymentError::Validation {
-                        code: "MISSING_GATEWAY_ORDER_ID",
-                        message: "payment.captured missing payment entity order_id.".to_owned(),
-                    })?;
+                let gateway_order_id =
+                    entity
+                        .get("order_id")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| PaymentError::Validation {
+                            code: "MISSING_GATEWAY_ORDER_ID",
+                            message: "payment.captured missing payment entity order_id.".to_owned(),
+                        })?;
                 let amount_paise = entity.get("amount").and_then(|v| v.as_i64());
                 let event_id = resolve_gateway_event_id(
                     event_id_header,
@@ -193,12 +195,12 @@ impl WebhookService {
                         message: format!("{event_type} webhook missing payload.refund.entity."),
                     })?;
 
-                let gateway_refund_id = entity
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| PaymentError::Validation {
-                        code: "MISSING_GATEWAY_REFUND_ID",
-                        message: format!("{event_type} missing refund entity id."),
+                let gateway_refund_id =
+                    entity.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
+                        PaymentError::Validation {
+                            code: "MISSING_GATEWAY_REFUND_ID",
+                            message: format!("{event_type} missing refund entity id."),
+                        }
                     })?;
 
                 let idemp_note = entity
@@ -237,14 +239,7 @@ impl WebhookService {
                 );
                 let mut tx = self.payment_service.pool().begin().await?;
                 insert_payment_event_idempotent(
-                    &mut tx,
-                    None,
-                    None,
-                    "WEBHOOK",
-                    &event_id,
-                    event_type,
-                    &root,
-                    true,
+                    &mut tx, None, None, "WEBHOOK", &event_id, event_type, &root, true,
                 )
                 .await?;
                 tx.commit().await?;

@@ -1,16 +1,14 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use pizzora_db::{
-    new_uuid_v4, record_audit_log, AuditContext, DbError, EphemeralCacheStore,
-};
+use pizzora_db::{new_uuid_v4, record_audit_log, AuditContext, DbError, EphemeralCacheStore};
 use sqlx::{PgPool, Row as _};
 use uuid::Uuid;
 
 use crate::dto::{CategoryDto, CreateCategoryRequest, UpdateCategoryRequest};
 use crate::error::{format_iso8601, ApiError};
 use crate::services::catalog_cache::{
-    invalidate_catalog_cache, CATEGORIES_CACHE_KEY, CATALOG_TTL_SECS,
+    invalidate_catalog_cache, CATALOG_TTL_SECS, CATEGORIES_CACHE_KEY,
 };
 
 #[derive(Clone)]

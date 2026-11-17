@@ -299,8 +299,7 @@ impl AuthService {
         .await?;
 
         if let Some(user_row) = row {
-            let email_verified_at: Option<DateTime<Utc>> =
-                user_row.try_get("email_verified_at")?;
+            let email_verified_at: Option<DateTime<Utc>> = user_row.try_get("email_verified_at")?;
             let is_active: bool = user_row.try_get("is_active")?;
             if email_verified_at.is_none() && is_active {
                 let user_id: Uuid = user_row.try_get("id")?;
@@ -624,9 +623,9 @@ impl AuthService {
                         .execute(&mut *tx)
                         .await?;
 
-                    let access_token =
-                        self.jwt_provider
-                            .create_access_token_at(user_id, session_id, role, now)?;
+                    let access_token = self
+                        .jwt_provider
+                        .create_access_token_at(user_id, session_id, role, now)?;
                     RefreshOutcome::Success(AuthTokensResponse {
                         access_token,
                         refresh_token: next_raw_refresh,
@@ -692,12 +691,11 @@ impl AuthService {
         let email = normalize_email(&request.email);
         let mut tx = self.pool.begin().await?;
 
-        let user_row = sqlx::query(
-            "SELECT id, full_name FROM users WHERE email = $1 AND is_active = TRUE",
-        )
-        .bind(&email)
-        .fetch_optional(&mut *tx)
-        .await?;
+        let user_row =
+            sqlx::query("SELECT id, full_name FROM users WHERE email = $1 AND is_active = TRUE")
+                .bind(&email)
+                .fetch_optional(&mut *tx)
+                .await?;
 
         if let Some(row) = user_row {
             let user_id: Uuid = row.try_get("id")?;

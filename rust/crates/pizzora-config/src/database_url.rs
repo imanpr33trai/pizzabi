@@ -42,7 +42,9 @@ impl NormalizedDatabaseUrl {
             });
         }
 
-        let (original_scheme, url_to_parse) = if let Some(rest) = strip_prefix_ignore_ascii_case(trimmed, "jdbc:") {
+        let (original_scheme, url_to_parse) = if let Some(rest) =
+            strip_prefix_ignore_ascii_case(trimmed, "jdbc:")
+        {
             let lower = rest.to_ascii_lowercase();
             if !lower.starts_with("postgresql://") && !lower.starts_with("postgres://") {
                 return Err(ConfigError::InvalidValue {
@@ -155,7 +157,11 @@ impl NormalizedDatabaseUrl {
 
     pub fn jdbc_url_without_credentials(&self) -> String {
         let host_part = format_host_for_url(&self.host);
-        let mut out = format!("jdbc:postgresql://{host_part}:{}/{}", self.port, encode_uri_component(&self.database));
+        let mut out = format!(
+            "jdbc:postgresql://{host_part}:{}/{}",
+            self.port,
+            encode_uri_component(&self.database)
+        );
         append_query_string(&mut out, &self.query_params);
         out
     }
@@ -167,7 +173,10 @@ impl NormalizedDatabaseUrl {
         let user_enc = encode_uri_component(&self.username);
         let pass_enc = encode_uri_component(&self.password);
         let db_enc = encode_uri_component(&self.database);
-        let mut out = format!("postgresql://{user_enc}:{pass_enc}@{host_part}:{}/{}", self.port, db_enc);
+        let mut out = format!(
+            "postgresql://{user_enc}:{pass_enc}@{host_part}:{}/{}",
+            self.port, db_enc
+        );
         append_query_string(&mut out, &self.query_params);
         Zeroizing::new(out)
     }
@@ -177,7 +186,10 @@ impl NormalizedDatabaseUrl {
         let host_part = format_host_for_url(&self.host);
         let user_enc = encode_uri_component(&self.username);
         let db_enc = encode_uri_component(&self.database);
-        let mut out = format!("postgresql://{user_enc}:***@{host_part}:{}/{}", self.port, db_enc);
+        let mut out = format!(
+            "postgresql://{user_enc}:***@{host_part}:{}/{}",
+            self.port, db_enc
+        );
         append_query_string(&mut out, &self.query_params);
         out
     }

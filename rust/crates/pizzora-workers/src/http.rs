@@ -77,7 +77,10 @@ impl WorkerHttpState {
         }
     }
 
-    pub fn for_tests(pg_probe: Option<Arc<dyn PostgresProbe>>, metrics: Arc<WorkerMetrics>) -> Self {
+    pub fn for_tests(
+        pg_probe: Option<Arc<dyn PostgresProbe>>,
+        metrics: Arc<WorkerMetrics>,
+    ) -> Self {
         Self {
             pool: None,
             pg_probe,

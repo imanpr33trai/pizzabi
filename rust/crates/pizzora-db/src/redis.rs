@@ -14,12 +14,7 @@ use crate::error::DbError;
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait EphemeralCacheStore: Send + Sync {
-    fn set_ex<'a>(
-        &'a self,
-        key: &'a str,
-        ttl_seconds: u64,
-        value: &'a str,
-    ) -> BoxFuture<'a, bool>;
+    fn set_ex<'a>(&'a self, key: &'a str, ttl_seconds: u64, value: &'a str) -> BoxFuture<'a, bool>;
 
     fn get<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<String>>;
 
@@ -94,12 +89,7 @@ impl RedisStore {
 }
 
 impl EphemeralCacheStore for RedisStore {
-    fn set_ex<'a>(
-        &'a self,
-        key: &'a str,
-        ttl_seconds: u64,
-        value: &'a str,
-    ) -> BoxFuture<'a, bool> {
+    fn set_ex<'a>(&'a self, key: &'a str, ttl_seconds: u64, value: &'a str) -> BoxFuture<'a, bool> {
         Box::pin(async move {
             let Some(mut conn) = self.get_or_connect().await else {
                 return false;
@@ -254,12 +244,7 @@ impl InMemoryCacheStore {
 }
 
 impl EphemeralCacheStore for InMemoryCacheStore {
-    fn set_ex<'a>(
-        &'a self,
-        key: &'a str,
-        ttl_seconds: u64,
-        value: &'a str,
-    ) -> BoxFuture<'a, bool> {
+    fn set_ex<'a>(&'a self, key: &'a str, ttl_seconds: u64, value: &'a str) -> BoxFuture<'a, bool> {
         Box::pin(async move {
             if self.fail_all_ops.load(std::sync::atomic::Ordering::SeqCst) {
                 return false;
@@ -332,7 +317,10 @@ impl EphemeralCacheStore for InMemoryCacheStore {
                     Some(*count)
                 }
                 _ => {
-                    guard.insert(key.to_owned(), (1, now + Duration::from_secs(window_seconds)));
+                    guard.insert(
+                        key.to_owned(),
+                        (1, now + Duration::from_secs(window_seconds)),
+                    );
                     Some(1)
                 }
             }

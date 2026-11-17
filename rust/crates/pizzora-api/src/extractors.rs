@@ -108,12 +108,9 @@ where
     async fn from_request(req: Request, state: &AppState) -> Result<Self, Self::Rejection> {
         match Json::<T>::from_request(req, state).await {
             Ok(Json(val)) => Ok(Self(val)),
-            Err(JsonRejection::JsonDataError(_)) | Err(JsonRejection::JsonSyntaxError(_)) => {
-                Err(ApiError::validation(
-                    "MALFORMED_REQUEST",
-                    "Invalid JSON payload.",
-                ))
-            }
+            Err(JsonRejection::JsonDataError(_)) | Err(JsonRejection::JsonSyntaxError(_)) => Err(
+                ApiError::validation("MALFORMED_REQUEST", "Invalid JSON payload."),
+            ),
             Err(JsonRejection::MissingJsonContentType(_)) => Err(ApiError::validation(
                 "UNSUPPORTED_MEDIA_TYPE",
                 "Content-Type must be application/json.",
@@ -160,9 +157,8 @@ where
             }
         }
 
-        let parsed = serde_json::from_slice::<T>(&bytes).map_err(|_| {
-            ApiError::validation("MALFORMED_REQUEST", "Invalid JSON payload.")
-        })?;
+        let parsed = serde_json::from_slice::<T>(&bytes)
+            .map_err(|_| ApiError::validation("MALFORMED_REQUEST", "Invalid JSON payload."))?;
         Ok(Self(Some(parsed)))
     }
 }
@@ -179,7 +175,10 @@ pub async fn authenticate_ws_parts(
             .await
             .map_err(ApiError::from)?
             .ok_or_else(|| {
-                ApiError::unauthorized("INVALID_WS_TICKET", "WebSocket ticket is invalid or expired.")
+                ApiError::unauthorized(
+                    "INVALID_WS_TICKET",
+                    "WebSocket ticket is invalid or expired.",
+                )
             })?;
         let active = state
             .authz_service
@@ -258,7 +257,10 @@ pub async fn require_permission(
         .map_err(ApiError::from)
 }
 
-pub fn build_audit_context(principal: Option<&PizzoraPrincipal>, meta: &RequestMeta) -> AuditContext {
+pub fn build_audit_context(
+    principal: Option<&PizzoraPrincipal>,
+    meta: &RequestMeta,
+) -> AuditContext {
     let (actor_user_id, actor_role) = match principal {
         Some(p) => (Some(p.user_id), user_role_as_str(p.role)),
         None => (None, "SYSTEM"),
@@ -273,9 +275,8 @@ pub fn build_audit_context(principal: Option<&PizzoraPrincipal>, meta: &RequestM
 }
 
 pub fn parse_uuid_param(raw: &str, field: &str) -> Result<Uuid, ApiError> {
-    Uuid::parse_str(raw.trim()).map_err(|_| {
-        ApiError::validation("INVALID_UUID", format!("Invalid {field} UUID: {raw}"))
-    })
+    Uuid::parse_str(raw.trim())
+        .map_err(|_| ApiError::validation("INVALID_UUID", format!("Invalid {field} UUID: {raw}")))
 }
 
 pub fn header_str(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {

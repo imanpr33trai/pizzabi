@@ -14,7 +14,8 @@ pub const MIGRATION_ADVISORY_LOCK_KEY: i64 = 884_210_001;
 pub static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 pub const CANONICAL_V1_BYTES: &[u8] = include_bytes!("../migrations/0001_core_schema.sql");
-pub const CANONICAL_V2_BYTES: &[u8] = include_bytes!("../migrations/0002_seed_rbac_and_settings.sql");
+pub const CANONICAL_V2_BYTES: &[u8] =
+    include_bytes!("../migrations/0002_seed_rbac_and_settings.sql");
 pub const CANONICAL_V3_BYTES: &[u8] = include_bytes!("../migrations/0003_hot_path_indexes.sql");
 
 pub const EXPECTED_TABLES: &[&str] = &[
@@ -117,7 +118,9 @@ pub struct MigrationPreflightReport {
 /// - Updates IEEE CRC-32 with each line's UTF-8 bytes without line terminator characters
 /// - Returns `checksum as i32`
 pub fn flyway_crc32(raw_bytes: &[u8]) -> Result<i32, DbError> {
-    let without_bom = raw_bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(raw_bytes);
+    let without_bom = raw_bytes
+        .strip_prefix(&[0xEF, 0xBB, 0xBF])
+        .unwrap_or(raw_bytes);
     let text = std::str::from_utf8(without_bom).map_err(|err| {
         DbError::FlywayHistoryInvalid(format!("migration SQL is not valid UTF-8: {err}"))
     })?;
@@ -158,7 +161,11 @@ pub fn flyway_crc32(raw_bytes: &[u8]) -> Result<i32, DbError> {
 
 pub fn canonical_v1_v3_specs() -> Result<[(&'static str, &'static str, i32); 3], DbError> {
     Ok([
-        ("1", "V1__core_schema.sql", flyway_crc32(CANONICAL_V1_BYTES)?),
+        (
+            "1",
+            "V1__core_schema.sql",
+            flyway_crc32(CANONICAL_V1_BYTES)?,
+        ),
         (
             "2",
             "V2__seed_rbac_and_settings.sql",
@@ -227,9 +234,7 @@ where
             Err(work_err)
         }
         (Err(work_err), Err(unlock_err)) => {
-            error!(
-                "Migration handoff failed and advisory unlock also failed: {unlock_err}"
-            );
+            error!("Migration handoff failed and advisory unlock also failed: {unlock_err}");
             let _ = conn.close().await;
             Err(work_err)
         }
@@ -371,10 +376,11 @@ pub async fn verify_migration_readiness_readonly(
     .fetch_one(&mut *conn)
     .await?;
 
-    let stream_high_water_seq: i64 =
-        sqlx::query_scalar("SELECT COALESCE((SELECT last_seq FROM event_stream_cursor WHERE id = 1), 0)")
-            .fetch_one(&mut *conn)
-            .await?;
+    let stream_high_water_seq: i64 = sqlx::query_scalar(
+        "SELECT COALESCE((SELECT last_seq FROM event_stream_cursor WHERE id = 1), 0)",
+    )
+    .fetch_one(&mut *conn)
+    .await?;
 
     let active_worker_sessions: i64 = sqlx::query_scalar(
         r#"
@@ -663,9 +669,10 @@ async fn ensure_sqlx_baseline_1_to_3(conn: &mut PgConnection) -> Result<(), DbEr
 }
 
 async fn verify_existing_sqlx_migrations(conn: &mut PgConnection) -> Result<(), DbError> {
-    let rows = sqlx::query("SELECT version, success, checksum FROM _sqlx_migrations ORDER BY version ASC")
-        .fetch_all(&mut *conn)
-        .await?;
+    let rows =
+        sqlx::query("SELECT version, success, checksum FROM _sqlx_migrations ORDER BY version ASC")
+            .fetch_all(&mut *conn)
+            .await?;
 
     for row in rows {
         let version: i64 = row.try_get("version")?;
@@ -690,10 +697,11 @@ async fn verify_existing_sqlx_migrations(conn: &mut PgConnection) -> Result<(), 
 }
 
 async fn collect_applied_versions(conn: &mut PgConnection) -> Result<Vec<i64>, DbError> {
-    let versions: Vec<i64> =
-        sqlx::query_scalar("SELECT version FROM _sqlx_migrations WHERE success = TRUE ORDER BY version ASC")
-            .fetch_all(&mut *conn)
-            .await?;
+    let versions: Vec<i64> = sqlx::query_scalar(
+        "SELECT version FROM _sqlx_migrations WHERE success = TRUE ORDER BY version ASC",
+    )
+    .fetch_all(&mut *conn)
+    .await?;
     Ok(versions)
 }
 
@@ -725,8 +733,16 @@ mod tests {
         while i + 3 < bytes.len() {
             let a = TABLE[bytes[i] as usize] as u32;
             let b = TABLE[bytes[i + 1] as usize] as u32;
-            let c = if bytes[i + 2] == b'=' { 0 } else { TABLE[bytes[i + 2] as usize] as u32 };
-            let d = if bytes[i + 3] == b'=' { 0 } else { TABLE[bytes[i + 3] as usize] as u32 };
+            let c = if bytes[i + 2] == b'=' {
+                0
+            } else {
+                TABLE[bytes[i + 2] as usize] as u32
+            };
+            let d = if bytes[i + 3] == b'=' {
+                0
+            } else {
+                TABLE[bytes[i + 3] as usize] as u32
+            };
             let triple = (a << 18) | (b << 12) | (c << 6) | d;
             out.push(((triple >> 16) & 0xFF) as u8);
             if bytes[i + 2] != b'=' {
@@ -759,7 +775,8 @@ mod tests {
         let bom = decode_b64_fixture("77u/LS0gQk9NIHRlc3Qg4oK5CkNSRUFURSBUQUJMRSBvcmFjbGVfYm9tIChpZCBJTlQgUFJJTUFSWSBLRVkpOwo=");
         assert_eq!(flyway_crc32(&bom).unwrap(), 1_730_716_617);
 
-        let no_nl = decode_b64_fixture("Q1JFQVRFIFRBQkxFIG9yYWNsZV9ub19ubCAoaWQgSU5UIFBSSU1BUlkgS0VZKTs=");
+        let no_nl =
+            decode_b64_fixture("Q1JFQVRFIFRBQkxFIG9yYWNsZV9ub19ubCAoaWQgSU5UIFBSSU1BUlkgS0VZKTs=");
         assert_eq!(flyway_crc32(&no_nl).unwrap(), -1_061_589_932);
     }
 
@@ -845,8 +862,8 @@ mod tests {
                 .url
                 .normalized_postgres_url(),
         };
-        let normalized = NormalizedDatabaseUrl::parse(&base_url, None, None)
-            .expect("valid PostgreSQL URL");
+        let normalized =
+            NormalizedDatabaseUrl::parse(&base_url, None, None).expect("valid PostgreSQL URL");
         let db_cfg = DatabaseConfig {
             url: normalized,
             max_pool_size: 4,

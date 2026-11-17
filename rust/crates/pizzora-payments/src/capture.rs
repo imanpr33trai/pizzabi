@@ -225,11 +225,13 @@ async fn complete_pending_payment_capture(
     .await?;
 
     let new_version = order.version + 1;
-    sqlx::query("UPDATE orders SET status = 'PLACED', version = $1, expires_at = NULL WHERE id = $2")
-        .bind(new_version)
-        .bind(order.id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE orders SET status = 'PLACED', version = $1, expires_at = NULL WHERE id = $2",
+    )
+    .bind(new_version)
+    .bind(order.id)
+    .execute(&mut *tx)
+    .await?;
 
     sqlx::query(
         r#"

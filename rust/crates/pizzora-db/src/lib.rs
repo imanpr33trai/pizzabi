@@ -14,7 +14,9 @@ pub mod redis;
 pub mod users;
 pub mod ws_tickets;
 
-pub use audit::{record_audit_log, AuditContext, AuditLogEntryDto, AuditLogsResponse, AuditService};
+pub use audit::{
+    record_audit_log, AuditContext, AuditLogEntryDto, AuditLogsResponse, AuditService,
+};
 pub use coupons::{
     AppliedCouponSummaryDto, AvailableCouponsResponse, CouponDto, CouponService,
     CreateCouponRequest, CustomerCouponDto, UpdateCouponRequest, ValidatedCoupon,

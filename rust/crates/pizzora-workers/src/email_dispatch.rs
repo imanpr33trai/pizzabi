@@ -5,9 +5,7 @@ use pizzora_auth::{
     EmailDeliveryProvider, OutboundEmail, OutboxEmailPayload,
 };
 use pizzora_config::OutboxEncryptionConfig;
-use pizzora_db::{
-    record_audit_log, AuditContext, ClaimedOutboxEvent, OutboxRepository,
-};
+use pizzora_db::{record_audit_log, AuditContext, ClaimedOutboxEvent, OutboxRepository};
 use sqlx::PgPool;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -51,32 +49,31 @@ impl EmailOutboxDispatcher {
         &self,
         event: &ClaimedOutboxEvent,
     ) -> Result<EmailDispatchOutcome, WorkerError> {
-        let parsed_payload: OutboxEmailPayload = match serde_json::from_value(
-            event.payload_json.clone(),
-        ) {
-            Ok(payload) => payload,
-            Err(_) => {
-                let scrubbed = best_effort_scrub_malformed_payload(&event.payload_json);
-                let safe_error = "Malformed EMAIL_DELIVERY_REQUESTED JSON payload";
-                self.mark_dead_letter_with_audit(
-                    event,
-                    None,
-                    None,
-                    None,
-                    "EMAIL_PAYLOAD_MALFORMED",
-                    safe_error,
-                    Some(&scrubbed),
-                )
-                .await?;
-                warn!(
-                    outbox_event_id = %event.id,
-                    attempts = event.attempts,
-                    error_code = "EMAIL_PAYLOAD_MALFORMED",
-                    "Moved malformed email outbox event to DEAD_LETTER"
-                );
-                return Ok(EmailDispatchOutcome::DeadLettered);
-            }
-        };
+        let parsed_payload: OutboxEmailPayload =
+            match serde_json::from_value(event.payload_json.clone()) {
+                Ok(payload) => payload,
+                Err(_) => {
+                    let scrubbed = best_effort_scrub_malformed_payload(&event.payload_json);
+                    let safe_error = "Malformed EMAIL_DELIVERY_REQUESTED JSON payload";
+                    self.mark_dead_letter_with_audit(
+                        event,
+                        None,
+                        None,
+                        None,
+                        "EMAIL_PAYLOAD_MALFORMED",
+                        safe_error,
+                        Some(&scrubbed),
+                    )
+                    .await?;
+                    warn!(
+                        outbox_event_id = %event.id,
+                        attempts = event.attempts,
+                        error_code = "EMAIL_PAYLOAD_MALFORMED",
+                        "Moved malformed email outbox event to DEAD_LETTER"
+                    );
+                    return Ok(EmailDispatchOutcome::DeadLettered);
+                }
+            };
 
         let envelope_kid = parsed_payload
             .sealed_envelope
@@ -93,10 +90,7 @@ impl EmailOutboxDispatcher {
             Err(err) => {
                 let scrubbed = scrub_outbox_email_payload(&parsed_payload);
                 let scrubbed_json = serde_json::to_value(&scrubbed)?;
-                let safe_error = sanitize_error_for_logs(
-                    &format!("UNSEAL_FAILED: {err}"),
-                    &[],
-                );
+                let safe_error = sanitize_error_for_logs(&format!("UNSEAL_FAILED: {err}"), &[]);
                 self.mark_dead_letter_with_audit(
                     event,
                     Some(&format!("{:?}", parsed_payload.template)),

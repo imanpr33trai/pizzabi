@@ -139,7 +139,8 @@ impl fmt::Debug for OutboxEncryptionConfig {
     }
 }
 
-const DEV_OUTBOX_KEY_B64_ENTRY: &str = "k_dev_local_01:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+const DEV_OUTBOX_KEY_B64_ENTRY: &str =
+    "k_dev_local_01:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
 fn validate_key_id(kid: &str, var: &'static str) -> Result<(), ConfigError> {
     if kid.is_empty()
@@ -164,10 +165,14 @@ fn decode_256_bit_key(b64: &str) -> Result<Zeroizing<[u8; 32]>, ConfigError> {
             reason: "base64 key material must not be empty".to_owned(),
         });
     }
-    let decoded = Zeroizing::new(STANDARD.decode(b64).map_err(|_| ConfigError::InvalidValue {
-        var: "OUTBOX_EMAIL_KEYS",
-        reason: "invalid base64 encoding in keyring entry".to_owned(),
-    })?);
+    let decoded = Zeroizing::new(
+        STANDARD
+            .decode(b64)
+            .map_err(|_| ConfigError::InvalidValue {
+                var: "OUTBOX_EMAIL_KEYS",
+                reason: "invalid base64 encoding in keyring entry".to_owned(),
+            })?,
+    );
     if decoded.len() != 32 {
         return Err(ConfigError::InvalidValue {
             var: "OUTBOX_EMAIL_KEYS",

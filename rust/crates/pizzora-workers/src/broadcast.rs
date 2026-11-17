@@ -297,11 +297,7 @@ pub struct BroadcastOutboxDispatcher {
 }
 
 impl BroadcastOutboxDispatcher {
-    pub fn new(
-        pool: PgPool,
-        cache: Arc<dyn EphemeralCacheStore>,
-        max_attempts: i32,
-    ) -> Self {
+    pub fn new(pool: PgPool, cache: Arc<dyn EphemeralCacheStore>, max_attempts: i32) -> Self {
         let outbox_repo = OutboxRepository::new(pool.clone());
         Self {
             pool,
@@ -406,11 +402,10 @@ impl BroadcastOutboxDispatcher {
             return Ok(*cached);
         }
 
-        let cid: Option<Uuid> =
-            sqlx::query_scalar("SELECT customer_id FROM orders WHERE id = $1")
-                .bind(event.aggregate_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let cid: Option<Uuid> = sqlx::query_scalar("SELECT customer_id FROM orders WHERE id = $1")
+            .bind(event.aggregate_id)
+            .fetch_optional(&self.pool)
+            .await?;
         order_customer_cache.insert(event.aggregate_id, cid);
         Ok(cid)
     }

@@ -200,16 +200,11 @@ impl S3ObjectStorageClient {
 
         let origin = format!(
             "{}://{}",
-            self.config
-                .endpoint
-                .split("://")
-                .next()
-                .unwrap_or("http"),
+            self.config.endpoint.split("://").next().unwrap_or("http"),
             self.host_header
         );
-        let upload_url = format!(
-            "{origin}{canonical_uri}?{canonical_query}&X-Amz-Signature={signature}"
-        );
+        let upload_url =
+            format!("{origin}{canonical_uri}?{canonical_query}&X-Amz-Signature={signature}");
 
         let mut required_headers = BTreeMap::new();
         required_headers.insert("Content-Type".to_owned(), content_type.trim().to_owned());
@@ -291,12 +286,7 @@ impl S3ObjectStorageClient {
     }
 
     fn request_url(&self, canonical_uri: &str) -> String {
-        let scheme = self
-            .config
-            .endpoint
-            .split("://")
-            .next()
-            .unwrap_or("http");
+        let scheme = self.config.endpoint.split("://").next().unwrap_or("http");
         format!("{scheme}://{}{canonical_uri}", self.host_header)
     }
 }
@@ -312,9 +302,9 @@ impl ObjectStorageClient for S3ObjectStorageClient {
         content_type: &'a str,
         ttl_seconds: i64,
     ) -> BoxFuture<'a, Result<PresignedPutUpload, ApiError>> {
-        Box::pin(async move {
-            self.presign_put_at(object_key, content_type, ttl_seconds, Utc::now())
-        })
+        Box::pin(
+            async move { self.presign_put_at(object_key, content_type, ttl_seconds, Utc::now()) },
+        )
     }
 
     fn head_object<'a>(
@@ -465,8 +455,7 @@ fn sign_v4(
     canonical_request: &str,
 ) -> Result<String, ApiError> {
     let req_hash = hex::encode(Sha256::digest(canonical_request.as_bytes()));
-    let string_to_sign =
-        format!("AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{req_hash}");
+    let string_to_sign = format!("AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{req_hash}");
 
     let k_secret = format!("AWS4{secret_key}");
     let k_date = hmac_sha256_raw(k_secret.as_bytes(), date_stamp.as_bytes())?;

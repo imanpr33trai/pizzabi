@@ -1,14 +1,12 @@
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
-use pizzora_db::{
-    AvailableCouponsResponse, CouponDto, CreateCouponRequest, UpdateCouponRequest,
-};
+use pizzora_db::{AvailableCouponsResponse, CouponDto, CreateCouponRequest, UpdateCouponRequest};
 use serde::Deserialize;
 
 use crate::dto::{
-    CartResponseDto, CheckoutRequest, CheckoutResponse, PricingQuoteRequest,
-    PricingQuoteResponse, ReplaceCartRequest, ValidateCartRequest,
+    CartResponseDto, CheckoutRequest, CheckoutResponse, PricingQuoteRequest, PricingQuoteResponse,
+    ReplaceCartRequest, ValidateCartRequest,
 };
 use crate::error::ApiError;
 use crate::extractors::{

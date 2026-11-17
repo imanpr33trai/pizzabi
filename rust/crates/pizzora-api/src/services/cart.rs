@@ -11,8 +11,8 @@ use sqlx::{PgConnection, PgPool, Row as _};
 use uuid::Uuid;
 
 use crate::dto::{
-    CartItemInputDto, CartItemViewDto, CartResponseDto, CartToppingViewDto,
-    CartValidationIssueDto, ReplaceCartRequest, ValidateCartRequest,
+    CartItemInputDto, CartItemViewDto, CartResponseDto, CartToppingViewDto, CartValidationIssueDto,
+    ReplaceCartRequest, ValidateCartRequest,
 };
 use crate::error::{format_iso8601, now_iso8601, ApiError};
 use crate::services::catalog::parse_size_code;
@@ -132,10 +132,11 @@ pub async fn load_catalog_ref_lookup(
         );
     }
 
-    let var_rows =
-        sqlx::query("SELECT id, product_id, size_code, price_paise, is_active FROM product_variants")
-            .fetch_all(&mut *conn)
-            .await?;
+    let var_rows = sqlx::query(
+        "SELECT id, product_id, size_code, price_paise, is_active FROM product_variants",
+    )
+    .fetch_all(&mut *conn)
+    .await?;
     let mut variants = HashMap::with_capacity(var_rows.len());
     for r in var_rows {
         let id: Uuid = r.try_get("id")?;

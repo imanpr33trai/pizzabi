@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 
 use pizzora_core::{PaymentAttemptStatus, RefundStatus};
-use pizzora_db::{
-    record_audit_log, AuditContext, ClaimedOutboxEvent, OutboxRepository,
-};
+use pizzora_db::{record_audit_log, AuditContext, ClaimedOutboxEvent, OutboxRepository};
 use sqlx::Row as _;
 use uuid::Uuid;
 
@@ -72,7 +70,11 @@ impl RazorpayReconciliationService {
 
         let Ok(attempt_uuid) = Uuid::parse_str(attempt_id_str) else {
             outbox
-                .mark_dead_letter(event.id, "Invalid payment_attempt_id in outbox payload", None)
+                .mark_dead_letter(
+                    event.id,
+                    "Invalid payment_attempt_id in outbox payload",
+                    None,
+                )
                 .await?;
             return Ok(());
         };
@@ -107,7 +109,9 @@ impl RazorpayReconciliationService {
                 if err.is_transient && event.attempts < max_attempts {
                     let shift = (event.attempts - 1).clamp(0, 6) as u32;
                     let backoff = (2_i64 << shift).min(300);
-                    outbox.schedule_retry(event.id, backoff, &err.message).await?;
+                    outbox
+                        .schedule_retry(event.id, backoff, &err.message)
+                        .await?;
                 } else {
                     let order_uuid = Uuid::parse_str(&order_id_str).unwrap_or(event.aggregate_id);
                     self.mark_gateway_order_dead_letter(
@@ -206,7 +210,11 @@ impl RazorpayReconciliationService {
             .and_then(|s| Uuid::parse_str(s).ok())
         else {
             outbox
-                .mark_dead_letter(event.id, "Missing refund_id in REFUND_REQUESTED payload", None)
+                .mark_dead_letter(
+                    event.id,
+                    "Missing refund_id in REFUND_REQUESTED payload",
+                    None,
+                )
                 .await?;
             return Ok(());
         };
@@ -249,16 +257,17 @@ impl RazorpayReconciliationService {
                 .get("gateway_payment_id")
                 .and_then(|v| v.as_str())
                 .map(str::to_owned);
-            let gateway_payment_id =
-                resolve_gateway_payment_id(&mut tx, payment_id, attempt_id)
-                    .await?
-                    .or(fallback_gw_payment);
+            let gateway_payment_id = resolve_gateway_payment_id(&mut tx, payment_id, attempt_id)
+                .await?
+                .or(fallback_gw_payment);
 
             if status == RefundStatus::Pending || status == RefundStatus::Failed {
-                sqlx::query("UPDATE refunds SET status = 'PROCESSING', updated_at = NOW() WHERE id = $1")
-                    .bind(refund_uuid)
-                    .execute(&mut *tx)
-                    .await?;
+                sqlx::query(
+                    "UPDATE refunds SET status = 'PROCESSING', updated_at = NOW() WHERE id = $1",
+                )
+                .bind(refund_uuid)
+                .execute(&mut *tx)
+                .await?;
             }
 
             let prep = RefundDispatchPrep {
@@ -275,7 +284,11 @@ impl RazorpayReconciliationService {
             prep
         };
 
-        let Some(gateway_payment_id) = prep.gateway_payment_id.as_deref().filter(|s| !s.trim().is_empty()) else {
+        let Some(gateway_payment_id) = prep
+            .gateway_payment_id
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        else {
             self.mark_refund_permanent_failure(
                 event.id,
                 &prep,
@@ -316,7 +329,9 @@ impl RazorpayReconciliationService {
                     .execute(&mut *tx)
                     .await?;
                     tx.commit().await?;
-                    outbox.schedule_retry(event.id, backoff, &err.message).await?;
+                    outbox
+                        .schedule_retry(event.id, backoff, &err.message)
+                        .await?;
                 } else {
                     self.mark_refund_permanent_failure(event.id, &prep, &err.message)
                         .await?;

@@ -44,10 +44,7 @@ pub enum DbError {
     Conflict { code: &'static str, message: String },
 
     #[error("{code}: {message}")]
-    Unprocessable {
-        code: &'static str,
-        message: String,
-    },
+    Unprocessable { code: &'static str, message: String },
 
     #[error("database error: {0}")]
     Sqlx(#[from] sqlx::Error),

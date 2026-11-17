@@ -180,7 +180,8 @@ impl RecipeService {
             }
         }
 
-        let lines_map = load_recipe_lines_for_target(&mut tx, request.target_type, target_id).await?;
+        let lines_map =
+            load_recipe_lines_for_target(&mut tx, request.target_type, target_id).await?;
         let binding = RecipeBindingDto {
             target_type: request.target_type,
             target_id: target_id.to_string(),
@@ -221,8 +222,10 @@ impl RecipeService {
             .flat_map(|i| i.topping_ids.iter().copied())
             .collect();
 
-        let variant_map = load_demand_map(&mut *conn, "variant_recipes", "variant_id", &variant_ids).await?;
-        let crust_map = load_demand_map(&mut *conn, "crust_recipes", "crust_id", &crust_ids).await?;
+        let variant_map =
+            load_demand_map(&mut *conn, "variant_recipes", "variant_id", &variant_ids).await?;
+        let crust_map =
+            load_demand_map(&mut *conn, "crust_recipes", "crust_id", &crust_ids).await?;
         let topping_map = if topping_ids.is_empty() {
             HashMap::new()
         } else {
@@ -272,7 +275,9 @@ async fn load_demand_map(
         let target_id: Uuid = r.try_get("target_id")?;
         let ing_id: Uuid = r.try_get("ingredient_id")?;
         let qty: i32 = r.try_get("quantity")?;
-        map.entry(target_id).or_default().push((ing_id, i64::from(qty)));
+        map.entry(target_id)
+            .or_default()
+            .push((ing_id, i64::from(qty)));
     }
     Ok(map)
 }
@@ -299,7 +304,10 @@ async fn load_recipe_lines(
     let mut grouped: HashMap<Uuid, Vec<RecipeIngredientLineDto>> = HashMap::new();
     for r in rows {
         let target_id: Uuid = r.try_get("target_id")?;
-        grouped.entry(target_id).or_default().push(row_to_recipe_line(&r)?);
+        grouped
+            .entry(target_id)
+            .or_default()
+            .push(row_to_recipe_line(&r)?);
     }
     Ok(grouped)
 }
@@ -323,7 +331,10 @@ async fn load_recipe_lines_for_target(
         ORDER BY i.name ASC
         "#
     );
-    let rows = sqlx::query(&sql).bind(target_id).fetch_all(&mut *conn).await?;
+    let rows = sqlx::query(&sql)
+        .bind(target_id)
+        .fetch_all(&mut *conn)
+        .await?;
     rows.iter().map(row_to_recipe_line).collect()
 }
 

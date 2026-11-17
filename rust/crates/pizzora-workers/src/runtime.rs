@@ -6,8 +6,7 @@ use pizzora_auth::{EmailDeliveryProvider, LettreSmtpEmailDeliveryProvider};
 use pizzora_config::AppConfig;
 use pizzora_db::EphemeralCacheStore;
 use pizzora_payments::{
-    create_default_razorpay_gateway, PaymentService, RazorpayGateway,
-    RazorpayReconciliationService,
+    create_default_razorpay_gateway, PaymentService, RazorpayGateway, RazorpayReconciliationService,
 };
 use sqlx::PgPool;
 use tokio::task::JoinHandle;

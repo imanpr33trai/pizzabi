@@ -19,9 +19,8 @@ pub use error::{AuthError, EmailDeliveryError};
 pub use jwt::{AccessTokenClaims, JwtTokenProvider, VerifiedAccessToken};
 pub use outbox_crypto::{
     compute_outbox_aad, mask_email, sanitize_error_for_logs, scrub_outbox_email_payload,
-    seal_outbox_email_payload, unseal_outbox_email_payload, EmailTemplateKind,
-    OutboxEmailPayload, SealedEmailEnvelope, SensitiveEmailSecrets, OUTBOX_ENVELOPE_ALG,
-    OUTBOX_NONCE_LEN,
+    seal_outbox_email_payload, unseal_outbox_email_payload, EmailTemplateKind, OutboxEmailPayload,
+    SealedEmailEnvelope, SensitiveEmailSecrets, OUTBOX_ENVELOPE_ALG, OUTBOX_NONCE_LEN,
 };
 pub use password::{CryptoTokens, PasswordHasher};
 pub use rbac::{AuthorizationService, PizzoraPrincipal};
@@ -167,12 +166,9 @@ mod tests {
         let key_k1 = "k1:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
         let key_k2 = "k2:AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
         let cfg_v1 = OutboxEncryptionConfig::parse_from_raw("k1", key_k1, false).unwrap();
-        let cfg_rotated = OutboxEncryptionConfig::parse_from_raw(
-            "k2",
-            &format!("{key_k1},{key_k2}"),
-            false,
-        )
-        .unwrap();
+        let cfg_rotated =
+            OutboxEncryptionConfig::parse_from_raw("k2", &format!("{key_k1},{key_k2}"), false)
+                .unwrap();
         let cfg_v2_only = OutboxEncryptionConfig::parse_from_raw("k2", key_k2, false).unwrap();
 
         let event_id = new_uuid_v4();
@@ -201,10 +197,7 @@ mod tests {
         assert!(!json_str.contains(email));
         assert!(!json_str.contains("Aarav Patel"));
         assert_eq!(sealed.recipient_masked, "c***@example.com");
-        assert_eq!(
-            sealed.sealed_envelope.as_ref().unwrap().kid,
-            "k1"
-        );
+        assert_eq!(sealed.sealed_envelope.as_ref().unwrap().kid, "k1");
 
         // Multi-kid rotation: rotated keyring (current=k2) decrypts k1 envelope seamlessly
         let unsealed = unseal_outbox_email_payload(
@@ -240,13 +233,9 @@ mod tests {
             &sealed,
         )
         .is_err());
-        assert!(unseal_outbox_email_payload(
-            &cfg_rotated,
-            event_id,
-            "OTHER_EVENT",
-            &sealed,
-        )
-        .is_err());
+        assert!(
+            unseal_outbox_email_payload(&cfg_rotated, event_id, "OTHER_EVENT", &sealed,).is_err()
+        );
         let mut wrong_user_payload = sealed.clone();
         wrong_user_payload.user_id = new_uuid_v4().to_string();
         assert!(unseal_outbox_email_payload(
@@ -272,9 +261,7 @@ mod tests {
         .is_err());
 
         // Error sanitization strips secret values
-        let raw_err = format!(
-            "SMTP rejected message containing token={raw_token}\nfor {email}"
-        );
+        let raw_err = format!("SMTP rejected message containing token={raw_token}\nfor {email}");
         let safe_err = sanitize_error_for_logs(&raw_err, &[raw_token, email]);
         assert!(!safe_err.contains(raw_token));
         assert!(!safe_err.contains(email));
@@ -305,11 +292,16 @@ mod tests {
         assert!(!dbg.contains("verify_tok_12345"));
         assert!(!dbg.contains("user@example.com"));
 
-        let message = provider.build_message(&req).expect("builds RFC 5322 message");
+        let message = provider
+            .build_message(&req)
+            .expect("builds RFC 5322 message");
         let raw_mime = String::from_utf8_lossy(&message.formatted()).into_owned();
         assert!(
-            raw_mime.contains("Message-ID: <outbox-11111111-2222-4333-8444-555555555555@pizzora.local>")
-                || raw_mime.contains("Message-Id: <outbox-11111111-2222-4333-8444-555555555555@pizzora.local>"),
+            raw_mime.contains(
+                "Message-ID: <outbox-11111111-2222-4333-8444-555555555555@pizzora.local>"
+            ) || raw_mime.contains(
+                "Message-Id: <outbox-11111111-2222-4333-8444-555555555555@pizzora.local>"
+            ),
             "Missing deterministic Message-ID in MIME headers: {raw_mime}"
         );
         assert!(
@@ -512,14 +504,21 @@ mod tests {
 
         // Fallback to PostgreSQL when Redis unavailable
         cache.set_unavailable(true);
-        let ticket = ws_svc.mint_ticket(&principal).await.expect("pg fallback mint");
+        let ticket = ws_svc
+            .mint_ticket(&principal)
+            .await
+            .expect("pg fallback mint");
         let consumed = ws_svc
             .consume_ticket(&ticket.ticket)
             .await
             .expect("pg fallback consume")
             .expect("ticket valid");
         assert_eq!(consumed, principal);
-        assert!(ws_svc.consume_ticket(&ticket.ticket).await.unwrap().is_none());
+        assert!(ws_svc
+            .consume_ticket(&ticket.ticket)
+            .await
+            .unwrap()
+            .is_none());
 
         // Owner bootstrap + staff creation + forgot/reset password + logout + outbox scrub/purge
         let owner_email = format!("owner_{unique}@example.com");
@@ -549,7 +548,12 @@ mod tests {
                     role: UserRole::KitchenStaff,
                     employee_code: staff_emp,
                 },
-                &AuditContext::new(Some(owner_id), "OWNER", "it-staff-create", Some("127.0.0.1")),
+                &AuditContext::new(
+                    Some(owner_id),
+                    "OWNER",
+                    "it-staff-create",
+                    Some("127.0.0.1"),
+                ),
             )
             .await
             .expect("create staff");
@@ -614,7 +618,9 @@ mod tests {
             .is_session_active(claims.user_id, claims.session_id)
             .await
             .expect("session active before logout"));
-        auth.logout(claims.session_id).await.expect("logout succeeds");
+        auth.logout(claims.session_id)
+            .await
+            .expect("logout succeeds");
         assert!(!rbac
             .is_session_active(claims.user_id, claims.session_id)
             .await
@@ -657,7 +663,8 @@ mod tests {
         .expect("reset outbox row");
         let reset_outbox_id: Uuid = reset_row.try_get("id").unwrap();
         let reset_payload_val: serde_json::Value = reset_row.try_get("payload_json").unwrap();
-        let reset_payload: OutboxEmailPayload = serde_json::from_value(reset_payload_val.clone()).unwrap();
+        let reset_payload: OutboxEmailPayload =
+            serde_json::from_value(reset_payload_val.clone()).unwrap();
         let reset_secrets = unseal_outbox_email_payload(
             &cfg.outbox_encryption,
             reset_outbox_id,

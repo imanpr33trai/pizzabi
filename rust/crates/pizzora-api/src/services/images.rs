@@ -193,7 +193,8 @@ impl ProductImagesService {
         StorageKeyValidator::validate_object_key(&object_key).map_err(ApiError::from)?;
 
         let meta = self.storage.head_object(&object_key).await?;
-        if meta.content_length < MIN_IMAGE_SIZE_BYTES || meta.content_length > MAX_IMAGE_SIZE_BYTES {
+        if meta.content_length < MIN_IMAGE_SIZE_BYTES || meta.content_length > MAX_IMAGE_SIZE_BYTES
+        {
             let _ = self.storage.delete_object(&object_key).await;
             self.record_rejected_upload_audit(
                 product_id,
@@ -216,7 +217,13 @@ impl ProductImagesService {
         if let Some(stored_ct) = meta
             .content_type
             .as_deref()
-            .map(|s| s.split(';').next().unwrap_or("").trim().to_ascii_lowercase())
+            .map(|s| {
+                s.split(';')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_ascii_lowercase()
+            })
             .filter(|s| !s.is_empty())
         {
             if stored_ct != "application/octet-stream"

@@ -19,7 +19,11 @@ async fn enforce_ip_rate_limit(
     window_secs: u64,
     group_label: &str,
 ) -> Result<(), ApiError> {
-    match state.rate_limiter.check(key, max_requests, window_secs).await {
+    match state
+        .rate_limiter
+        .check(key, max_requests, window_secs)
+        .await
+    {
         RateLimitDecision::Allowed => Ok(()),
         RateLimitDecision::Rejected { retry_after_secs } => Err(ApiError::rate_limited(
             format!("Too many requests for '{group_label}'. Please try again later."),

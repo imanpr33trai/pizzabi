@@ -472,7 +472,10 @@ impl CouponService {
         .await?;
         let mut active_global = HashMap::with_capacity(global_res_rows.len());
         for r in global_res_rows {
-            active_global.insert(r.try_get::<Uuid, _>("coupon_id")?, r.try_get::<i32, _>("cnt")?);
+            active_global.insert(
+                r.try_get::<Uuid, _>("coupon_id")?,
+                r.try_get::<i32, _>("cnt")?,
+            );
         }
 
         let user_usage_rows = sqlx::query(
@@ -492,7 +495,10 @@ impl CouponService {
         .await?;
         let mut user_usage = HashMap::with_capacity(user_usage_rows.len());
         for r in user_usage_rows {
-            user_usage.insert(r.try_get::<Uuid, _>("coupon_id")?, r.try_get::<i32, _>("cnt")?);
+            user_usage.insert(
+                r.try_get::<Uuid, _>("coupon_id")?,
+                r.try_get::<i32, _>("cnt")?,
+            );
         }
 
         let mut items = Vec::with_capacity(rows.len());
@@ -565,9 +571,14 @@ impl CouponService {
         immediate_commit: bool,
     ) -> Result<AppliedCouponSummaryDto, DbError> {
         let row = load_coupon_by_code(&mut *conn, raw_code, true).await?;
-        let validated = evaluate_coupon_in_tx(&mut *conn, &row, user_id, subtotal_paise, true).await?;
+        let validated =
+            evaluate_coupon_in_tx(&mut *conn, &row, user_id, subtotal_paise, true).await?;
 
-        let status = if immediate_commit { "COMMITTED" } else { "ACTIVE" };
+        let status = if immediate_commit {
+            "COMMITTED"
+        } else {
+            "ACTIVE"
+        };
         let effective_expires = if immediate_commit { None } else { expires_at };
 
         sqlx::query(

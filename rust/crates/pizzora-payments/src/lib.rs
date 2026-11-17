@@ -190,7 +190,8 @@ mod tests {
             ""
         ));
 
-        let raw_body = br#"{"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_1"}}}}"#;
+        let raw_body =
+            br#"{"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_1"}}}}"#;
         let wh_sig = compute_hmac_sha256_hex(raw_body, wh_secret);
         assert!(verify_webhook_signature(raw_body, Some(&wh_sig), wh_secret));
 

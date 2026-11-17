@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use pizzora_auth::{
-    AuthService, AuthorizationService, PasswordHasher, WsTicketService,
-};
+use pizzora_auth::{AuthService, AuthorizationService, PasswordHasher, WsTicketService};
 use pizzora_config::AppConfig;
 use pizzora_db::{
     AuditService, CouponService, EphemeralCacheStore, InventoryService, NotificationService,
@@ -147,8 +145,7 @@ impl AppState {
         } else {
             PaymentService::new(pool.clone(), config.razorpay.clone())
         };
-        let webhook_service =
-            WebhookService::new(payment_service.clone(), config.razorpay.clone());
+        let webhook_service = WebhookService::new(payment_service.clone(), config.razorpay.clone());
 
         let categories_service = CategoriesService::new(pool.clone(), cache_store.clone());
         let catalog_service =

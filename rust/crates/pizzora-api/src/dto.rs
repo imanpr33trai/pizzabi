@@ -4,9 +4,7 @@ use pizzora_core::{
     CartValidationIssueCode, FulfillmentType, OrderStatus, PaymentMethod, PaymentStatus,
     ScheduleType, SizeCode,
 };
-use pizzora_db::{
-    AppliedCouponSummaryDto, InventoryItemDto, OrderDetailDto, OrderSummaryDto,
-};
+use pizzora_db::{AppliedCouponSummaryDto, InventoryItemDto, OrderDetailDto, OrderSummaryDto};
 use serde::{Deserialize, Serialize};
 
 fn default_true() -> bool {

@@ -90,19 +90,20 @@ impl JwtTokenProvider {
         self.verify_access_token_strict(token).ok()
     }
 
-    pub fn verify_access_token_strict(&self, token: &str) -> Result<VerifiedAccessToken, AuthError> {
+    pub fn verify_access_token_strict(
+        &self,
+        token: &str,
+    ) -> Result<VerifiedAccessToken, AuthError> {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_issuer(&[&self.issuer]);
         validation.set_required_spec_claims(&["exp", "iss", "sub"]);
         validation.leeway = 0;
         validation.validate_exp = true;
 
-        let token_data =
-            decode::<AccessTokenClaims>(token, &self.decoding_key, &validation).map_err(|_| {
-                AuthError::Unauthorized {
-                    code: "INVALID_ACCESS_TOKEN",
-                    message: "Access token is invalid or expired.".to_owned(),
-                }
+        let token_data = decode::<AccessTokenClaims>(token, &self.decoding_key, &validation)
+            .map_err(|_| AuthError::Unauthorized {
+                code: "INVALID_ACCESS_TOKEN",
+                message: "Access token is invalid or expired.".to_owned(),
             })?;
         let claims = token_data.claims;
 

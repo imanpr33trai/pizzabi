@@ -548,16 +548,25 @@ impl OrderService {
                 obj.insert("reason".to_owned(), serde_json::Value::String(r));
             }
             if let Some(v) = &detail.accepted_at {
-                obj.insert("accepted_at".to_owned(), serde_json::Value::String(v.clone()));
+                obj.insert(
+                    "accepted_at".to_owned(),
+                    serde_json::Value::String(v.clone()),
+                );
             }
             if let Some(v) = &detail.prep_started_at {
-                obj.insert("prep_started_at".to_owned(), serde_json::Value::String(v.clone()));
+                obj.insert(
+                    "prep_started_at".to_owned(),
+                    serde_json::Value::String(v.clone()),
+                );
             }
             if let Some(v) = &detail.ready_at {
                 obj.insert("ready_at".to_owned(), serde_json::Value::String(v.clone()));
             }
             if let Some(v) = &detail.completed_at {
-                obj.insert("completed_at".to_owned(), serde_json::Value::String(v.clone()));
+                obj.insert(
+                    "completed_at".to_owned(),
+                    serde_json::Value::String(v.clone()),
+                );
             }
         }
 
@@ -622,8 +631,8 @@ impl OrderService {
         let cgst_paise = tax_paise / 2;
         let sgst_paise = tax_paise - cgst_paise;
         let addr_json: Option<serde_json::Value> = h.try_get("delivery_address_snapshot")?;
-        let delivery_address = addr_json
-            .and_then(|v| serde_json::from_value::<DeliveryAddressSnapshotDto>(v).ok());
+        let delivery_address =
+            addr_json.and_then(|v| serde_json::from_value::<DeliveryAddressSnapshotDto>(v).ok());
 
         let item_rows = sqlx::query(
             r#"
@@ -714,9 +723,7 @@ impl OrderService {
             id: h.try_get::<Uuid, _>("id")?.to_string(),
             order_number: h.try_get("order_number")?,
             customer_id: h.try_get::<Uuid, _>("customer_id")?.to_string(),
-            fulfillment_type: parse_fulfillment_type(
-                &h.try_get::<String, _>("fulfillment_type")?,
-            )?,
+            fulfillment_type: parse_fulfillment_type(&h.try_get::<String, _>("fulfillment_type")?)?,
             schedule_type: parse_schedule_type(&h.try_get::<String, _>("schedule_type")?)?,
             scheduled_slot_id: h
                 .try_get::<Option<Uuid>, _>("scheduled_slot_id")?

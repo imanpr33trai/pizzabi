@@ -22,8 +22,12 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
         PaymentService::with_public_key_id(pool.clone(), cfg.clone(), gateway.public_key_id());
     let webhook_service = WebhookService::new(payment_service.clone(), cfg.clone());
     let outbox_repo = OutboxRepository::new(pool.clone());
-    let reconciler =
-        RazorpayReconciliationService::new(pool.clone(), gateway.clone(), payment_service.clone(), 20);
+    let reconciler = RazorpayReconciliationService::new(
+        pool.clone(),
+        gateway.clone(),
+        payment_service.clone(),
+        20,
+    );
 
     let owner_id = common::seed_owner_staff(&pool).await;
     let customer_id = common::seed_user(&pool, "flow").await;
@@ -33,11 +37,18 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
     assert_eq!(gateway.created_orders().len(), 1);
 
     let status1 = payment_service
-        .get_order_payment_status(order1.order_id, customer_id, pizzora_core::UserRole::Customer)
+        .get_order_payment_status(
+            order1.order_id,
+            customer_id,
+            pizzora_core::UserRole::Customer,
+        )
         .await
         .expect("get status");
     let latest1 = status1.payment.latest_attempt.expect("latest attempt");
-    assert_eq!(latest1.status, PaymentAttemptStatus::AwaitingCustomerPayment);
+    assert_eq!(
+        latest1.status,
+        PaymentAttemptStatus::AwaitingCustomerPayment
+    );
     let gw_order_id = latest1.gateway_order_id.expect("gw order id");
 
     let audit_cust = AuditContext {
@@ -160,18 +171,22 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
             },
             &audit_cust,
         ),
-        webhook_service.handle_razorpay_webhook(wh_body.as_bytes(), Some(&wh_sig), None, &audit_sys),
+        webhook_service.handle_razorpay_webhook(
+            wh_body.as_bytes(),
+            Some(&wh_sig),
+            None,
+            &audit_sys
+        ),
     );
     res_v.expect("verify succeeds");
     res_w.expect("webhook succeeds");
 
-    let inv_row = sqlx::query(
-        "SELECT on_hand_qty, reserved_qty FROM inventory WHERE ingredient_id = $1",
-    )
-    .bind(order1.ingredient_id.expect("ing"))
-    .fetch_one(&pool)
-    .await
-    .expect("inv");
+    let inv_row =
+        sqlx::query("SELECT on_hand_qty, reserved_qty FROM inventory WHERE ingredient_id = $1")
+            .bind(order1.ingredient_id.expect("ing"))
+            .fetch_one(&pool)
+            .await
+            .expect("inv");
     assert_eq!(inv_row.get::<i64, _>("on_hand_qty"), 750);
     assert_eq!(inv_row.get::<i64, _>("reserved_qty"), 0);
 
@@ -186,10 +201,19 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
     let order2 = common::seed_pending_razorpay_order(&pool, customer_id, false).await;
     common::dispatch_all_pending_payment_outbox(&reconciler, &outbox_repo).await;
     let st2 = payment_service
-        .get_order_payment_status(order2.order_id, customer_id, pizzora_core::UserRole::Customer)
+        .get_order_payment_status(
+            order2.order_id,
+            customer_id,
+            pizzora_core::UserRole::Customer,
+        )
         .await
         .expect("st2");
-    let gw_order2 = st2.payment.latest_attempt.expect("att2").gateway_order_id.expect("gwo2");
+    let gw_order2 = st2
+        .payment
+        .latest_attempt
+        .expect("att2")
+        .gateway_order_id
+        .expect("gwo2");
 
     // Mark order2 & payment expired directly to simulate ExpirySweepWorker completion
     sqlx::query("UPDATE orders SET status = 'EXPIRED', expires_at = $1 WHERE id = $2")
@@ -229,7 +253,11 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
         .expect("late capture webhook handled");
 
     let after_late = payment_service
-        .get_order_payment_status(order2.order_id, customer_id, pizzora_core::UserRole::Customer)
+        .get_order_payment_status(
+            order2.order_id,
+            customer_id,
+            pizzora_core::UserRole::Customer,
+        )
         .await
         .expect("after late");
     assert_eq!(after_late.order_status, OrderStatus::Expired);
@@ -245,7 +273,11 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
     gateway.set_fail_next_refunds(1, false);
     common::dispatch_all_pending_payment_outbox(&reconciler, &outbox_repo).await;
     let after_fail = payment_service
-        .get_order_payment_status(order2.order_id, customer_id, pizzora_core::UserRole::Customer)
+        .get_order_payment_status(
+            order2.order_id,
+            customer_id,
+            pizzora_core::UserRole::Customer,
+        )
         .await
         .expect("after fail");
     assert_eq!(after_fail.refunds[0].status, RefundStatus::Failed);
@@ -281,7 +313,11 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
     assert_eq!(gateway.created_refunds().len(), 1);
 
     let final_st = payment_service
-        .get_order_payment_status(order2.order_id, customer_id, pizzora_core::UserRole::Customer)
+        .get_order_payment_status(
+            order2.order_id,
+            customer_id,
+            pizzora_core::UserRole::Customer,
+        )
         .await
         .expect("final state");
     assert_eq!(final_st.payment.status, PaymentStatus::Refunded);
@@ -315,14 +351,26 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
     let order3 = common::seed_pending_razorpay_order(&pool, customer_id, false).await;
     common::dispatch_all_pending_payment_outbox(&reconciler, &outbox_repo).await;
     let st3 = payment_service
-        .get_order_payment_status(order3.order_id, customer_id, pizzora_core::UserRole::Customer)
+        .get_order_payment_status(
+            order3.order_id,
+            customer_id,
+            pizzora_core::UserRole::Customer,
+        )
         .await
         .expect("st3");
-    let gw_order3 = st3.payment.latest_attempt.expect("att3").gateway_order_id.expect("gwo3");
+    let gw_order3 = st3
+        .payment
+        .latest_attempt
+        .expect("att3")
+        .gateway_order_id
+        .expect("gwo3");
     gateway.insert_mock_payment_for_order(
         &gw_order3,
         GatewayPaymentResult {
-            gateway_payment_id: format!("pay_reconcile_{}", &new_uuid_v4().simple().to_string()[..8]),
+            gateway_payment_id: format!(
+                "pay_reconcile_{}",
+                &new_uuid_v4().simple().to_string()[..8]
+            ),
             gateway_order_id: gw_order3.clone(),
             amount_paise: order3.total_paise,
             currency: "INR".to_owned(),
@@ -337,7 +385,11 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
         .expect("open attempt reconciler");
     assert_eq!(rec3, 1);
     let final3 = payment_service
-        .get_order_payment_status(order3.order_id, customer_id, pizzora_core::UserRole::Customer)
+        .get_order_payment_status(
+            order3.order_id,
+            customer_id,
+            pizzora_core::UserRole::Customer,
+        )
         .await
         .expect("final3");
     assert_eq!(final3.order_status, OrderStatus::Placed);

@@ -435,11 +435,10 @@ async fn lookup_order_customer_id(
     conn: &mut PgConnection,
     order_id: Uuid,
 ) -> Result<Option<Uuid>, ApiError> {
-    let cid: Option<Uuid> =
-        sqlx::query_scalar("SELECT customer_id FROM orders WHERE id = $1")
-            .bind(order_id)
-            .fetch_optional(&mut *conn)
-            .await?;
+    let cid: Option<Uuid> = sqlx::query_scalar("SELECT customer_id FROM orders WHERE id = $1")
+        .bind(order_id)
+        .fetch_optional(&mut *conn)
+        .await?;
     Ok(cid)
 }
 

@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use chrono::{Duration, Utc};
 use hmac::{Hmac, Mac};
 use pizzora_api::dto::{
-    AvailableSlotsResponse, CancelOrderRequest, CartItemInputDto, CartResponseDto,
-    CheckoutRequest, CheckoutResponse, ConfirmProductImageRequest, CreateScheduledSlotRequest,
+    AvailableSlotsResponse, CancelOrderRequest, CartItemInputDto, CartResponseDto, CheckoutRequest,
+    CheckoutResponse, ConfirmProductImageRequest, CreateScheduledSlotRequest,
     DeliveryZoneCheckResponse, HealthReadinessResponse, KdsTicketActionResponse,
     KdsTicketsResponse, OperationsReportResponse, OwnerDashboardResponse,
     PresignProductImageRequest, PresignProductImageResponse, PricingQuoteRequest,
@@ -16,9 +16,8 @@ use pizzora_api::dto::{
 };
 use pizzora_api::error::ApiErrorEnvelope;
 use pizzora_auth::{
-    AuthTokensResponse, ForgotPasswordRequest, LoginRequest, MessageResponse,
-    RefreshTokenRequest, ResendVerificationRequest, ResetPasswordRequest, VerifyEmailRequest,
-    WsTicketResponse,
+    AuthTokensResponse, ForgotPasswordRequest, LoginRequest, MessageResponse, RefreshTokenRequest,
+    ResendVerificationRequest, ResetPasswordRequest, VerifyEmailRequest, WsTicketResponse,
 };
 use pizzora_core::{FulfillmentType, OrderStatus, PaymentMethod, PaymentStatus, ScheduleType};
 use pizzora_db::{
@@ -224,7 +223,9 @@ async fn pg18_auth_rbac_profile_and_addresses_matrix() {
     assert_eq!(addr_create.status(), StatusCode::CREATED);
     let addr1: AddressDto = addr_create.json().await.unwrap();
 
-    let (_, _, other_cust) = srv.register_and_verify_customer(&format!("other-{tag}")).await;
+    let (_, _, other_cust) = srv
+        .register_and_verify_customer(&format!("other-{tag}"))
+        .await;
     let idor_del = srv
         .client
         .delete(srv.url(&format!("/api/v1/me/addresses/{}", addr1.id)))
@@ -328,11 +329,15 @@ async fn pg18_catalog_zones_slots_images_and_disabled_storage() {
 
     // Server 1: S3 disabled -> presign fails 503 gracefully, menu/config still 200
     let srv_no_s3 = TestServer::spawn_with_options(pool.clone(), HashMap::new(), false, None).await;
-    let (_, owner_no_s3) = srv_no_s3.bootstrap_and_login_owner(&format!("nos3-{tag}")).await;
+    let (_, owner_no_s3) = srv_no_s3
+        .bootstrap_and_login_owner(&format!("nos3-{tag}"))
+        .await;
     let prod_id_dummy = new_uuid_v4();
     let presign_disabled = srv_no_s3
         .client
-        .post(srv_no_s3.url(&format!("/api/v1/owner/products/{prod_id_dummy}/images/presign")))
+        .post(srv_no_s3.url(&format!(
+            "/api/v1/owner/products/{prod_id_dummy}/images/presign"
+        )))
         .bearer_auth(&owner_no_s3.access_token)
         .json(&PresignProductImageRequest {
             mime_type: "image/jpeg".to_owned(),
@@ -367,7 +372,8 @@ async fn pg18_catalog_zones_slots_images_and_disabled_storage() {
     // Server 2: Mock S3 enabled
     let srv = TestServer::spawn_default(pool).await;
     let (_, owner_tokens) = srv.bootstrap_and_login_owner(tag).await;
-    let seeded = seed_full_storefront_via_owner_api(&srv, &owner_tokens.access_token, tag, &pincode).await;
+    let seeded =
+        seed_full_storefront_via_owner_api(&srv, &owner_tokens.access_token, tag, &pincode).await;
     let mock_s3 = srv.mock_storage.as_ref().expect("mock storage enabled");
 
     // 1. Valid JPEG upload presign -> mock put -> confirm -> appears in public menu -> delete
@@ -521,16 +527,17 @@ async fn pg18_catalog_zones_slots_images_and_disabled_storage() {
     let del_date = &seeded.delivery_slot.slot_date;
     let del_slots: AvailableSlotsResponse = srv
         .client
-        .get(srv.url(&format!(
-            "/api/v1/slots?type=DELIVERY&date={del_date}"
-        )))
+        .get(srv.url(&format!("/api/v1/slots?type=DELIVERY&date={del_date}")))
         .send()
         .await
         .unwrap()
         .json()
         .await
         .unwrap();
-    assert!(del_slots.slots.iter().any(|s| s.id == seeded.delivery_slot.id && s.is_bookable));
+    assert!(del_slots
+        .slots
+        .iter()
+        .any(|s| s.id == seeded.delivery_slot.id && s.is_bookable));
 
     // Past-cutoff slot reports "Cutoff time passed", and deleting unused slot returns 204
     let past_cutoff = (Utc::now() - Duration::minutes(15)).to_rfc3339();
@@ -676,7 +683,10 @@ async fn pg18_cart_coupons_checkout_razorpay_webhooks_kds_and_reports() {
         .json()
         .await
         .unwrap();
-    assert!(avail.coupons.iter().any(|c| c.code == coupon.code && c.is_eligible));
+    assert!(avail
+        .coupons
+        .iter()
+        .any(|c| c.code == coupon.code && c.is_eligible));
 
     let quote: PricingQuoteResponse = srv
         .client

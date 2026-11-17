@@ -8,9 +8,7 @@ use pizzora_db::{record_audit_log, AuditContext, DbError, OrderService, OutboxRe
 use sqlx::{PgConnection, PgPool, Row as _};
 use uuid::Uuid;
 
-use crate::dto::{
-    KdsTicketActionResponse, KdsTicketDto, KdsTicketItemDto, KdsTicketsResponse,
-};
+use crate::dto::{KdsTicketActionResponse, KdsTicketDto, KdsTicketItemDto, KdsTicketsResponse};
 use crate::error::{format_iso8601, now_iso8601, ApiError};
 use crate::services::slots::parse_fulfillment_type;
 
@@ -23,7 +21,10 @@ pub struct KitchenService {
 impl KitchenService {
     pub fn new(pool: PgPool) -> Self {
         let order_service = OrderService::new(pool.clone());
-        Self { pool, order_service }
+        Self {
+            pool,
+            order_service,
+        }
     }
 
     pub async fn list_tickets(
@@ -155,7 +156,10 @@ impl KitchenService {
         let ticket = load_single_ticket(&mut tx, order_id)
             .await?
             .ok_or_else(|| {
-                ApiError::not_found("ORDER_NOT_FOUND", format!("Order {order_id} was not found."))
+                ApiError::not_found(
+                    "ORDER_NOT_FOUND",
+                    format!("Order {order_id} was not found."),
+                )
             })?;
         tx.commit().await?;
 
@@ -187,7 +191,10 @@ impl KitchenService {
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| {
-            ApiError::not_found("ORDER_NOT_FOUND", format!("Order {order_id} was not found."))
+            ApiError::not_found(
+                "ORDER_NOT_FOUND",
+                format!("Order {order_id} was not found."),
+            )
         })?;
 
         let customer_id: Uuid = locked.try_get("customer_id")?;
@@ -231,7 +238,10 @@ impl KitchenService {
             });
             if let Some(ref clean) = clean_reason {
                 if let Some(obj) = payload.as_object_mut() {
-                    obj.insert("reason".to_owned(), serde_json::Value::String(clean.clone()));
+                    obj.insert(
+                        "reason".to_owned(),
+                        serde_json::Value::String(clean.clone()),
+                    );
                 }
             }
 
@@ -270,7 +280,10 @@ impl KitchenService {
         let ticket = load_single_ticket(&mut tx, order_id)
             .await?
             .ok_or_else(|| {
-                ApiError::not_found("ORDER_NOT_FOUND", format!("Order {order_id} was not found."))
+                ApiError::not_found(
+                    "ORDER_NOT_FOUND",
+                    format!("Order {order_id} was not found."),
+                )
             })?;
         tx.commit().await?;
 

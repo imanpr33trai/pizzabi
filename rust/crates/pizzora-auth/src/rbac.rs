@@ -71,7 +71,10 @@ impl AuthorizationService {
                 .collect::<Vec<_>>()
                 .join(",");
             if !self.cache.set_ex(&cache_key, 300, &joined).await {
-                warn!(role = role_name, "Redis unavailable while caching RBAC permissions");
+                warn!(
+                    role = role_name,
+                    "Redis unavailable while caching RBAC permissions"
+                );
             }
         }
 

@@ -18,7 +18,10 @@ impl DeliveryZoneService {
         Self { pool }
     }
 
-    pub async fn check_pincode(&self, raw_pincode: &str) -> Result<DeliveryZoneCheckResponse, ApiError> {
+    pub async fn check_pincode(
+        &self,
+        raw_pincode: &str,
+    ) -> Result<DeliveryZoneCheckResponse, ApiError> {
         let pincode = validate_pincode(raw_pincode)?;
         let row = sqlx::query(
             r#"
@@ -49,7 +52,9 @@ impl DeliveryZoneService {
                 pincode: pincode.clone(),
                 is_serviceable: false,
                 zone: None,
-                message: format!("Sorry, pincode {pincode} is currently outside our delivery area."),
+                message: format!(
+                    "Sorry, pincode {pincode} is currently outside our delivery area."
+                ),
             }),
         }
     }

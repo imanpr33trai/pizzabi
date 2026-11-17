@@ -429,7 +429,11 @@ impl CheckoutService {
         }
 
         if let Some(slot_id) = scheduled_slot_id {
-            let slot_res_status = if immediate_commit { "COMMITTED" } else { "ACTIVE" };
+            let slot_res_status = if immediate_commit {
+                "COMMITTED"
+            } else {
+                "ACTIVE"
+            };
             let slot_res_exp = if immediate_commit { None } else { expires_at };
             sqlx::query(
                 r#"
@@ -457,7 +461,8 @@ impl CheckoutService {
                 })
                 .unwrap_or("REGULAR");
             let topping_names: Vec<String> = item.toppings.iter().map(|t| t.name.clone()).collect();
-            let toppings_json = serde_json::to_value(&topping_names).map_err(|_| ApiError::internal())?;
+            let toppings_json =
+                serde_json::to_value(&topping_names).map_err(|_| ApiError::internal())?;
             sqlx::query(
                 r#"
                 INSERT INTO order_items (
@@ -639,7 +644,11 @@ fn order_status_as_str(status: OrderStatus) -> &'static str {
 fn generate_order_number(order_id: Uuid) -> String {
     let ts_part = Utc::now().timestamp() % 1_000_000;
     let id_hex = order_id.simple().to_string();
-    format!("PZ-{:06}-{}", ts_part.abs(), &id_hex[..4].to_ascii_uppercase())
+    format!(
+        "PZ-{:06}-{}",
+        ts_part.abs(),
+        &id_hex[..4].to_ascii_uppercase()
+    )
 }
 
 fn compute_request_hash(
@@ -679,7 +688,11 @@ fn compute_request_hash(
             ScheduleType::Asap => "ASAP",
             ScheduleType::Scheduled => "SCHEDULED",
         },
-        request.scheduled_slot_id.as_deref().map(str::trim).unwrap_or(""),
+        request
+            .scheduled_slot_id
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or(""),
         request.address_id.as_deref().map(str::trim).unwrap_or(""),
         match request.payment_method {
             PaymentMethod::Razorpay => "RAZORPAY",

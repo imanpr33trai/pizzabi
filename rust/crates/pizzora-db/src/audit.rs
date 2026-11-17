@@ -136,9 +136,7 @@ impl AuditService {
         }
         if let Some(act) = clean_action {
             push_cond(&mut qb);
-            qb.push("LOWER(a.action) = LOWER(")
-                .push_bind(act)
-                .push(")");
+            qb.push("LOWER(a.action) = LOWER(").push_bind(act).push(")");
         }
         if let Some(eid) = clean_entity_id {
             push_cond(&mut qb);
@@ -188,9 +186,7 @@ impl AuditService {
             parsed.truncate(clamped_limit as usize);
         }
         let next_cursor = if has_more {
-            parsed
-                .last()
-                .map(|(ts, id, _)| encode_cursor(*ts, *id))
+            parsed.last().map(|(ts, id, _)| encode_cursor(*ts, *id))
         } else {
             None
         };
@@ -216,10 +212,12 @@ pub fn encode_cursor(created_at: DateTime<Utc>, id: Uuid) -> String {
 }
 
 pub fn decode_cursor(encoded: &str) -> Result<AuditCursor, DbError> {
-    let bytes = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| DbError::Validation {
-        code: "INVALID_CURSOR",
-        message: "Invalid pagination cursor for audit logs.".to_owned(),
-    })?;
+    let bytes = URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|_| DbError::Validation {
+            code: "INVALID_CURSOR",
+            message: "Invalid pagination cursor for audit logs.".to_owned(),
+        })?;
     let text = std::str::from_utf8(&bytes).map_err(|_| DbError::Validation {
         code: "INVALID_CURSOR",
         message: "Invalid pagination cursor for audit logs.".to_owned(),

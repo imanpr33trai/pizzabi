@@ -61,10 +61,7 @@ pub async fn security_headers_middleware(
     let mut resp = next.run(req).await;
     let headers = resp.headers_mut();
 
-    headers.insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("no-store"),
-    );
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
@@ -183,7 +180,11 @@ pub async fn rate_limit_middleware(
         return next.run(req).await;
     };
     let key = format!("group:{}:{client_ip}", quota.group);
-    match state.rate_limiter.check(&key, quota.max_per_minute, 60).await {
+    match state
+        .rate_limiter
+        .check(&key, quota.max_per_minute, 60)
+        .await
+    {
         RateLimitDecision::Allowed => next.run(req).await,
         RateLimitDecision::Rejected { retry_after_secs } => {
             let cid = correlation_id_from_req(&req);
@@ -195,7 +196,10 @@ pub async fn rate_limit_middleware(
                 "Rate limited request by route group"
             );
             ApiError::rate_limited(
-                format!("Too many requests for '{}'. Please try again later.", quota.group),
+                format!(
+                    "Too many requests for '{}'. Please try again later.",
+                    quota.group
+                ),
                 retry_after_secs,
             )
             .with_detail("group", quota.group)
@@ -257,7 +261,12 @@ pub fn extract_client_ip(req: &Request) -> String {
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
     {
-        if let Some(first) = fwd.split(',').next().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(first) = fwd
+            .split(',')
+            .next()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             return first.to_owned();
         }
     }

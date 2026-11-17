@@ -145,7 +145,11 @@ impl AppConfig {
             use_starttls: smtp_starttls,
         };
 
-        let jwt_secret = match env.get("JWT_SECRET").map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let jwt_secret = match env
+            .get("JWT_SECRET")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        {
             Some(s) => Zeroizing::new(s.to_owned()),
             None => {
                 if is_production {
@@ -493,8 +497,22 @@ impl fmt::Debug for RazorpayConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RazorpayConfig")
             .field("key_id", &self.key_id)
-            .field("key_secret", &if self.key_secret.is_empty() { "" } else { "***" })
-            .field("webhook_secret", &if self.webhook_secret.is_empty() { "" } else { "***" })
+            .field(
+                "key_secret",
+                &if self.key_secret.is_empty() {
+                    ""
+                } else {
+                    "***"
+                },
+            )
+            .field(
+                "webhook_secret",
+                &if self.webhook_secret.is_empty() {
+                    ""
+                } else {
+                    "***"
+                },
+            )
             .field("base_url", &self.base_url)
             .finish()
     }
@@ -732,8 +750,14 @@ mod tests {
         assert_eq!(parsed.ssl_mode.as_deref(), Some("verify-full"));
         assert!(!parsed.normalized_redacted_url().contains("p@ss"));
         assert!(!parsed.normalized_redacted_url().contains("p%40ss"));
-        assert!(parsed.normalized_redacted_url().starts_with("postgresql://user%40prod:***@%5B::1%5D")
-            || parsed.normalized_redacted_url().starts_with("postgresql://user%40prod:***@[::1]:5433/pizzora_prod"));
+        assert!(
+            parsed
+                .normalized_redacted_url()
+                .starts_with("postgresql://user%40prod:***@%5B::1%5D")
+                || parsed
+                    .normalized_redacted_url()
+                    .starts_with("postgresql://user%40prod:***@[::1]:5433/pizzora_prod")
+        );
         assert!(parsed
             .normalized_postgres_url()
             .contains("p%40ss%2F%3A123@[::1]:5433/pizzora_prod"));
@@ -759,7 +783,10 @@ mod tests {
         assert!(err.to_string().contains("OUTBOX_EMAIL_KEYS"));
 
         let mut bad_len = prod_env();
-        bad_len.insert("OUTBOX_EMAIL_KEYS".to_owned(), "k2026_01:c2hvcnQ=".to_owned());
+        bad_len.insert(
+            "OUTBOX_EMAIL_KEYS".to_owned(),
+            "k2026_01:c2hvcnQ=".to_owned(),
+        );
         let err = AppConfig::from_env_map(&bad_len).expect_err("must reject <32-byte key");
         assert!(err.to_string().contains("OUTBOX_EMAIL_KEYS"));
         assert!(!err.to_string().contains("c2hvcnQ="));
@@ -784,7 +811,10 @@ mod tests {
         assert!(!cfg.storage.enabled);
 
         env.insert("S3_ENABLED".to_owned(), "true".to_owned());
-        env.insert("S3_ENDPOINT".to_owned(), "https://s3.ap-south-1.amazonaws.com".to_owned());
+        env.insert(
+            "S3_ENDPOINT".to_owned(),
+            "https://s3.ap-south-1.amazonaws.com".to_owned(),
+        );
         env.insert("S3_BUCKET".to_owned(), "<replace-me>".to_owned());
         let err = AppConfig::from_env_map(&env).expect_err("placeholder bucket rejected");
         assert!(err.to_string().contains("S3_BUCKET"));

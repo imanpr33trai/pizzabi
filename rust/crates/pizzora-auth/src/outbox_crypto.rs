@@ -157,10 +157,9 @@ pub fn unseal_outbox_email_payload(
             "outbox email envelope has already been redacted".to_owned(),
         ));
     }
-    let envelope = payload
-        .sealed_envelope
-        .as_ref()
-        .ok_or_else(|| AuthError::Crypto("outbox email payload is missing sealed_envelope".to_owned()))?;
+    let envelope = payload.sealed_envelope.as_ref().ok_or_else(|| {
+        AuthError::Crypto("outbox email payload is missing sealed_envelope".to_owned())
+    })?;
 
     if envelope.alg != OUTBOX_ENVELOPE_ALG {
         return Err(AuthError::Crypto(format!(
@@ -189,10 +188,13 @@ pub fn unseal_outbox_email_payload(
 
     let ciphertext = STANDARD
         .decode(envelope.ciphertext_b64.as_bytes())
-        .map_err(|_| AuthError::Crypto("invalid base64 ciphertext in outbox envelope".to_owned()))?;
+        .map_err(|_| {
+            AuthError::Crypto("invalid base64 ciphertext in outbox envelope".to_owned())
+        })?;
 
-    let user_id = Uuid::parse_str(&payload.user_id)
-        .map_err(|_| AuthError::Crypto("invalid user_id UUID in outbox email payload".to_owned()))?;
+    let user_id = Uuid::parse_str(&payload.user_id).map_err(|_| {
+        AuthError::Crypto("invalid user_id UUID in outbox email payload".to_owned())
+    })?;
     let aad = compute_outbox_aad(outbox_event_id, user_id, event_type);
 
     let cipher = Aes256Gcm::new_from_slice(key_bytes)
