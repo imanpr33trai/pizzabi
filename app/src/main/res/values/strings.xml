@@ -97,6 +97,8 @@
     <string name="action_complete_payment">Complete Payment</string>
     <string name="action_retry_payment">Retry Payment</string>
     <string name="razorpay_sheet_title">Razorpay Payment Checkout</string>
+    <string name="razorpay_official_sdk_notice">You will be redirected to Razorpay\'s secure checkout to pay via UPI, Card, or Netbanking.</string>
+    <string name="action_pay_with_razorpay">Pay with Razorpay</string>
     <string name="razorpay_payment_id_hint">Razorpay Payment ID (e.g. pay_...)</string>
     <string name="razorpay_signature_hint">Razorpay HMAC Signature</string>
     <string name="action_verify_payment">Verify &amp; Confirm Payment</string>

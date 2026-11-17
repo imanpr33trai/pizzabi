@@ -309,6 +309,14 @@ class CheckoutQuoteViewModel(
     }
   }
 
+  fun clearSessionState() {
+    quoteJob?.cancel()
+    quoteJob = null
+    latestCartItems = emptyList()
+    latestSubtotalPaise = 0L
+    _uiState.value = CheckoutQuoteUiState()
+  }
+
   private fun List<CartItemWithToppings>.toSignature(): String =
     joinToString("|") { entry ->
       val toppings = entry.toppings.map { it.toppingId }.sorted().joinToString(",")

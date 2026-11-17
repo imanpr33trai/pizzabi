@@ -2,6 +2,7 @@ package com.example.auth
 
 import com.example.core.network.PizzoraApiClient
 import com.example.core.security.AuthSession
+import com.example.core.security.SessionTransitionCoordinator
 import com.example.core.security.TokenStorage
 import com.pizzora.contracts.ForgotPasswordRequest
 import com.pizzora.contracts.LoginRequest
@@ -28,6 +29,7 @@ interface AuthRepository {
 class NetworkAuthRepository(
   private val apiClient: PizzoraApiClient,
   private val tokenStorage: TokenStorage,
+  private val sessionCoordinator: SessionTransitionCoordinator? = null,
 ) : AuthRepository {
   override val sessionFlow: StateFlow<AuthSession?> = tokenStorage.sessionFlow
 
@@ -42,7 +44,11 @@ class NetworkAuthRepository(
       refreshToken = response.refreshToken,
       user = response.user,
     )
-    tokenStorage.saveSession(session)
+    if (sessionCoordinator != null) {
+      sessionCoordinator.onLoginSuccess(session)
+    } else {
+      tokenStorage.saveSession(session)
+    }
     return session
   }
 
@@ -74,7 +80,11 @@ class NetworkAuthRepository(
   }
 
   override suspend fun logout() {
-    runCatching { apiClient.logout() }
-    tokenStorage.clearSession()
+    if (sessionCoordinator != null) {
+      sessionCoordinator.onLogout { apiClient.logout() }
+    } else {
+      runCatching { apiClient.logout() }
+      tokenStorage.clearSession()
+    }
   }
 }

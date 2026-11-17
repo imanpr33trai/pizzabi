@@ -38,28 +38,7 @@ An incremental, production-safe migration blueprint to fix immediate client cart
 6. **Cumulative Revision Policy**: Added a policy prohibiting silent condensation or removal of previously approved implementation detail.
 7. **Git Branch Gate Clarification**: Added safe handling for an already-existing migration branch; no reset, stash, overwrite or automatic dirty-tree cleanup.
 
----
-
-## 0. Mandatory Pre-Implementation Git Branch Safety Gate
-
-> [!CAUTION]
-> **MUST execute before modifying ANY project file (Phase 0 / Phase 1 or beyond).**
-
-1. **Inspect Current Repository State**:
-   - Run `git status`, identify the current base branch, and inspect for any uncommitted/untracked changes.
-   - **NEVER** overwrite, discard, stash, or reset existing user changes.
-   - If uncommitted changes are present, **STOP immediately**, report them to the user, and wait for explicit approval before continuing.
-2. **Create & Verify Dedicated Migration Branch**:
-   - If `feat/pizzora-rust-migration` does **not** exist, create it from the approved clean base branch using `git switch -c feat/pizzora-rust-migration`.
-   - If it **already exists**, inspect its current commit, upstream/base relationship and working tree; do not recreate, reset, overwrite or force-switch it. Ask the user if its provenance or intended state is unclear.
-   - Confirm active branch with `git branch --show-current` == **`feat/pizzora-rust-migration`**, confirming zero work occurs on `main`, `master`, or the original working branch.
-3. **Commit & Publish Boundaries**:
-   - All subsequent implementation commits MUST stay strictly on `feat/pizzora-rust-migration`.
-   - **NEVER** push the branch, open a PR, merge, create/push a release tag, or deploy to Railway without explicit user approval.
-
----
-
-## 1. Current Architecture Assessment *(Verified Existing Functionality)*
+## 1. Current Architecture Assessment _(Verified Existing Functionality)_
 
 - **Android App (`app/`)**: Kotlin + Jetpack Compose M3, manual DI (`AppContainer`), Ktor `HttpClient` (`OkHttp`), `AndroidKeyStore` AES-256-GCM + `DataStore` (`TokenManager`), `Room` `2.7.0` v2 (`PizzoraDatabase` with `exportSchema = false` and `fallbackToDestructiveMigration(dropAllTables = true)`), `WorkManager` (`OrderSyncWorker`), `WebSocketEventClient`, and placeholder manual-entry `RazorpayPaymentSheetDialog`.
 - **Verified Critical Bugs**:
@@ -77,16 +56,16 @@ An incremental, production-safe migration blueprint to fix immediate client cart
 
 Every crate lives under `/rust/crates/<name>/` and inherits pinned versions from `/rust/Cargo.toml`:
 
-| Crate | Cargo Targets | Pinned Dependencies | Explicit Ownership |
-| :--- | :--- | :--- | :--- |
-| **`pizzora-core`** | `[lib]` | `serde`, `thiserror`, `uuid` | **Pure domain (zero I/O, zero crypto)**: `Money`, `PricingEngine`, `CouponEvaluator`, `OrderStateMachine`, `PaymentStateMachine`, `OrderCausalTracker`, `CartValidation`, `CartSyncPlanner`, `StorageKeyValidator`, `DomainError`. |
-| **`pizzora-uniffi`** | `[lib]` (`lib`, `cdylib`) + `[[bin]] name = "uniffi-bindgen"` | `pizzora-core`, `uniffi = { version = "=0.29.3", features = ["cli"] }`, `thiserror` | **Android FFI boundary only**: UniFFI exports + workspace-locked `uniffi-bindgen` binary. Never imported by backend crates. |
-| **`pizzora-config`** | `[lib]` | `serde`, `thiserror`, `url` | **Env & validation parity**: Normalizes DB URLs, `S3_ENABLED`, `PIZZORA_ENV=production` guards (rejecting missing JWT/Razorpay/outbox encryption keys), `WorkerConfig`, `SmtpConfig`, `OutboxEncryptionConfig`, `RazorpayConfig`, `SecurityConfig`. |
-| **`pizzora-db`** | `[lib]` | `pizzora-core`, `pizzora-config`, `sqlx = "=0.8.6"`, `crc32fast`, `redis`, `chrono`, `uuid`, `tokio`, `tracing`, `serde_json` | **Shared Persistence, Redis & Transactional Services**: PostgreSQL 18.6 `PgPool`, dedicated-connection advisory-locked Flyway->SQLx migrator (`0001..0003` + `V4+`), `flyway_crc32` (oracle-matched to Flyway `11.3.4`), `RedisStore`, `Outbox` SQL, `OrderService`, `InventoryService`, `CouponService`, `NotificationService`, `AuditService`, domain repositories. *(Zero outbox crypto keys.)* |
-| **`pizzora-auth`** | `[lib]` | `pizzora-core`, `pizzora-config`, `pizzora-db`, `argon2`, `jsonwebtoken`, `sha2`, `aes-gcm`, `zeroize`, `base64`, `hex`, `rand`, `lettre` (`tokio1-rustls-tls`) | **Identity, RBAC, Outbox Token Envelope Crypto & SMTP**: Argon2id, HS256 JWT, SHA-256 one-time DB tokens, **AEAD `AES-256-GCM` keyring sealing/unsealing for sensitive outbox email payloads**, and **`EmailDeliveryProvider` (`lettre` SMTP with deterministic `Message-ID`)**. |
-| **`pizzora-payments`** | `[lib]` | `pizzora-core`, `pizzora-config`, `pizzora-db`, `reqwest` (`rustls-tls`), `hmac`, `sha2`, `hex`, `subtle`, `serde_json`, `tracing` | **Payments, Receipts, Gateway & Webhooks**: Owns canonical **`format_razorpay_receipt`** (`sha2` + `hex`), strict `(order_id, idempotency_key)` receipt reuse vs `409 Conflict` detection, `RazorpayGateway`, constant-time HMAC verification, `PaymentService`, `WebhookService`, refunds & reconciliation. |
-| **`pizzora-workers`** | `[lib]` + `[[bin]] name = "pizzora-workers"` | `pizzora-core`, `pizzora-config`, `pizzora-db`, **`pizzora-auth`**, `pizzora-payments`, `axum`, `tokio`, `tokio-util`, `metrics`, `serde_json`, `tracing-subscriber` | **Standalone Worker Runtime (`:8081`)**: `EventSequencerWorker`, `OutboxDispatcherWorker` (payment/refund gateway calls, Redis Pub/Sub broadcast, inbox notifications, and **at-least-once `EMAIL_DELIVERY_REQUESTED` dispatch via `pizzora-auth`**), `ExpirySweepWorker` (including sensitive outbox payload scrubbing), `RazorpayReconciliationWorker`, `/health/worker`, `/metrics`. |
-| **`pizzora-api`** | `[lib]` + `[[bin]] name = "pizzora-api"` | `pizzora-core`, `pizzora-config`, `pizzora-db`, `pizzora-auth`, `pizzora-payments`, `axum`, `tower`, `tower-http`, `reqwest`, `hmac`, `sha2`, `metrics-exporter-prometheus`, `tracing-subscriber` | **Standalone API Runtime (`:8080`)**: Axum HTTP/WS router, Tower security/body-limit/rate-limit middleware, `RealtimeHub`, **S3 SigV4 (`S3_ENABLED` optional)**, API services, `--migrate-only` & `--bootstrap-owner` CLI modes. |
+| Crate                  | Cargo Targets                                                 | Pinned Dependencies                                                                                                                                                                               | Explicit Ownership                                                                                                                                                                                                                                                                                                                                                                                 |
+| :--------------------- | :------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`pizzora-core`**     | `[lib]`                                                       | `serde`, `thiserror`, `uuid`                                                                                                                                                                      | **Pure domain (zero I/O, zero crypto)**: `Money`, `PricingEngine`, `CouponEvaluator`, `OrderStateMachine`, `PaymentStateMachine`, `OrderCausalTracker`, `CartValidation`, `CartSyncPlanner`, `StorageKeyValidator`, `DomainError`.                                                                                                                                                                 |
+| **`pizzora-uniffi`**   | `[lib]` (`lib`, `cdylib`) + `[[bin]] name = "uniffi-bindgen"` | `pizzora-core`, `uniffi = { version = "=0.29.3", features = ["cli"] }`, `thiserror`                                                                                                               | **Android FFI boundary only**: UniFFI exports + workspace-locked `uniffi-bindgen` binary. Never imported by backend crates.                                                                                                                                                                                                                                                                        |
+| **`pizzora-config`**   | `[lib]`                                                       | `serde`, `thiserror`, `url`                                                                                                                                                                       | **Env & validation parity**: Normalizes DB URLs, `S3_ENABLED`, `PIZZORA_ENV=production` guards (rejecting missing JWT/Razorpay/outbox encryption keys), `WorkerConfig`, `SmtpConfig`, `OutboxEncryptionConfig`, `RazorpayConfig`, `SecurityConfig`.                                                                                                                                                |
+| **`pizzora-db`**       | `[lib]`                                                       | `pizzora-core`, `pizzora-config`, `sqlx = "=0.8.6"`, `crc32fast`, `redis`, `chrono`, `uuid`, `tokio`, `tracing`, `serde_json`                                                                     | **Shared Persistence, Redis & Transactional Services**: PostgreSQL 18.6 `PgPool`, dedicated-connection advisory-locked Flyway->SQLx migrator (`0001..0003` + `V4+`), `flyway_crc32` (oracle-matched to Flyway `11.3.4`), `RedisStore`, `Outbox` SQL, `OrderService`, `InventoryService`, `CouponService`, `NotificationService`, `AuditService`, domain repositories. _(Zero outbox crypto keys.)_ |
+| **`pizzora-auth`**     | `[lib]`                                                       | `pizzora-core`, `pizzora-config`, `pizzora-db`, `argon2`, `jsonwebtoken`, `sha2`, `aes-gcm`, `zeroize`, `base64`, `hex`, `rand`, `lettre` (`tokio1-rustls-tls`)                                   | **Identity, RBAC, Outbox Token Envelope Crypto & SMTP**: Argon2id, HS256 JWT, SHA-256 one-time DB tokens, **AEAD `AES-256-GCM` keyring sealing/unsealing for sensitive outbox email payloads**, and **`EmailDeliveryProvider` (`lettre` SMTP with deterministic `Message-ID`)**.                                                                                                                   |
+| **`pizzora-payments`** | `[lib]`                                                       | `pizzora-core`, `pizzora-config`, `pizzora-db`, `reqwest` (`rustls-tls`), `hmac`, `sha2`, `hex`, `subtle`, `serde_json`, `tracing`                                                                | **Payments, Receipts, Gateway & Webhooks**: Owns canonical **`format_razorpay_receipt`** (`sha2` + `hex`), strict `(order_id, idempotency_key)` receipt reuse vs `409 Conflict` detection, `RazorpayGateway`, constant-time HMAC verification, `PaymentService`, `WebhookService`, refunds & reconciliation.                                                                                       |
+| **`pizzora-workers`**  | `[lib]` + `[[bin]] name = "pizzora-workers"`                  | `pizzora-core`, `pizzora-config`, `pizzora-db`, **`pizzora-auth`**, `pizzora-payments`, `axum`, `tokio`, `tokio-util`, `metrics`, `serde_json`, `tracing-subscriber`                              | **Standalone Worker Runtime (`:8081`)**: `EventSequencerWorker`, `OutboxDispatcherWorker` (payment/refund gateway calls, Redis Pub/Sub broadcast, inbox notifications, and **at-least-once `EMAIL_DELIVERY_REQUESTED` dispatch via `pizzora-auth`**), `ExpirySweepWorker` (including sensitive outbox payload scrubbing), `RazorpayReconciliationWorker`, `/health/worker`, `/metrics`.            |
+| **`pizzora-api`**      | `[lib]` + `[[bin]] name = "pizzora-api"`                      | `pizzora-core`, `pizzora-config`, `pizzora-db`, `pizzora-auth`, `pizzora-payments`, `axum`, `tower`, `tower-http`, `reqwest`, `hmac`, `sha2`, `metrics-exporter-prometheus`, `tracing-subscriber` | **Standalone API Runtime (`:8080`)**: Axum HTTP/WS router, Tower security/body-limit/rate-limit middleware, `RealtimeHub`, **S3 SigV4 (`S3_ENABLED` optional)**, API services, `--migrate-only` & `--bootstrap-owner` CLI modes.                                                                                                                                                                   |
 
 ### 2.2 Complete Acyclic Dependency DAG
 
@@ -189,7 +168,7 @@ Every crate lives under `/rust/crates/<name>/` and inherits pinned versions from
        }
      }
      ```
-     *(Where `ciphertext_b64` holds the encrypted JSON `{ "to_email", "full_name", "raw_token" }`, or encrypted token/address envelope, decrypted strictly inside worker RAM via `pizzora-workers -> pizzora-auth` and wrapped in `Zeroizing<String>` immediately dropped after SMTP send.)*
+     _(Where `ciphertext_b64` holds the encrypted JSON `{ "to_email", "full_name", "raw_token" }`, or encrypted token/address envelope, decrypted strictly inside worker RAM via `pizzora-workers -> pizzora-auth` and wrapped in `Zeroizing<String>` immediately dropped after SMTP send.)_
 3. **Key Ownership, Rotation, Retention & Cleanup**:
    - **Ownership**: Keys are loaded by `pizzora-config::OutboxEncryptionConfig` solely from environment secrets (`OUTBOX_EMAIL_KEY_CURRENT_ID` + `OUTBOX_EMAIL_KEYS` base64-encoded 256-bit keys mapped by `kid`), injected into Railway/CI runtime secrets—never committed to Git or stored in PostgreSQL. `PIZZORA_ENV=production` fails fast if the current key is missing, < 32 bytes, or matches dev defaults.
    - **Rotation**: Multiple `kid` entries remain active in `OUTBOX_EMAIL_KEYS` during rotation: new outbox events encrypt under `OUTBOX_EMAIL_KEY_CURRENT_ID`, while workers decrypt any in-flight event by looking up `sealed_envelope.kid`. Once > 24 hours (maximum verification token lifetime) have elapsed and `SELECT COUNT(*) FROM outbox_events WHERE event_type='EMAIL_DELIVERY_REQUESTED' AND dispatch_status IN ('PENDING','PROCESSING')` reaches 0 for the old `kid`, the retired `kid` is removed cleanly.
@@ -250,7 +229,7 @@ Every crate lives under `/rust/crates/<name>/` and inherits pinned versions from
 
 ---
 
-## 7. UniFFI Build Workflow & Room `v2 -> v3` FK-Safe Migration *(Preserved)*
+## 7. UniFFI Build Workflow & Room `v2 -> v3` FK-Safe Migration _(Preserved)_
 
 - **UniFFI (`uniffi = "=0.29.3"` + `cargo-ndk 4.1.2` + `Rust 1.88.0`)**: Strict separation between host cdylib (`generateUniFfiKotlinBindings` + Robolectric `-Djava.library.path=...`) and Android NDK `.so` (`buildAndroidRustLibs` for `arm64-v8a` & `x86_64`), using JNA `5.15.0@aar` / `5.15.0`.
 - **Session Isolation (`SessionTransitionCoordinator`)**: Single `TransitionMutex` + monotonic `sessionEpoch` across logout, refresh failure, and account switch; session-derived `user_id` only; `(user_id, event_id)` on `NotificationInboxEntity`; no `'__legacy__'` runtime usage.
@@ -269,7 +248,7 @@ Every crate lives under `/rust/crates/<name>/` and inherits pinned versions from
 - **Phase 6 — `pizzora-payments`**: Implement canonical receipts, idempotent/conflict-safe retries + concurrent retry tests, Razorpay gateway, constant-time HMAC verification, webhooks, refunds.
 - **Phase 7 — `pizzora-api` (`[[bin]] :8080`)**: Full Axum HTTP/WS parity, S3 SigV4 (`S3_ENABLED`), `--migrate-only`, `--bootstrap-owner`.
 - **Phase 8 — `pizzora-workers` (`[[bin]] :8081`) & Railway Staging (PG 18.6)**: At-least-once `EMAIL_DELIVERY_REQUESTED` dispatch (`-> pizzora-auth`) with post-SMTP crash test, payload scrubbing on `DISPATCHED`/`DEAD_LETTER`/TTL expiry, Docker `cargo-chef`, and staging Railway PG 18.6 + Redis validation.
-- **Phase 9 — Railway Production Cutover & Expand-and-Contract Rollback**: Take `pg_dump`, stop Ktor worker, run `pizzora-api --migrate-only` (`_sqlx_migrations` `1..3`), launch `pizzabi` + `pizzabi-worker`, keeping `V1`–`V3` parity (or additive *expand* `V4+`) until Ktor retirement.
+- **Phase 9 — Railway Production Cutover & Expand-and-Contract Rollback**: Take `pg_dump`, stop Ktor worker, run `pizzora-api --migrate-only` (`_sqlx_migrations` `1..3`), launch `pizzabi` + `pizzabi-worker`, keeping `V1`–`V3` parity (or additive _expand_ `V4+`) until Ktor retirement.
 
 ---
 
@@ -284,13 +263,13 @@ Every crate lives under `/rust/crates/<name>/` and inherits pinned versions from
 
 ## 10. Exact Acceptance Tests per Corrected Issue
 
-| Issue | Exact Verification & Automated Acceptance Tests |
-| :--- | :--- |
-| **1. At-Least-Once Email** | `pizzora-workers` fault-injection test crashes/aborts DB update immediately after mock SMTP `250 OK` acceptance -> proves lease expiry recovers, re-delivers with identical `outbox_events.id` and `Message-ID: <outbox-{id}@{domain}>`, marks `DISPATCHED`, and proves verification/reset endpoints remain single-use. |
-| **2. Auth Token Security** | Assert `email_verification_tokens`/`password_reset_tokens` contain only SHA-256 `token_hash`, `outbox_events.payload_json` contains zero substring of raw token, AAD tamper/wrong-`kid` fails cleanly, `kid` rotation decrypts `v1` while encrypting `v2`, `DISPATCHED`/`DEAD_LETTER`/TTL expiry scrubs `sealed_envelope`, and `last_error` + `tracing` logs contain zero token leakage. |
-| **3. Flyway `11.3.4` Oracle** | `:backend:test` invokes real Flyway `11.3.4` checksum calculator across `V1`–`V3` + LF, CRLF, UTF-8 multibyte, and UTF-8 BOM fixtures into `tools/golden-vectors/flyway_11_3_4_checksums.json`; `cargo test -p pizzora-db` proves exact signed `i32` match across all fixtures + tampered `FLYWAY_CHECKSUM_MISMATCH` abort. |
-| **4. Dedicated Advisory Lock** | `pizzora-db` test acquires `pg_advisory_lock(884210001)` on a single `PgConnection`; spawns two parallel migration-runner tasks synchronized at a baseline barrier against live PG 18.6 -> proves Runner B blocks until Runner A completes and unlocks, executes zero duplicate DDL, and drops/closes poisoned sessions safely on failure. |
-| **5. Receipt Idempotency** | Both `:backend:test` and `cargo test -p pizzora-payments` test concurrent `retryPayment` with identical `(order_id, Idempotency-Key)` -> assert only 1 `payment_attempt` + 1 outbox row created; test conflicting parameters / cross-order key replay -> assert `409 Conflict` (`IDEMPOTENCY_KEY_CONFLICT`) with zero side effects and canonical 37-char `rcpt_<32_hex>` format. |
+| Issue                          | Exact Verification & Automated Acceptance Tests                                                                                                                                                                                                                                                                                                                                                      |
+| :----------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1. At-Least-Once Email**     | `pizzora-workers` fault-injection test crashes/aborts DB update immediately after mock SMTP `250 OK` acceptance -> proves lease expiry recovers, re-delivers with identical `outbox_events.id` and `Message-ID: <outbox-{id}@{domain}>`, marks `DISPATCHED`, and proves verification/reset endpoints remain single-use.                                                                              |
+| **2. Auth Token Security**     | Assert `email_verification_tokens`/`password_reset_tokens` contain only SHA-256 `token_hash`, `outbox_events.payload_json` contains zero substring of raw token, AAD tamper/wrong-`kid` fails cleanly, `kid` rotation decrypts `v1` while encrypting `v2`, `DISPATCHED`/`DEAD_LETTER`/TTL expiry scrubs `sealed_envelope`, and `last_error` + `tracing` logs contain zero token leakage.             |
+| **3. Flyway `11.3.4` Oracle**  | `:backend:test` invokes real Flyway `11.3.4` checksum calculator across `V1`–`V3` + LF, CRLF, UTF-8 multibyte, and UTF-8 BOM fixtures into `tools/golden-vectors/flyway_11_3_4_checksums.json`; `cargo test -p pizzora-db` proves exact signed `i32` match across all fixtures + tampered `FLYWAY_CHECKSUM_MISMATCH` abort.                                                                          |
+| **4. Dedicated Advisory Lock** | `pizzora-db` test acquires `pg_advisory_lock(884210001)` on a single `PgConnection`; spawns two parallel migration-runner tasks synchronized at a baseline barrier against live PG 18.6 -> proves Runner B blocks until Runner A completes and unlocks, executes zero duplicate DDL, and drops/closes poisoned sessions safely on failure.                                                           |
+| **5. Receipt Idempotency**     | Both `:backend:test` and `cargo test -p pizzora-payments` test concurrent `retryPayment` with identical `(order_id, Idempotency-Key)` -> assert only 1 `payment_attempt` + 1 outbox row created; test conflicting parameters / cross-order key replay -> assert `409 Conflict` (`IDEMPOTENCY_KEY_CONFLICT`) with zero side effects and canonical 37-char `rcpt_<32_hex>` format.                     |
 | **6. Razorpay, Room & Branch** | Before Phase 0 edits, `git status` & `git branch --show-current == feat/pizzora-rust-migration`; `./gradlew --version` passes; `app/gradle.lockfile` + `verification-metadata.xml` + `assembleDebug`/`assembleRelease` + Checkout runtime tests pass; `RoomMigrationTest` passes with `PRAGMA foreign_keys = ON`, `PRAGMA foreign_key_check == 0`, cascade + orphan rejection, and catalog survival. |
 
 ---
@@ -317,17 +296,17 @@ The Rust API is a replacement implementation, not an API redesign. Preserve the 
 
 The matrix below is the migration inventory from the earlier architecture audit. Before implementation, the agent must verify each route against the current repository's `Application.kt` and route files; if a route differs, record the observed route and update this matrix rather than silently omitting it.
 
-| Route Group | Existing Route Inventory | Auth / Permission Contract | Rust Implementation Requirements |
-| :--- | :--- | :--- | :--- |
-| **Ops** | `GET /api/v1/health/live`, `GET /api/v1/health/ready`, `GET /metrics`, `GET /api/v1/openapi.json` | Public; health endpoints must not require a customer JWT | `/ready` checks PostgreSQL and relevant optional dependencies. If `S3_ENABLED=false`, MinIO/object storage is omitted from required checks. Preserve documented `HEALTHY`, `DEGRADED`, and `503` semantics. |
-| **Auth** | `POST /api/v1/auth/register`, `verify-email`, `resend-verification`, `login`, `refresh`, `forgot-password`, `reset-password`, `logout`, `ws-ticket` | Public IP/group rate limits as applicable; logout and WS-ticket require authenticated session | Verify existing Argon2id hashes; preserve refresh-token rotation and token-family reuse revocation; preserve single-use verification/reset tokens; use hashed token storage and encrypted outbox payload envelope as specified in Rev. 11. |
-| **Users & Staff** | `GET/PATCH /api/v1/me`; CRUD `/api/v1/me/addresses`; `GET/POST/PATCH /api/v1/owner/staff` | Authenticated user; owner staff routes require `owner:staff_manage` or exact existing permission | Address ownership is derived from session. Default-address change must be atomic. Preserve existing staff status and role constraints. |
-| **Catalog & Images** | `GET /api/v1/catalog/menu`, `GET /api/v1/catalog/categories`; owner CRUD for categories, products, variants, crusts, toppings; product image presign/confirm/delete routes | Public catalog rate limits; owner routes require `owner:catalog_manage` | Preserve catalog cache invalidation and audit-log writes. With `S3_ENABLED=false`, image operations return the established unavailable error and do not fabricate public URLs. |
-| **Cart, Coupons & Pricing** | `GET/PUT /api/v1/cart`, `POST /api/v1/cart/validate`, `GET /api/v1/coupons/available`, owner coupon CRUD, `POST /api/v1/pricing/quote` | Customer cart access is tied to authenticated user; owner coupon routes require `owner:coupons_manage` | `pizzora-core` owns deterministic line math, pricing, coupon eligibility, tax split and cart validation. Server derives cart owner from auth context. Never accept a foreign `user_id` from payload. |
-| **Config, Zones & Slots** | `GET /api/v1/config/public`, `GET /api/v1/delivery-zones/check`, `GET /api/v1/slots`; owner settings, delivery-zone and slot management routes | Public read routes; owner mutations require exact existing settings/zones permissions | Preserve `Asia/Kolkata` business-date and slot calculations, minimum-order rules, delivery-zone boundaries and slot capacity semantics. |
-| **Checkout, Orders & KDS** | `POST /api/v1/checkout`, customer order list/detail/cancel routes; owner order routes; KDS ticket list and acknowledge/start-prep/ready/dispatch/complete/priority routes | Preserve `checkout:create`, own-order read/cancel permissions, owner order permissions and KDS permissions | Checkout transaction includes idempotency, inventory, coupon usage, slot capacity, order/payment rows and outbox events. Preserve lock ordering and `OrderStateMachine` behavior. |
-| **Payments, Refunds & Webhooks** | Customer order payment status/retry/fail; Razorpay verify; owner refund; Razorpay webhook | Own-order payment permissions; owner refund permission; webhook uses raw request body and provider signature | Use Rev. 11 canonical 37-character receipt and idempotency/conflict rules. Verify HMAC in constant time; webhook processing is idempotent by provider event ID; refund calls/reconciliation must not double-execute. |
-| **Notifications, Realtime & Owner Ops** | Notification list/read/delete routes; event replay; `GET/WS /ws/v1/events`; owner dashboard/reports/audit logs/inventory/recipes | Authenticated customer or owner permissions; WS ticket/Bearer behavior must match existing client | Preserve user-scoped inbox, replay cursor semantics, WS ping/timeout/frame-size limits, Redis Pub/Sub with database replay fallback, and owner audit visibility. |
+| Route Group                             | Existing Route Inventory                                                                                                                                                   | Auth / Permission Contract                                                                                   | Rust Implementation Requirements                                                                                                                                                                                                           |
+| :-------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ops**                                 | `GET /api/v1/health/live`, `GET /api/v1/health/ready`, `GET /metrics`, `GET /api/v1/openapi.json`                                                                          | Public; health endpoints must not require a customer JWT                                                     | `/ready` checks PostgreSQL and relevant optional dependencies. If `S3_ENABLED=false`, MinIO/object storage is omitted from required checks. Preserve documented `HEALTHY`, `DEGRADED`, and `503` semantics.                                |
+| **Auth**                                | `POST /api/v1/auth/register`, `verify-email`, `resend-verification`, `login`, `refresh`, `forgot-password`, `reset-password`, `logout`, `ws-ticket`                        | Public IP/group rate limits as applicable; logout and WS-ticket require authenticated session                | Verify existing Argon2id hashes; preserve refresh-token rotation and token-family reuse revocation; preserve single-use verification/reset tokens; use hashed token storage and encrypted outbox payload envelope as specified in Rev. 11. |
+| **Users & Staff**                       | `GET/PATCH /api/v1/me`; CRUD `/api/v1/me/addresses`; `GET/POST/PATCH /api/v1/owner/staff`                                                                                  | Authenticated user; owner staff routes require `owner:staff_manage` or exact existing permission             | Address ownership is derived from session. Default-address change must be atomic. Preserve existing staff status and role constraints.                                                                                                     |
+| **Catalog & Images**                    | `GET /api/v1/catalog/menu`, `GET /api/v1/catalog/categories`; owner CRUD for categories, products, variants, crusts, toppings; product image presign/confirm/delete routes | Public catalog rate limits; owner routes require `owner:catalog_manage`                                      | Preserve catalog cache invalidation and audit-log writes. With `S3_ENABLED=false`, image operations return the established unavailable error and do not fabricate public URLs.                                                             |
+| **Cart, Coupons & Pricing**             | `GET/PUT /api/v1/cart`, `POST /api/v1/cart/validate`, `GET /api/v1/coupons/available`, owner coupon CRUD, `POST /api/v1/pricing/quote`                                     | Customer cart access is tied to authenticated user; owner coupon routes require `owner:coupons_manage`       | `pizzora-core` owns deterministic line math, pricing, coupon eligibility, tax split and cart validation. Server derives cart owner from auth context. Never accept a foreign `user_id` from payload.                                       |
+| **Config, Zones & Slots**               | `GET /api/v1/config/public`, `GET /api/v1/delivery-zones/check`, `GET /api/v1/slots`; owner settings, delivery-zone and slot management routes                             | Public read routes; owner mutations require exact existing settings/zones permissions                        | Preserve `Asia/Kolkata` business-date and slot calculations, minimum-order rules, delivery-zone boundaries and slot capacity semantics.                                                                                                    |
+| **Checkout, Orders & KDS**              | `POST /api/v1/checkout`, customer order list/detail/cancel routes; owner order routes; KDS ticket list and acknowledge/start-prep/ready/dispatch/complete/priority routes  | Preserve `checkout:create`, own-order read/cancel permissions, owner order permissions and KDS permissions   | Checkout transaction includes idempotency, inventory, coupon usage, slot capacity, order/payment rows and outbox events. Preserve lock ordering and `OrderStateMachine` behavior.                                                          |
+| **Payments, Refunds & Webhooks**        | Customer order payment status/retry/fail; Razorpay verify; owner refund; Razorpay webhook                                                                                  | Own-order payment permissions; owner refund permission; webhook uses raw request body and provider signature | Use Rev. 11 canonical 37-character receipt and idempotency/conflict rules. Verify HMAC in constant time; webhook processing is idempotent by provider event ID; refund calls/reconciliation must not double-execute.                       |
+| **Notifications, Realtime & Owner Ops** | Notification list/read/delete routes; event replay; `GET/WS /ws/v1/events`; owner dashboard/reports/audit logs/inventory/recipes                                           | Authenticated customer or owner permissions; WS ticket/Bearer behavior must match existing client            | Preserve user-scoped inbox, replay cursor semantics, WS ping/timeout/frame-size limits, Redis Pub/Sub with database replay fallback, and owner audit visibility.                                                                           |
 
 ### 11.3 API Contract Acceptance Gate
 
@@ -353,6 +332,7 @@ Before a route group is considered complete:
 **Preconditions:** User has approved implementation. Git branch gate in Section 0 has passed. The agent is on `feat/pizzora-rust-migration` and has confirmed a clean working tree.
 
 **Scope:**
+
 - Record current commit SHA, current branch, `git status`, project tree, available JDKs, Android SDK/NDK, Rust toolchain and Docker versions in a baseline report.
 - Restore the complete Gradle Wrapper `9.3.1` (`gradlew`, `gradlew.bat`, wrapper JAR and distribution checksum). Verify wrapper files against the official Gradle distribution and use `./gradlew` for all Gradle tasks.
 - Keep JDK 17 and JDK 21 roles explicit as specified in Section 3; do not silently switch the project's AGP/JDK combination.
@@ -363,6 +343,7 @@ Before a route group is considered complete:
 **Files likely involved:** `gradlew`, `gradlew.bat`, `gradle/wrapper/*`, `.github/workflows/*`, `.gitignore`, `.gitattributes`, toolchain documentation and baseline test report.
 
 **Tests / acceptance:**
+
 - `./gradlew --version` reports Gradle 9.3.1.
 - Existing baseline Kotlin backend tests pass or pre-existing failures are documented separately.
 - `git status` shows only intended Phase 0 changes; no production configuration or database is changed.
@@ -374,6 +355,7 @@ Before a route group is considered complete:
 **Purpose:** Eliminate the P0 cross-account data leak before any Rust backend cutover.
 
 **Files likely involved:**
+
 - `app/build.gradle.kts` for Room schema export configuration.
 - Room entities and DAOs for `CartItemEntity`, `NotificationInboxEntity`, and related child entities.
 - `PizzoraDatabase.kt`, Room migration source and `app/schemas/` JSON exports.
@@ -381,6 +363,7 @@ Before a route group is considered complete:
 - Tests for cart isolation, session transition and Room migration.
 
 **Implementation requirements:**
+
 1. Add non-null `user_id` ownership to cart and inbox rows and appropriate user-scoped indexes/uniqueness constraints.
 2. Scope every DAO read, update, delete and aggregate query by the active user. Search the repository for all DAO call sites; no unscoped query may remain on a customer-owned table.
 3. Centralize logout, refresh-token failure and account-switch cleanup in `SessionTransitionCoordinator` / `SessionScopeCleaner`.
@@ -404,6 +387,7 @@ Before a route group is considered complete:
 **Files likely involved:** `gradle/libs.versions.toml`, `app/build.gradle.kts`, `MainActivity.kt` or the current Activity result owner, payment sheet/launcher, order ViewModel/repository, Ktor `CheckoutService` and `PaymentService`, backend payment tests, Gradle lock and verification metadata.
 
 **Implementation requirements:**
+
 - Integrate `com.razorpay:checkout:1.6.41` through the official callback/listener flow. Do not treat manually entered payment ID/signature text as a production checkout implementation.
 - Preserve a test seam so checkout success, error, cancellation and activity recreation can be tested without a live charge.
 - Lock exact transitive versions and verify artifact checksums. Do not force an arbitrary transitive version to hide a build error.
@@ -424,6 +408,7 @@ Before a route group is considered complete:
 **Files likely involved:** `rust/Cargo.toml`, `rust/rust-toolchain.toml`, all eight crate manifests, `pizzora-core/src/*`, golden-vector fixtures and Rust CI job.
 
 **Implementation requirements:**
+
 - Pin Rust 1.88.0 and required targets/components. Keep dependency versions centralized in workspace dependencies.
 - Create the full eight-crate DAG from Section 2. No crate may depend on `pizzora-api` or `pizzora-workers` in a way that creates cycles; API and worker runtimes remain independent.
 - Keep `pizzora-core` pure: no Tokio, SQLx, Reqwest, filesystem, environment, network, crypto or UniFFI dependencies.
@@ -442,6 +427,7 @@ Before a route group is considered complete:
 **Purpose:** Expose a narrow stable Rust domain API to Kotlin while maintaining separate host and Android binaries.
 
 **Implementation requirements:**
+
 - `pizzora-uniffi` is a thin adapter over `pizzora-core`; it must not become a second business-logic implementation.
 - Build the host cdylib for binding generation and Robolectric separately from Android `.so` targets built with cargo-ndk.
 - Generate Kotlin bindings from the pinned UniFFI version; use pinned JNA runtime/test dependencies.
@@ -461,6 +447,7 @@ Before a route group is considered complete:
 **Purpose:** Implement persistence and identity parity without altering the existing production schema unexpectedly.
 
 **Implementation requirements:**
+
 - Implement `pizzora-config` validation and normalization, including `jdbc:postgresql://`, `postgres://` and `postgresql://` URL forms and explicit user/password overrides where the existing deployment uses separate variables.
 - Implement SQLx pool sizing, connection lifecycle, tracing and health checks against PostgreSQL 18.6.
 - Preserve Flyway V1-V3 as historical migrations and byte-match their SQL files. Use the real Flyway 11.3.4 checksum oracle and dedicated connection advisory lock exactly as Rev. 11 Section 6 specifies.
@@ -480,6 +467,7 @@ Before a route group is considered complete:
 **Purpose:** Port payment operations with provider-safe idempotency and exact compatibility.
 
 **Implementation requirements:**
+
 - Implement gateway HTTP client, sandbox/test double, canonical receipt formatter, payment service, webhook service, refund service and reconciliation support in `pizzora-payments`.
 - Verify checkout signatures and webhook signatures over the exact raw bytes required by Razorpay; compare MACs in constant time.
 - Persist provider event IDs and enforce idempotent webhook handling.
@@ -498,6 +486,7 @@ Before a route group is considered complete:
 **Purpose:** Implement the API as a separate runtime while preserving all Android-facing behavior.
 
 **Implementation requirements:**
+
 - Build Axum router, shared application state, structured error mapping, middleware, rate limits, request body limits, auth extractors, DTOs and route modules.
 - Port all route groups in Section 11; keep a route-by-route completion checklist.
 - Preserve `:8080`, health endpoints, metrics and readiness behavior.
@@ -517,6 +506,7 @@ Before a route group is considered complete:
 **Purpose:** Prove the complete Rust service topology away from production.
 
 **Implementation requirements:**
+
 - Build independent `pizzora-workers` runtime on `:8081` with health and metrics endpoints, graceful shutdown, bounded concurrency and worker leases.
 - Implement event sequencing, outbox dispatcher, expiry sweep and Razorpay reconciliation. Use `FOR UPDATE SKIP LOCKED` and explicit leases.
 - Email delivery follows at-least-once semantics and encrypted token envelope handling from Rev. 11. Do not claim exactly-once SMTP delivery.
@@ -536,6 +526,7 @@ Before a route group is considered complete:
 **Purpose:** Switch production only after explicit approval and completed staging sign-off.
 
 **Pre-cutover gates:**
+
 - Written user approval for the cutover window and exact Railway services to change.
 - Verified recent PostgreSQL backup and tested restore procedure.
 - Confirmed Rust API and worker image digests, environment-variable inventory, health checks, pool limits and rollback image digest.
@@ -544,6 +535,7 @@ Before a route group is considered complete:
 - Confirmed Ktor worker shutdown procedure and how to prove it has no active worker DB sessions.
 
 **Cutover sequence:**
+
 1. Freeze schema changes and record current production deploy identifiers.
 2. Take and verify a production `pg_dump`; store backup outside the app container and verify restoreability in a separate environment.
 3. Confirm the production DB migration history and SQLx baseline preconditions read-only.
@@ -575,18 +567,18 @@ Before a route group is considered complete:
 
 The implementation agent must generate a complete variable inventory from current Ktor config and deployment files. At minimum classify:
 
-| Category | Variables / Configuration | Handling |
-| :--- | :--- | :--- |
-| Runtime | `PIZZORA_ENV`, `PORT`, log level, shutdown timeout | Non-secret unless deployment policy says otherwise. |
-| PostgreSQL | `DATABASE_URL` or host/port/database/user/password, pool size, connect timeout | Secret credentials; normalize JDBC and Railway URL forms without logging them. |
-| Redis | `REDIS_URL`, timeout, fallback policy | Treat URL as secret if it contains credentials. |
-| Auth | `JWT_SECRET`, issuer, access TTL, refresh TTL, WS ticket TTL | Secrets must be generated and stored in Railway secret variables. Never reuse development defaults in production. |
-| Payments | Razorpay key ID, key secret, webhook secret | Secret values; separate sandbox and production credentials. |
-| Email | SMTP host, port, username, password, sender/from domain | Credentials are secrets; sender metadata may be non-secret. |
-| Outbox encryption | `OUTBOX_EMAIL_KEY_CURRENT_ID`, `OUTBOX_EMAIL_KEYS` | High-sensitivity secrets; rotation and grace-window runbook required. |
-| Object storage | `S3_ENABLED`, endpoint, bucket, region, access key, secret key, public base URL | Secret keys remain secrets; omit S3 readiness dependency when disabled. |
-| Worker | poll intervals, batch size, lease duration, max attempts, concurrency | Tune independently; do not allow API and worker to both run duplicate worker loops. |
-| Limits | max body sizes, rate-limit toggles/thresholds, timeouts | Validate at startup and expose safe effective values in diagnostics. |
+| Category          | Variables / Configuration                                                       | Handling                                                                                                          |
+| :---------------- | :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------- |
+| Runtime           | `PIZZORA_ENV`, `PORT`, log level, shutdown timeout                              | Non-secret unless deployment policy says otherwise.                                                               |
+| PostgreSQL        | `DATABASE_URL` or host/port/database/user/password, pool size, connect timeout  | Secret credentials; normalize JDBC and Railway URL forms without logging them.                                    |
+| Redis             | `REDIS_URL`, timeout, fallback policy                                           | Treat URL as secret if it contains credentials.                                                                   |
+| Auth              | `JWT_SECRET`, issuer, access TTL, refresh TTL, WS ticket TTL                    | Secrets must be generated and stored in Railway secret variables. Never reuse development defaults in production. |
+| Payments          | Razorpay key ID, key secret, webhook secret                                     | Secret values; separate sandbox and production credentials.                                                       |
+| Email             | SMTP host, port, username, password, sender/from domain                         | Credentials are secrets; sender metadata may be non-secret.                                                       |
+| Outbox encryption | `OUTBOX_EMAIL_KEY_CURRENT_ID`, `OUTBOX_EMAIL_KEYS`                              | High-sensitivity secrets; rotation and grace-window runbook required.                                             |
+| Object storage    | `S3_ENABLED`, endpoint, bucket, region, access key, secret key, public base URL | Secret keys remain secrets; omit S3 readiness dependency when disabled.                                           |
+| Worker            | poll intervals, batch size, lease duration, max attempts, concurrency           | Tune independently; do not allow API and worker to both run duplicate worker loops.                               |
+| Limits            | max body sizes, rate-limit toggles/thresholds, timeouts                         | Validate at startup and expose safe effective values in diagnostics.                                              |
 
 **Secret handling rules:** Never commit `.env` files or actual production values. Do not paste secrets into agent prompts, logs, issue descriptions or generated reports. Use placeholder names in documentation. Startup must fail fast for missing mandatory production secrets and invalid key lengths; error output must name the missing variable without printing its value.
 
@@ -607,26 +599,26 @@ The implementation agent must generate a complete variable inventory from curren
 
 ## 14. Risk Register & Mitigation Gates
 
-| ID | Risk | Severity | Detection / Mitigation | Release Gate |
-| :--- | :--- | :--- | :--- | :--- |
-| R1 | Cross-account cart or notification leakage | Critical | User-scoped DAO/server queries, serialized session transition, regression tests | Must pass before any client release containing Phase 1 |
-| R2 | Room migration destroys or corrupts local cached data | High | Export schemas, explicit v2-v3 migration, FK checks, migration fixtures | Must pass before Phase 1 release |
-| R3 | Razorpay receipt exceeds 40 characters or retry duplicates payment attempts | Critical | Canonical receipt, DB unique constraint, row locks, concurrent idempotency tests | Must pass before payment SDK rollout |
-| R4 | Android SDK/AGP/Gradle/JDK or native ABI incompatibility | High | Pinned toolchain, wrapper checksum, dependency lock/verification, debug and release builds | Must pass before Phase 2/4 sign-off |
-| R5 | UniFFI host/Android binary confusion | High | Separate host and NDK builds, host Robolectric tests, APK ABI inspection | Must pass before Phase 4 sign-off |
-| R6 | Flyway-to-SQLx checksum or baseline mismatch | Critical | Real Flyway 11.3.4 oracle, exact SQL parity, read-only verification, no auto-repair | Must pass before staging DB handoff |
-| R7 | Migration lock acquired on one connection but work runs on another | Critical | Dedicated `PgConnection`, same-session assertions and two-runner concurrency test | Must pass before any existing DB adoption |
-| R8 | Auth password hashes fail after migration | High | Real Ktor PHC fixtures and cross-language verification | Must pass before auth cutover |
-| R9 | Reset/verification token exposed in outbox, logs or dead-letter queue | Critical | AES-256-GCM envelope, key rotation, scrubbing, redaction and leakage tests | Must pass before email outbox is enabled |
-| R10 | Duplicate SMTP email after worker crash | Medium | Explicit at-least-once semantics, stable Message-ID, single-use token consumption | Must be accepted and documented; exactly-once must not be claimed |
-| R11 | Duplicate payment/refund from dual workers | Critical | Separate worker topology, stop Ktor worker, verify no active worker DB sessions | Must pass before production worker start |
-| R12 | Ktor rollback blocked by destructive SQLx migration | Critical | Initial V1-V3 parity, expand-and-contract, compatibility review | Must pass before each V4+ production migration |
-| R13 | Railway staging accidentally connects to production data | Critical | Separate DB/Redis/credentials, startup environment checks | Must pass before staging E2E |
-| R14 | Secrets leak through config errors, logs or agent output | Critical | Redaction tests, no secret values in docs, secret manager use | Must pass before any deployment |
-| R15 | API wire-format drift breaks Android clients | High | Route inventory, DTO snapshots, Ktor-vs-Axum contract suite | Must pass before Rust API staging sign-off |
-| R16 | Redis/S3 outage changes behavior unexpectedly | Medium/High | Explicit degraded readiness and fallback tests for each optional dependency | Must pass before staging sign-off |
-| R17 | Worker shutdown/restart loses leased jobs | High | Lease expiry, idempotent handlers, SIGTERM tests and crash injection | Must pass before worker production use |
-| R18 | Scope creep or agent rewrites unrelated app modules | High | Phase-scoped file allowlist, small commits, review diffs, stop on unexpected changes | Every implementation task |
+| ID  | Risk                                                                        | Severity    | Detection / Mitigation                                                                     | Release Gate                                                      |
+| :-- | :-------------------------------------------------------------------------- | :---------- | :----------------------------------------------------------------------------------------- | :---------------------------------------------------------------- |
+| R1  | Cross-account cart or notification leakage                                  | Critical    | User-scoped DAO/server queries, serialized session transition, regression tests            | Must pass before any client release containing Phase 1            |
+| R2  | Room migration destroys or corrupts local cached data                       | High        | Export schemas, explicit v2-v3 migration, FK checks, migration fixtures                    | Must pass before Phase 1 release                                  |
+| R3  | Razorpay receipt exceeds 40 characters or retry duplicates payment attempts | Critical    | Canonical receipt, DB unique constraint, row locks, concurrent idempotency tests           | Must pass before payment SDK rollout                              |
+| R4  | Android SDK/AGP/Gradle/JDK or native ABI incompatibility                    | High        | Pinned toolchain, wrapper checksum, dependency lock/verification, debug and release builds | Must pass before Phase 2/4 sign-off                               |
+| R5  | UniFFI host/Android binary confusion                                        | High        | Separate host and NDK builds, host Robolectric tests, APK ABI inspection                   | Must pass before Phase 4 sign-off                                 |
+| R6  | Flyway-to-SQLx checksum or baseline mismatch                                | Critical    | Real Flyway 11.3.4 oracle, exact SQL parity, read-only verification, no auto-repair        | Must pass before staging DB handoff                               |
+| R7  | Migration lock acquired on one connection but work runs on another          | Critical    | Dedicated `PgConnection`, same-session assertions and two-runner concurrency test          | Must pass before any existing DB adoption                         |
+| R8  | Auth password hashes fail after migration                                   | High        | Real Ktor PHC fixtures and cross-language verification                                     | Must pass before auth cutover                                     |
+| R9  | Reset/verification token exposed in outbox, logs or dead-letter queue       | Critical    | AES-256-GCM envelope, key rotation, scrubbing, redaction and leakage tests                 | Must pass before email outbox is enabled                          |
+| R10 | Duplicate SMTP email after worker crash                                     | Medium      | Explicit at-least-once semantics, stable Message-ID, single-use token consumption          | Must be accepted and documented; exactly-once must not be claimed |
+| R11 | Duplicate payment/refund from dual workers                                  | Critical    | Separate worker topology, stop Ktor worker, verify no active worker DB sessions            | Must pass before production worker start                          |
+| R12 | Ktor rollback blocked by destructive SQLx migration                         | Critical    | Initial V1-V3 parity, expand-and-contract, compatibility review                            | Must pass before each V4+ production migration                    |
+| R13 | Railway staging accidentally connects to production data                    | Critical    | Separate DB/Redis/credentials, startup environment checks                                  | Must pass before staging E2E                                      |
+| R14 | Secrets leak through config errors, logs or agent output                    | Critical    | Redaction tests, no secret values in docs, secret manager use                              | Must pass before any deployment                                   |
+| R15 | API wire-format drift breaks Android clients                                | High        | Route inventory, DTO snapshots, Ktor-vs-Axum contract suite                                | Must pass before Rust API staging sign-off                        |
+| R16 | Redis/S3 outage changes behavior unexpectedly                               | Medium/High | Explicit degraded readiness and fallback tests for each optional dependency                | Must pass before staging sign-off                                 |
+| R17 | Worker shutdown/restart loses leased jobs                                   | High        | Lease expiry, idempotent handlers, SIGTERM tests and crash injection                       | Must pass before worker production use                            |
+| R18 | Scope creep or agent rewrites unrelated app modules                         | High        | Phase-scoped file allowlist, small commits, review diffs, stop on unexpected changes       | Every implementation task                                         |
 
 ---
 
@@ -634,25 +626,25 @@ The implementation agent must generate a complete variable inventory from curren
 
 Every phase must produce a concise evidence report containing exact commands, exit codes, test counts, skipped tests and known failures. “Tests pass” without commands and output summary is not sufficient.
 
-| Layer | Required Verification | Evidence to Retain |
-| :--- | :--- | :--- |
-| Git safety | `git status --short`, `git branch --show-current`, diff review | Branch name, base commit, clean/dirty state and changed-file list |
-| Gradle | `./gradlew --version`; relevant module tests; debug and release builds when required | Gradle/JDK versions, test counts, build outputs and dependency lock changes |
-| Android Room | Room migration tests from exported v2 schema; FK and cascade/orphan checks | Schema JSONs, migration test report, `PRAGMA foreign_key_check` result |
-| Android session/cart | logout offline, refresh failure, account switch, stale coroutine, empty-cart semantics | Regression test report and network request assertions |
-| Razorpay Android | SDK launch, success/error/cancel, lifecycle/configuration change | Integration test output and release/R8 build result |
-| Kotlin backend | Existing contract/backend tests and security script | Baseline vs post-change test results; no silent removal of old tests |
-| Rust domain | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p pizzora-core` | Toolchain version, golden parity count, property-test cases |
-| Rust workspace | `cargo check --workspace`, `cargo test --workspace` | Crate graph, test counts and dependency audit |
-| UniFFI | Host bindgen, Robolectric host native loading, Android ABI packaging | Generated binding diff and ABI listing |
-| Database | PostgreSQL 18.6 migration tests, Flyway oracle, SQLx handoff, advisory-lock concurrency | Migration history before/after, checksums, catalog invariant report |
-| Auth/security | Argon2id fixture, JWT/refresh reuse, RBAC, token single-use, AEAD/key rotation | Sanitized security test report; never include token/key values |
-| Payments | Receipt golden vectors, retry concurrency, raw HMAC, webhook replay, refund idempotency | Provider-mocked integration test report |
-| API | Route inventory and Ktor/Axum contract suite | Per-route coverage checklist and DTO/status snapshots |
-| Workers | Lease recovery, retries, dead-letter, duplicate SMTP window, graceful shutdown | Fault-injection output and queue-state assertions |
-| Containers | Multi-stage image build, non-root runtime, health checks, SIGTERM | Image digest, vulnerability scan and runtime smoke output |
-| Railway staging | Isolated DB/Redis, API/worker health, full E2E, restart recovery | Staging deploy IDs, environment inventory (names only), smoke/E2E report |
-| Production | Backup/restore proof, approved change window, cutover and rollback rehearsal | User approval, backup verification, image digests, monitoring snapshots |
+| Layer                | Required Verification                                                                                      | Evidence to Retain                                                          |
+| :------------------- | :--------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- |
+| Git safety           | `git status --short`, `git branch --show-current`, diff review                                             | Branch name, base commit, clean/dirty state and changed-file list           |
+| Gradle               | `./gradlew --version`; relevant module tests; debug and release builds when required                       | Gradle/JDK versions, test counts, build outputs and dependency lock changes |
+| Android Room         | Room migration tests from exported v2 schema; FK and cascade/orphan checks                                 | Schema JSONs, migration test report, `PRAGMA foreign_key_check` result      |
+| Android session/cart | logout offline, refresh failure, account switch, stale coroutine, empty-cart semantics                     | Regression test report and network request assertions                       |
+| Razorpay Android     | SDK launch, success/error/cancel, lifecycle/configuration change                                           | Integration test output and release/R8 build result                         |
+| Kotlin backend       | Existing contract/backend tests and security script                                                        | Baseline vs post-change test results; no silent removal of old tests        |
+| Rust domain          | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p pizzora-core` | Toolchain version, golden parity count, property-test cases                 |
+| Rust workspace       | `cargo check --workspace`, `cargo test --workspace`                                                        | Crate graph, test counts and dependency audit                               |
+| UniFFI               | Host bindgen, Robolectric host native loading, Android ABI packaging                                       | Generated binding diff and ABI listing                                      |
+| Database             | PostgreSQL 18.6 migration tests, Flyway oracle, SQLx handoff, advisory-lock concurrency                    | Migration history before/after, checksums, catalog invariant report         |
+| Auth/security        | Argon2id fixture, JWT/refresh reuse, RBAC, token single-use, AEAD/key rotation                             | Sanitized security test report; never include token/key values              |
+| Payments             | Receipt golden vectors, retry concurrency, raw HMAC, webhook replay, refund idempotency                    | Provider-mocked integration test report                                     |
+| API                  | Route inventory and Ktor/Axum contract suite                                                               | Per-route coverage checklist and DTO/status snapshots                       |
+| Workers              | Lease recovery, retries, dead-letter, duplicate SMTP window, graceful shutdown                             | Fault-injection output and queue-state assertions                           |
+| Containers           | Multi-stage image build, non-root runtime, health checks, SIGTERM                                          | Image digest, vulnerability scan and runtime smoke output                   |
+| Railway staging      | Isolated DB/Redis, API/worker health, full E2E, restart recovery                                           | Staging deploy IDs, environment inventory (names only), smoke/E2E report    |
+| Production           | Backup/restore proof, approved change window, cutover and rollback rehearsal                               | User approval, backup verification, image digests, monitoring snapshots     |
 
 **CI policy:** Keep existing Kotlin jobs active throughout the migration. Add Rust jobs incrementally. Do not mark a job optional or remove a failing test simply to make the pipeline green. Any quarantined/flaky test needs an owner, reason, issue reference and expiry/review date.
 
@@ -725,4 +717,3 @@ This plan is cumulative. Future revisions must not become shorter by silently de
 7. Keep user-approved architecture decisions separate from agent recommendations and unverified assumptions.
 8. Never claim repository inspection, tests, build success, Railway state or branch creation unless those actions were actually performed and evidence is available.
 9. The plan is a blueprint, not permission to execute every phase. Each phase and each production-impacting operation still requires the applicable user approval.
-

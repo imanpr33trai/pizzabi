@@ -34,6 +34,7 @@ import com.pizzora.contracts.VerifyRazorpayPaymentRequest
 import com.pizzora.contracts.VerifyRazorpayPaymentResponse
 import java.sql.Connection
 import java.sql.ResultSet
+import java.sql.SQLException
 import java.sql.Timestamp
 import java.sql.Types
 import java.time.Instant
@@ -80,8 +81,17 @@ class PaymentService(
     if (cleanIdempKey != null && cleanIdempKey.length > 100) {
       throw ValidationException("INVALID_IDEMPOTENCY_KEY", "Idempotency-Key cannot exceed 100 characters.")
     }
+    val cleanReason = request?.reason?.trim()?.takeIf { it.isNotEmpty() }?.take(200)
 
     return DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+      if (cleanIdempKey != null) {
+        conn.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))").use { ps ->
+          ps.setString(1, customerId.toString())
+          ps.setString(2, cleanIdempKey)
+          ps.execute()
+        }
+      }
+
       val order = lockOrder(conn, orderId)
       if (order.customerId != customerId) {
         logger.warn("Blocked cross-user payment retry IDOR actorUserId={} orderId={} ownerCustomerId={}", customerId, orderId, order.customerId)
@@ -109,19 +119,60 @@ class PaymentService(
         throw ConflictException("PAYMENT_ALREADY_SETTLED", "Payment is already in status ${payment.status}.")
       }
 
-      val receipt = cleanIdempKey?.let { "retry:$orderId:$it" }
-      if (receipt != null) {
-        val existingReceipt = conn.prepareStatement(
-          "SELECT id FROM payment_attempts WHERE payment_id = ? AND idempotency_receipt = ?",
+      if (cleanIdempKey != null) {
+        val usedOnOtherOrder = conn.prepareStatement(
+          """
+          SELECT aggregate_id
+          FROM outbox_events
+          WHERE event_type = 'PAYMENT_GATEWAY_ORDER_REQUESTED'
+            AND payload_json->>'customer_id' = ?
+            AND payload_json->>'idempotency_key' = ?
+            AND aggregate_id <> ?
+          LIMIT 1
+          """.trimIndent(),
         ).use { ps ->
-          ps.setObject(1, payment.id)
-          ps.setString(2, receipt)
+          ps.setString(1, customerId.toString())
+          ps.setString(2, cleanIdempKey)
+          ps.setObject(3, orderId)
           ps.executeQuery().use { rs -> rs.next() }
         }
-        if (existingReceipt) {
-          val detail = orderService.loadOrderDetail(conn, orderId)!!
-          return@withJdbcTransaction buildOrderPaymentStatusResponse(conn, detail)
+        if (usedOnOtherOrder) {
+          throw ConflictException(
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "Idempotency-Key '$cleanIdempKey' was already used for another order.",
+          )
         }
+      }
+
+      val attemptId = UUID.randomUUID()
+      val effectiveReceipt = RazorpayReceiptFormatter.formatReceipt(
+        orderId = orderId,
+        keyOrAttemptId = cleanIdempKey ?: attemptId.toString(),
+      )
+      val retryFingerprint = RazorpayReceiptFormatter.computeRetryFingerprint(
+        orderId = orderId,
+        paymentId = payment.id,
+        method = payment.method,
+        amountPaise = payment.amountPaise,
+        reason = cleanReason,
+      )
+
+      val existingByReceipt = findAttemptByReceipt(conn, effectiveReceipt)
+      if (existingByReceipt != null) {
+        val matchesSameOrderAndParams =
+          existingByReceipt.orderId == orderId &&
+            existingByReceipt.paymentId == payment.id &&
+            existingByReceipt.method == payment.method &&
+            existingByReceipt.amountPaise == payment.amountPaise &&
+            existingByReceipt.retryFingerprint == retryFingerprint
+        if (!matchesSameOrderAndParams) {
+          throw ConflictException(
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "Idempotency-Key '$cleanIdempKey' conflicts with an existing payment attempt.",
+          )
+        }
+        val detail = orderService.loadOrderDetail(conn, orderId)!!
+        return@withJdbcTransaction buildOrderPaymentStatusResponse(conn, detail)
       }
 
       val maxAttemptNum = conn.prepareStatement(
@@ -145,27 +196,34 @@ class PaymentService(
         ps.executeUpdate()
       }
 
-      val attemptId = UUID.randomUUID()
       val nextNumber = maxAttemptNum + 1
-      val effectiveReceipt = receipt ?: attemptId.toString()
 
-      conn.prepareStatement(
-        """
-        INSERT INTO payment_attempts (
-          id, payment_id, attempt_number, method, status, amount_paise, idempotency_receipt, expires_at
-        ) VALUES (?, ?, ?, 'RAZORPAY', 'INITIATING', ?, ?, ?)
-        """.trimIndent(),
-      ).use { ps ->
-        ps.setObject(1, attemptId)
-        ps.setObject(2, payment.id)
-        ps.setInt(3, nextNumber)
-        ps.setLong(4, payment.amountPaise)
-        ps.setString(5, effectiveReceipt)
-        if (order.expiresAt != null) ps.setTimestamp(6, Timestamp.from(order.expiresAt)) else ps.setNull(6, Types.TIMESTAMP_WITH_TIMEZONE)
-        ps.executeUpdate()
+      try {
+        conn.prepareStatement(
+          """
+          INSERT INTO payment_attempts (
+            id, payment_id, attempt_number, method, status, amount_paise, idempotency_receipt, expires_at
+          ) VALUES (?, ?, ?, 'RAZORPAY', 'INITIATING', ?, ?, ?)
+          """.trimIndent(),
+        ).use { ps ->
+          ps.setObject(1, attemptId)
+          ps.setObject(2, payment.id)
+          ps.setInt(3, nextNumber)
+          ps.setLong(4, payment.amountPaise)
+          ps.setString(5, effectiveReceipt)
+          if (order.expiresAt != null) ps.setTimestamp(6, Timestamp.from(order.expiresAt)) else ps.setNull(6, Types.TIMESTAMP_WITH_TIMEZONE)
+          ps.executeUpdate()
+        }
+      } catch (ex: SQLException) {
+        if (ex.sqlState == "23505") {
+          throw ConflictException(
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "Payment retry receipt '$effectiveReceipt' conflicts with an existing attempt.",
+          )
+        }
+        throw ex
       }
 
-      val cleanReason = request?.reason?.trim()?.takeIf { it.isNotEmpty() }?.take(200)
       val payload = buildJsonObject {
         put("order_id", orderId.toString())
         put("order_number", order.orderNumber)
@@ -176,6 +234,8 @@ class PaymentService(
         put("payment_method", PaymentMethod.RAZORPAY.name)
         put("amount_paise", payment.amountPaise)
         put("receipt", effectiveReceipt)
+        if (cleanIdempKey != null) put("idempotency_key", cleanIdempKey)
+        put("retry_fingerprint", retryFingerprint)
         if (cleanReason != null) put("reason", cleanReason)
       }.toString()
 
@@ -1337,6 +1397,52 @@ class PaymentService(
       createdAt = getObject("created_at", OffsetDateTime::class.java).toInstant().toString(),
       updatedAt = getObject("updated_at", OffsetDateTime::class.java).toInstant().toString(),
     )
+
+  private data class ExistingReceiptAttempt(
+    val attemptId: UUID,
+    val orderId: UUID,
+    val paymentId: UUID,
+    val method: PaymentMethod,
+    val amountPaise: Long,
+    val retryFingerprint: String?,
+  )
+
+  private fun findAttemptByReceipt(conn: Connection, receipt: String): ExistingReceiptAttempt? =
+    conn.prepareStatement(
+      """
+      SELECT pa.id AS attempt_id,
+             p.order_id,
+             pa.payment_id,
+             pa.method,
+             pa.amount_paise,
+             (
+               SELECT oe.payload_json->>'retry_fingerprint'
+               FROM outbox_events oe
+               WHERE oe.aggregate_id = p.order_id
+                 AND oe.event_type = 'PAYMENT_GATEWAY_ORDER_REQUESTED'
+                 AND oe.payload_json->>'payment_attempt_id' = pa.id::text
+               ORDER BY oe.created_at DESC
+               LIMIT 1
+             ) AS retry_fingerprint
+      FROM payment_attempts pa
+      JOIN payments p ON p.id = pa.payment_id
+      WHERE pa.idempotency_receipt = ?
+      LIMIT 1
+      """.trimIndent(),
+    ).use { ps ->
+      ps.setString(1, receipt)
+      ps.executeQuery().use { rs ->
+        if (!rs.next()) null
+        else ExistingReceiptAttempt(
+          attemptId = rs.getObject("attempt_id", UUID::class.java),
+          orderId = rs.getObject("order_id", UUID::class.java),
+          paymentId = rs.getObject("payment_id", UUID::class.java),
+          method = PaymentMethod.valueOf(rs.getString("method")),
+          amountPaise = rs.getLong("amount_paise"),
+          retryFingerprint = rs.getString("retry_fingerprint"),
+        )
+      }
+    }
 
   private data class LockedOrder(
     val id: UUID,

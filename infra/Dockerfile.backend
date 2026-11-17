@@ -12,5 +12,17 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=builder /workspace/backend/build/install/backend/lib /app/libs
 
+# Run the legacy backend as an unprivileged user; the packaged jars are
+# world-readable so no ownership change is required.
+RUN addgroup -S -g 10001 pizzora \
+    && adduser -S -u 10001 -G pizzora -H -s /sbin/nologin pizzora
+
+USER pizzora
+
 EXPOSE 8080 8081
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8080/api/v1/health/live >/dev/null 2>&1 || exit 1
+
 CMD ["java", "-cp", "/app/libs/*", "com.pizzora.backend.ApplicationKt"]

@@ -8,9 +8,13 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 
-@Entity(tableName = "cart_items")
+@Entity(
+  tableName = "cart_items",
+  indices = [Index(value = ["user_id"])],
+)
 data class CartItemEntity(
   @PrimaryKey val id: String,
+  @ColumnInfo(name = "user_id") val userId: String,
   @ColumnInfo(name = "product_id") val productId: String,
   @ColumnInfo(name = "product_name") val productName: String,
   @ColumnInfo(name = "image_url") val imageUrl: String? = null,
@@ -77,10 +81,14 @@ data class CachedMenuSnapshotEntity(
 
 @Entity(
   tableName = "notification_inbox",
-  indices = [Index(value = ["event_id"], unique = true)],
+  indices = [
+    Index(value = ["user_id", "event_id"], unique = true),
+    Index(value = ["user_id"]),
+  ],
 )
 data class NotificationInboxEntity(
   @PrimaryKey val id: String,
+  @ColumnInfo(name = "user_id") val userId: String,
   @ColumnInfo(name = "event_id") val eventId: String,
   val title: String,
   val body: String,

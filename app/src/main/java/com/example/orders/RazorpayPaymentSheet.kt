@@ -18,24 +18,17 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -229,16 +222,18 @@ fun RazorpayPaymentSheetDialog(
   isVerifyingPayment: Boolean,
   isReportingFailure: Boolean,
   paymentError: String?,
+  customerName: String? = null,
+  customerEmail: String? = null,
+  customerPhone: String? = null,
+  razorpayCheckoutLauncher: RazorpayCheckoutLauncher = AndroidRazorpayCheckoutLauncher(),
+  onLaunchStarted: (orderId: String, gatewayOrderId: String) -> Unit = { _, _ -> },
+  onSdkLaunchError: (code: Int, description: String?) -> Unit = { _, _ -> },
   onDismiss: () -> Unit,
-  onVerifyPayment: (gatewayPaymentId: String, signature: String) -> Unit,
-  onReportFailure: (failureCode: String, failureReason: String) -> Unit,
 ) {
+  val context = androidx.compose.ui.platform.LocalContext.current
   val latestAttempt = paymentStatus?.payment?.latestAttempt ?: order.payment.latestAttempt
   val gatewayOrderId = latestAttempt?.gatewayOrderId
-  val razorpayKeyId = paymentStatus?.razorpayKeyId ?: "rzp_test"
-
-  var gatewayPaymentId by remember(gatewayOrderId) { mutableStateOf("") }
-  var signature by remember(gatewayOrderId) { mutableStateOf("") }
+  val razorpayKeyId = paymentStatus?.razorpayKeyId?.takeIf { it.isNotBlank() }
 
   AlertDialog(
     onDismissRequest = onDismiss,
@@ -271,11 +266,13 @@ fun RazorpayPaymentSheetDialog(
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
           ) {
-            Text(
-              text = "Key: $razorpayKeyId",
-              style = PizzoraMonoBody,
-              modifier = Modifier.testTag("razorpay_key_id_text"),
-            )
+            if (razorpayKeyId != null) {
+              Text(
+                text = "Key: $razorpayKeyId",
+                style = PizzoraMonoBody,
+                modifier = Modifier.testTag("razorpay_key_id_text"),
+              )
+            }
             if (!gatewayOrderId.isNullOrBlank()) {
               Text(
                 text = "Gateway Order: $gatewayOrderId",
@@ -288,10 +285,26 @@ fun RazorpayPaymentSheetDialog(
                 style = MaterialTheme.typography.bodySmall,
               )
             }
+            if (!customerEmail.isNullOrBlank() || !customerPhone.isNullOrBlank()) {
+              Text(
+                text = listOfNotNull(customerName, customerEmail, customerPhone)
+                  .filter { it.isNotBlank() }
+                  .joinToString(" • "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("razorpay_customer_summary"),
+              )
+            }
           }
         }
 
-        if (isPollingGatewayOrder || gatewayOrderId.isNullOrBlank()) {
+        Text(
+          text = stringResource(R.string.razorpay_official_sdk_notice),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (isPollingGatewayOrder || gatewayOrderId.isNullOrBlank() || isVerifyingPayment) {
           LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
@@ -309,49 +322,53 @@ fun RazorpayPaymentSheetDialog(
             )
           }
         }
-
-        OutlinedTextField(
-          value = gatewayPaymentId,
-          onValueChange = { gatewayPaymentId = it },
-          label = { Text(stringResource(R.string.razorpay_payment_id_hint)) },
-          singleLine = true,
-          enabled = !gatewayOrderId.isNullOrBlank() && !isVerifyingPayment,
-          modifier = Modifier.fillMaxWidth().testTag("razorpay_payment_id_input"),
-        )
-        OutlinedTextField(
-          value = signature,
-          onValueChange = { signature = it },
-          label = { Text(stringResource(R.string.razorpay_signature_hint)) },
-          singleLine = true,
-          enabled = !gatewayOrderId.isNullOrBlank() && !isVerifyingPayment,
-          modifier = Modifier.fillMaxWidth().testTag("razorpay_signature_input"),
-        )
-
-        Spacer(modifier = Modifier.height(2.dp))
-        OutlinedButton(
-          onClick = {
-            onReportFailure("PAYMENT_FAILED_BY_GATEWAY", "Payment declined or cancelled at Razorpay checkout")
-          },
-          enabled = !isVerifyingPayment && !isReportingFailure,
-          colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-          modifier = Modifier
-            .fillMaxWidth()
-            .minimumInteractiveComponentSize()
-            .testTag("fail_razorpay_payment_button"),
-        ) {
-          Text(stringResource(R.string.action_report_payment_failure))
-        }
       }
     },
     confirmButton = {
       Button(
-        onClick = { onVerifyPayment(gatewayPaymentId, signature) },
-        enabled = !gatewayOrderId.isNullOrBlank() && !isVerifyingPayment && !isReportingFailure,
-        modifier = Modifier.minimumInteractiveComponentSize().testTag("verify_razorpay_payment_button"),
+        onClick = {
+          val keyId = razorpayKeyId
+          val gwOrderId = gatewayOrderId
+          if (keyId.isNullOrBlank() || gwOrderId.isNullOrBlank()) {
+            onSdkLaunchError(com.razorpay.Checkout.INVALID_OPTIONS, "Missing Razorpay key or gateway order.")
+            return@Button
+          }
+          val activity = context.findActivity()
+          if (activity == null) {
+            onSdkLaunchError(com.razorpay.Checkout.INVALID_OPTIONS, "Host activity unavailable for Razorpay Checkout.")
+            return@Button
+          }
+          onLaunchStarted(order.id, gwOrderId)
+          try {
+            razorpayCheckoutLauncher.launch(
+              activity = activity,
+              request = RazorpayCheckoutRequest(
+                orderId = order.id,
+                orderNumber = order.orderNumber,
+                gatewayOrderId = gwOrderId,
+                razorpayKeyId = keyId,
+                amountPaise = order.totalPaise,
+                customerName = customerName,
+                customerEmail = customerEmail,
+                customerPhone = customerPhone,
+              ),
+            )
+          } catch (t: Throwable) {
+            onSdkLaunchError(
+              com.razorpay.Checkout.INVALID_OPTIONS,
+              t.message ?: "Unable to launch Razorpay Checkout.",
+            )
+          }
+        },
+        enabled = !gatewayOrderId.isNullOrBlank() &&
+          !razorpayKeyId.isNullOrBlank() &&
+          !isVerifyingPayment &&
+          !isReportingFailure,
+        modifier = Modifier.minimumInteractiveComponentSize().testTag("launch_razorpay_checkout_button"),
       ) {
         Text(
           if (isVerifyingPayment) stringResource(R.string.razorpay_verifying)
-          else stringResource(R.string.action_verify_payment),
+          else stringResource(R.string.action_pay_with_razorpay),
         )
       }
     },

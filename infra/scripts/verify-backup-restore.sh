@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # PIZZORA Automated Backup & Restore Drill Verification Script
-# Spins up two ephemeral PostgreSQL 16 containers (source + clean restore target),
+# Spins up two ephemeral PostgreSQL 18 containers (source + clean restore target),
 # applies Flyway migrations, seeds sample transactional rows, runs backup-postgres.sh,
 # restores onto the fresh container via restore-postgres.sh, and asserts zero data loss.
 
@@ -27,14 +27,14 @@ for cmd in docker pg_dump pg_restore psql; do
   fi
 done
 
-echo "[drill] Starting ephemeral source and target Postgres 16 containers..."
+echo "[drill] Starting ephemeral source and target Postgres 18 containers..."
 docker run -d --name "$SRC_CONTAINER" \
   -e POSTGRES_DB=pizzora -e POSTGRES_USER=pizzora -e POSTGRES_PASSWORD="$PG_PASS" \
-  -p "127.0.0.1:${SRC_PORT}:5432" postgres:16-alpine >/dev/null
+  -p "127.0.0.1:${SRC_PORT}:5432" postgres:18-alpine >/dev/null
 
 docker run -d --name "$DST_CONTAINER" \
   -e POSTGRES_DB=pizzora -e POSTGRES_USER=pizzora -e POSTGRES_PASSWORD="$PG_PASS" \
-  -p "127.0.0.1:${DST_PORT}:5432" postgres:16-alpine >/dev/null
+  -p "127.0.0.1:${DST_PORT}:5432" postgres:18-alpine >/dev/null
 
 wait_pg() {
   local port="$1"

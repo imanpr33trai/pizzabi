@@ -61,10 +61,10 @@ import com.example.R
 import com.example.checkout.PriceBreakdownCard
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
+import com.example.core.domain.RustDomainBridge
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.OrderDetailDto
-import com.pizzora.contracts.OrderStateMachine
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
 import com.pizzora.contracts.PaymentMethod
@@ -82,8 +82,12 @@ fun OrdersScreen(
   onOpenPaymentSheet: () -> Unit = {},
   onDismissPaymentSheet: () -> Unit = {},
   onRetryPayment: () -> Unit = {},
-  onVerifyRazorpayPayment: (String, String) -> Unit = { _, _ -> },
-  onReportPaymentFailure: (String, String) -> Unit = { _, _ -> },
+  customerName: String? = null,
+  customerEmail: String? = null,
+  customerPhone: String? = null,
+  razorpayCheckoutLauncher: RazorpayCheckoutLauncher = AndroidRazorpayCheckoutLauncher(),
+  onRazorpayLaunchStarted: (String, String) -> Unit = { _, _ -> },
+  onRazorpaySdkError: (Int, String?) -> Unit = { _, _ -> },
   modifier: Modifier = Modifier,
 ) {
   val selected = uiState.selectedOrder
@@ -97,8 +101,12 @@ fun OrdersScreen(
       onOpenPaymentSheet = onOpenPaymentSheet,
       onDismissPaymentSheet = onDismissPaymentSheet,
       onRetryPayment = onRetryPayment,
-      onVerifyRazorpayPayment = onVerifyRazorpayPayment,
-      onReportPaymentFailure = onReportPaymentFailure,
+      customerName = customerName,
+      customerEmail = customerEmail,
+      customerPhone = customerPhone,
+      razorpayCheckoutLauncher = razorpayCheckoutLauncher,
+      onRazorpayLaunchStarted = onRazorpayLaunchStarted,
+      onRazorpaySdkError = onRazorpaySdkError,
       modifier = modifier,
     )
   } else {
@@ -279,8 +287,12 @@ private fun OrderDetailScreen(
   onOpenPaymentSheet: () -> Unit,
   onDismissPaymentSheet: () -> Unit,
   onRetryPayment: () -> Unit,
-  onVerifyRazorpayPayment: (String, String) -> Unit,
-  onReportPaymentFailure: (String, String) -> Unit,
+  customerName: String?,
+  customerEmail: String?,
+  customerPhone: String?,
+  razorpayCheckoutLauncher: RazorpayCheckoutLauncher,
+  onRazorpayLaunchStarted: (String, String) -> Unit,
+  onRazorpaySdkError: (Int, String?) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   BackHandler(onBack = onBack)
@@ -300,9 +312,13 @@ private fun OrderDetailScreen(
       isVerifyingPayment = uiState.isVerifyingPayment,
       isReportingFailure = uiState.isReportingFailure,
       paymentError = uiState.paymentError,
+      customerName = customerName,
+      customerEmail = customerEmail,
+      customerPhone = customerPhone,
+      razorpayCheckoutLauncher = razorpayCheckoutLauncher,
+      onLaunchStarted = onRazorpayLaunchStarted,
+      onSdkLaunchError = onRazorpaySdkError,
       onDismiss = onDismissPaymentSheet,
-      onVerifyPayment = onVerifyRazorpayPayment,
-      onReportFailure = onReportPaymentFailure,
     )
   }
 
@@ -471,7 +487,7 @@ private fun OrderDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
-            if (OrderStateMachine.canCustomerCancel(order.status)) {
+            if (RustDomainBridge.canCustomerCancel(order.status)) {
               Spacer(modifier = Modifier.height(4.dp))
               OutlinedButton(
                 onClick = { showCancelDialog = true },

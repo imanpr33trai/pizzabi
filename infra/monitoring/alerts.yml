@@ -56,10 +56,19 @@ groups:
           description: "Inspect refunds WHERE status='FAILED' and verify RazorpayReconciliationWorker."
 
       - alert: PizzoraDbPoolExhaustion
-        expr: pizzora_hikari_threads_awaiting > 2
+        expr: (pizzora_db_pool_connections{state="idle"} == 0 and pizzora_db_pool_connections{state="total"} > 0) or pizzora_hikari_threads_awaiting > 2
         for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "Threads awaiting PostgreSQL HikariCP connections"
-          description: "Database connection pool pressure detected on pizzora-api."
+          summary: "Database connection pool pressure detected on PIZZORA"
+          description: "Zero idle SQLx connections or threads awaiting HikariCP connections on pizzora-api / pizzora-workers."
+
+      - alert: PizzoraWorkerLoopErrors
+        expr: increase(pizzora_worker_loop_errors_total[5m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PIZZORA background worker loop errors increasing"
+          description: "Check pizzora-workers logs for {{ $labels.loop }} errors or downstream timeouts."

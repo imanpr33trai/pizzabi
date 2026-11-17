@@ -2,36 +2,180 @@ name: PIZZORA Security, CI & Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ '**' ]
     tags: [ 'v[0-9]*.[0-9]*.[0-9]*' ]
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pizzora-ci-${{ github.event.pull_request.number || github.ref }}
+  # One group per PR number (so force-pushes replace the run), or per ref otherwise.
+  # Release tags always get their own group and are never cancelled by development pushes.
+  group: pizzora-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  security-audit:
-    name: Secret, Play Policy & Manifest Audit
+  # ---------------------------------------------------------------------------
+  # Stage 0 — Security and repository preflight. Fails fast when repo
+  # prerequisites (security policy, wrapper mode, lockfiles, workflow syntax)
+  # are broken, before any expensive build runs.
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: Stage 0 — Security & Repository Preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Run Phase 18 Security & Policy Check
+      - name: Run Phase 18 Security & Policy Check (secrets, Play policy, manifests)
         run: bash infra/security-check.sh
 
-  test-contracts-and-backend:
-    name: Contracts & Backend Tests
-    needs: security-audit
+      - name: Set up JDK 17 (wrapper verification)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Verify Gradle wrapper executable permission (100755) and wrapper run
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODE="$(git ls-files --stage gradlew | awk '{print $1}')"
+          if [ "$MODE" != "100755" ]; then
+            echo "ERROR: gradlew Git mode is '$MODE'; expected '100755'." >&2
+            exit 1
+          fi
+          test -x ./gradlew || { echo "ERROR: ./gradlew is not executable." >&2; exit 1; }
+          ./gradlew --version
+
+      - name: Set up Rust toolchain (pinned 1.88.0)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Verify Cargo.lock presence, tracking, and manifest consistency
+        working-directory: rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files --error-unmatch Cargo.lock || {
+            echo "ERROR: rust/Cargo.lock is not tracked by Git; commit it for reproducible --locked builds." >&2
+            exit 1
+          }
+          test -s Cargo.lock || { echo "ERROR: rust/Cargo.lock is empty." >&2; exit 1; }
+          # Fails when Cargo.lock is out of sync with the workspace manifests.
+          cargo metadata --locked --no-deps --format-version 1 > /dev/null
+          git diff --exit-code -- Cargo.lock \
+            || { echo "ERROR: cargo metadata mutated rust/Cargo.lock; regenerate and commit it." >&2; exit 1; }
+          echo "rust/Cargo.lock tracked and consistent with rust/Cargo.toml manifests."
+
+      - name: Validate workflow YAML syntax and reusable workflow references
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYEOF'
+          import glob, sys
+          import yaml
+
+          failed = False
+          for path in sorted(glob.glob(".github/workflows/*.y*ml")):
+              with open(path, "r", encoding="utf-8") as fh:
+                  doc = yaml.safe_load(fh)
+              if not isinstance(doc, dict) or "jobs" not in doc:
+                  print(f"::error file={path}::Workflow file has no 'jobs' mapping.")
+                  failed = True
+                  continue
+              jobs = doc["jobs"]
+              for job_id, job in jobs.items():
+                  uses = (job or {}).get("uses") or ""
+                  if uses.startswith("./"):
+                      referenced = uses.split("@", 1)[0]
+                      with open(referenced, "r", encoding="utf-8") as ref_fh:
+                          ref_doc = yaml.safe_load(ref_fh)
+                      on = ref_doc.get(True) or ref_doc.get("on") or {}
+                      if "workflow_call" not in (on or {}):
+                          print(f"::error file={path}::Job '{job_id}' calls '{uses}' which has no workflow_call trigger.")
+                          failed = True
+              print(f"OK {path}: {len(jobs)} jobs parsed")
+          if failed:
+              sys.exit(1)
+          PYEOF
+
+      - name: Preflight summary
+        shell: bash
+        run: |
+          {
+            echo "### Stage 0 — Preflight"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Security & Play policy audit | ✅ |"
+            echo "| gradlew Git mode 100755 | ✅ |"
+            echo "| rust/Cargo.lock tracked & consistent | ✅ |"
+            echo "| Workflow YAML syntax & reusable refs | ✅ |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Stage 1 — Independent quality checks running in parallel.
+  # ---------------------------------------------------------------------------
+  rust-quality:
+    name: Stage 1 — Rust Formatting, Clippy & Workspace Check
+    needs: preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned 1.88.0, from rust/rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          components: rustfmt, clippy
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-ci
+          prefix-key: v1
+          cache-on-failure: true
+
+      - name: Verify Rust formatting
+        working-directory: rust
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy across workspace with warnings denied
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Verify full 8-crate Rust workspace compiles
+        working-directory: rust
+        run: cargo check --workspace --all-features --locked
+
+      - name: Verify pizzora-core purity (no I/O, runtime, crypto, or FFI dependencies)
+        working-directory: rust
+        run: |
+          set -euo pipefail
+          TREE="$(cargo tree -p pizzora-core -e no-dev)"
+          echo "$TREE"
+          if echo "$TREE" | grep -E '\b(tokio|sqlx|reqwest|uniffi|argon2|aes-gcm|lettre|axum|redis)\b'; then
+            echo "ERROR: Prohibited runtime/IO/crypto/FFI dependency found in pizzora-core." >&2
+            exit 1
+          fi
+
+  kotlin-contracts-and-backend:
+    name: Stage 1 — Kotlin Shared Contracts & Backend Tests
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -44,22 +188,49 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Gradle
+      - name: Set up Gradle (dependency and build cache)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-dependency-path: |
+            gradle/libs.versions.toml
+            gradle/verification-metadata.xml
+            settings-gradle.lockfile
+            **/build.gradle.kts
+            gradle/wrapper/gradle-wrapper.properties
 
-      - name: Run Shared Contracts Tests
-        run: gradle -PbackendOnly=true :shared:contracts:test --no-daemon
-
-      - name: Run Backend Test Suite (S3 disabled by default)
+      - name: Run Shared Contracts Tests + Backend Test Suite (S3 disabled by default)
         env:
           S3_ENABLED: "false"
           PIZZORA_ENV: "development"
-        run: gradle -PbackendOnly=true :backend:test --no-daemon
+        run: ./gradlew -PbackendOnly=true :shared:contracts:test :backend:test --no-daemon
 
-  test-android:
-    name: Android Unit & Robolectric Tests
-    needs: security-audit
+      - name: Verify golden parity fixtures match current Kotlin contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- tools/golden-vectors/pizzora_core_parity.json; then
+            echo "::error file=tools/golden-vectors/pizzora_core_parity.json::Regenerating golden parity vectors from the Kotlin shared contracts changed this file. The committed fixture is stale: run ':shared:contracts:test' locally and commit the regenerated fixture, or the Rust parity gate would silently enforce an outdated contract." >&2
+            git diff -- tools/golden-vectors/pizzora_core_parity.json | head -120
+            exit 1
+          fi
+          test -s tools/golden-vectors/pizzora_core_parity.json
+
+      - name: Upload Kotlin test and dependency-verification reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kotlin-reports-${{ github.run_id }}
+          path: |
+            **/build/reports/tests/**
+            build/reports/dependency-verification/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  android-prep:
+    name: Stage 1 — Android Build Preparation (JDK, Rust, UniFFI Bindgen)
+    needs: preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -78,17 +249,430 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Install Rust host toolchain (1.88.0 for UniFFI bindgen)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Restore Rust build cache (host release profile shared with Android test jobs)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-android-host
+          prefix-key: v1
+          cache-on-failure: true
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-dependency-path: |
+            gradle/libs.versions.toml
+            gradle/verification-metadata.xml
+            settings-gradle.lockfile
+            **/build.gradle.kts
+            gradle/wrapper/gradle-wrapper.properties
 
-      - name: Run Android Unit & Robolectric Tests
-        run: gradle :app:testDebugUnitTest --no-daemon
+      - name: Generate UniFFI Kotlin bindings (builds host pizzora-uniffi cdylib)
+        run: ./gradlew :app:generateUniFfiKotlinBindings -PpizzoraRequireRust=true --no-daemon
 
-  build-preview-apk:
-    name: Build Android Debug Preview APK
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    needs: [security-audit, test-contracts-and-backend, test-android]
+      - name: Verify generated binding output exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d app/build/generated/uniffi/kotlin || {
+            echo "ERROR: UniFFI generated Kotlin bindings directory is missing." >&2
+            exit 1
+          }
+          ls app/build/generated/uniffi/kotlin | head
+
+  # ---------------------------------------------------------------------------
+  # Stage 2 — Rust/Kotlin parity gate. Runs after Rust quality, before any
+  # Rust unit/integration or Android tests. Verifies that the Rust core
+  # reproduces the Kotlin shared contracts using the committed golden
+  # fixtures exported by :shared:contracts (GoldenVectorParityExportTest).
+  # ---------------------------------------------------------------------------
+  test-rust-parity:
+    name: Stage 2 — Rust/Kotlin Parity Gate (Golden Vectors & Wire Contracts)
+    needs: [preflight, rust-quality]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned 1.88.0)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Restore Rust build cache (shared with Rust CI stages)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-ci
+          prefix-key: v1
+          cache-on-failure: true
+
+      - name: Run pizzora-core golden parity tests against Kotlin fixtures
+        working-directory: rust
+        run: cargo test -p pizzora-core --all-features --locked
+
+      - name: Run pizzora-api wire-contract parity tests (DTOs, error envelopes, HTTP behavior)
+        working-directory: rust
+        run: cargo test -p pizzora-api --lib --all-features --locked
+
+      - name: Parity fixture summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### Stage 2 — Rust/Kotlin parity gate"
+            echo ""
+            echo "Rust \`pizzora-core\` and \`pizzora-api\` contract behavior verified against the golden fixtures exported by the Kotlin \`shared:contracts\` suite:"
+            echo ""
+            echo "| Fixture family | Vectors |"
+            echo "|---|---|"
+            for family in money_bps_vectors money_format_vectors discount_vectors quote_vectors order_cancel_vectors order_transition_vectors kds_next_vectors payment_transition_vectors attempt_transition_vectors causal_trace; do
+              echo "| \`$family\` | $(jq ".$family | length" tools/golden-vectors/pizzora_core_parity.json) |"
+            done
+            echo "| \`storage_key_parity.json\` cases | $(jq '.cases | length' tools/golden-vectors/storage_key_parity.json) |"
+            echo ""
+            echo "Fixture freshness was enforced by the Stage 1 Kotlin job (regenerated fixture must match the committed one)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Stage 3 — Rust workspace unit tests. Only run after the parity gate.
+  # ---------------------------------------------------------------------------
+  test-rust-unit:
+    name: Stage 3 — Rust Workspace Unit Tests
+    needs: [preflight, rust-quality, test-rust-parity]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned 1.88.0)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Restore Rust build cache (shared with Rust CI stages)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-ci
+          prefix-key: v1
+          cache-on-failure: true
+
+      - name: Run every Rust workspace unit test (database-ignored tests excluded)
+        working-directory: rust
+        run: cargo test --workspace --all-features --locked
+
+  # ---------------------------------------------------------------------------
+  # Stage 4 — Database and service integration. Sequential, isolated services.
+  # ---------------------------------------------------------------------------
+  test-rust-integration:
+    name: Stage 4 — PostgreSQL 18.6 & Redis Integration
+    needs: [preflight, rust-quality, test-rust-parity, test-rust-unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: pizzora
+          POSTGRES_PASSWORD: pizzora_dev_password
+          POSTGRES_DB: pizzora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U pizzora -d pizzora"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned 1.88.0)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+
+      - name: Restore Rust build cache (shared with Rust CI stages)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-ci
+          prefix-key: v1
+          cache-on-failure: true
+
+      - name: Run PostgreSQL 18.6, Redis, SQLx migration, advisory-lock and API integration suites
+        working-directory: rust
+        env:
+          PIZZORA_ENV: "development"
+          DATABASE_URL: "postgres://pizzora:pizzora_dev_password@127.0.0.1:5432/pizzora"
+          TEST_POSTGRES_URL: "postgres://pizzora:pizzora_dev_password@127.0.0.1:5432/pizzora"
+          REDIS_URL: "redis://127.0.0.1:6379"
+        run: cargo test --workspace --all-features --locked -- --ignored --test-threads=1
+
+  # ---------------------------------------------------------------------------
+  # Stage 5 — Android and application tests.
+  # ---------------------------------------------------------------------------
+  test-android:
+    name: Stage 5 — Android Unit & Robolectric Tests
+    needs: [preflight, rust-quality, test-rust-parity, android-prep]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (for shared/contracts toolchain)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up JDK 21 (for AGP 9 & Robolectric SDK 36)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Rust host toolchain (1.88.0 for UniFFI bindgen & Robolectric)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Restore Rust build cache (Android host release profile)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-android-host
+          prefix-key: v1
+          cache-on-failure: true
+
+      - name: Cache Robolectric android-all jars (avoids re-downloading ~100 MB per run)
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-android-all-${{ runner.os }}-v1
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-dependency-path: |
+            gradle/libs.versions.toml
+            gradle/verification-metadata.xml
+            settings-gradle.lockfile
+            **/build.gradle.kts
+            gradle/wrapper/gradle-wrapper.properties
+
+      - name: Run UniFFI Host Bindgen and Android Unit & Robolectric Tests
+        run: ./gradlew :app:generateUniFfiKotlinBindings :app:testDebugUnitTest -PpizzoraRequireRust=true --no-daemon
+
+      - name: Upload Android test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-reports-${{ github.run_id }}
+          path: app/build/reports/**
+          retention-days: 7
+          if-no-files-found: ignore
+
+  test-android-instrumented:
+    name: Stage 5 — Android Instrumentation Tests (API 36 Emulator)
+    needs: [preflight, rust-quality, test-rust-parity, test-android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Detect and enable KVM access for the runner user
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ubuntu-latest exposes /dev/kvm, but the runner user is not in the
+          # kvm group, so the emulator silently falls back to QEMU TCG software
+          # emulation and an API 36 image never boots within the job timeout.
+          # This udev rule is the enablement step documented by
+          # reactivecircus/android-emulator-runner (README: "Enable KVM group
+          # perms" / 99-kvm4all.rules).
+          if [ ! -e /dev/kvm ]; then
+            echo "ERROR: /dev/kvm does not exist on this runner. Hardware-accelerated Android emulation is unavailable; refusing to boot an API 36 emulator under QEMU TCG software emulation." >&2
+            exit 1
+          fi
+          echo "KVM device before applying the kvm4all udev rule:"
+          ls -l /dev/kvm
+          echo "Runner user and kvm group membership:"
+          id
+          getent group kvm || true
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          # udev processes triggered uevents asynchronously: the permission
+          # change is not guaranteed to be visible right after `trigger`
+          # returns. Settle the udev queue, then verify with a bounded retry
+          # loop before giving up.
+          sudo udevadm settle || true
+          kvm_ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              kvm_ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$kvm_ok" -ne 1 ]; then
+            # Direct permission fallback so this runner is not left on QEMU
+            # TCG software emulation; the udev rule stays in place regardless.
+            sudo chmod 0666 /dev/kvm || true
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              kvm_ok=1
+            fi
+          fi
+          if [ "$kvm_ok" -ne 1 ]; then
+            echo "ERROR: /dev/kvm is still not accessible for user '$(id -un)' after the kvm4all udev rule, udevadm settle, 10 retries and a chmod fallback." >&2
+            ls -l /dev/kvm
+            getent group kvm || true
+            exit 1
+          fi
+          echo "KVM is accessible (rw) for user '$(id -un)'."
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Rust Android cross-compilation toolchain (cargo-ndk 4.1.2 + NDK 27.2.12479018)
+        uses: ./.github/actions/setup-android-rust
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-dependency-path: |
+            gradle/libs.versions.toml
+            gradle/verification-metadata.xml
+            settings-gradle.lockfile
+            **/build.gradle.kts
+            gradle/wrapper/gradle-wrapper.properties
+
+      - name: Create temporary debug keystore
+        run: |
+          keytool -genkeypair -noprompt \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Run Android instrumentation tests on API 36 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          # Documented input; explicitly bounds the action's internal boot wait.
+          emulator-boot-timeout: 600
+          # NOTE: this action splits `script` on newlines and executes each
+          # line as a separate `sh -c`, so all shell logic lives in the
+          # wrapper script. It runs the bounded boot-readiness gate, then the
+          # exact instrumentation command, preserves its original exit code,
+          # and (via an EXIT trap) collects diagnostics while the emulator is
+          # still alive on every path.
+          script: bash .github/scripts/run-android-instrumentation.sh
+
+      - name: Collect emulator diagnostics and test reports
+        if: always()
+        shell: bash
+        run: |
+          # The wrapper already collected diagnostics while the emulator was
+          # alive. This post-termination pass appends an addendum and fills in
+          # any file the wrapper could not produce (e.g. when the action
+          # failed before running the wrapper). It must never change the job
+          # outcome, so it always exits 0; every adb call inside is bounded by
+          # `timeout` because adb blocks indefinitely without a device.
+          set +e
+          bash .github/scripts/collect-android-diagnostics.sh post
+          exit 0
+
+      - name: Upload instrumentation diagnostics & test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-instrumented-diagnostics-${{ github.run_id }}
+          path: ci-diagnostics/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Stage 6 — Docker validation and build. Rust and legacy Kotlin pipelines
+  # stay separate until the migration cutover is explicitly complete.
+  # ---------------------------------------------------------------------------
+  backend-docker:
+    name: Stage 6 — Kotlin Backend Docker (${{ github.ref_type == 'tag' && 'Release' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'Preview Push' || 'Validate Only') }})
+    needs: [preflight, kotlin-contracts-and-backend]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-backend.yml
+    with:
+      mode: ${{ (github.event_name == 'push' && github.ref_type == 'tag') && 'release' || ((github.event_name == 'push' && github.ref == 'refs/heads/main') && 'preview' || 'validate') }}
+      push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
+      tag_name: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
+  rust-docker:
+    name: Stage 6 — Rust Backend Docker (${{ github.ref_type == 'tag' && 'Release' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'Preview Push' || 'Validate Only') }})
+    needs: [preflight, rust-quality, test-rust-parity, test-rust-unit, test-rust-integration]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-rust-backend.yml
+    with:
+      mode: ${{ (github.event_name == 'push' && github.ref_type == 'tag') && 'release' || ((github.event_name == 'push' && github.ref == 'refs/heads/main') && 'preview' || 'validate') }}
+      push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
+      tag_name: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
+  # ---------------------------------------------------------------------------
+  # Stage 7 — Release. Only after all required gates pass. Pull requests never
+  # publish production artifacts.
+  # ---------------------------------------------------------------------------
+  build-preview-apk:
+    name: Stage 7 — Build Android Debug Preview APK
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: [preflight, kotlin-contracts-and-backend, android-prep, test-android, test-android-instrumented]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -107,8 +691,18 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Set up Rust Android cross-compilation toolchain (cargo-ndk 4.1.2 + NDK 27.2.12479018)
+        uses: ./.github/actions/setup-android-rust
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-dependency-path: |
+            gradle/libs.versions.toml
+            gradle/verification-metadata.xml
+            settings-gradle.lockfile
+            **/build.gradle.kts
+            gradle/wrapper/gradle-wrapper.properties
 
       - name: Create temporary debug keystore for preview build
         run: |
@@ -125,7 +719,24 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build Debug Preview APK
-        run: gradle :app:assembleDebug --no-daemon
+        run: ./gradlew :app:assembleDebug -PpizzoraRequireRust=true --no-daemon
+
+      - name: Verify UniFFI Native ABI Packaging (arm64-v8a & x86_64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          ZIP_LIST="$(unzip -l "$APK_SRC")"
+          for entry in \
+            "lib/arm64-v8a/libpizzora_uniffi.so" \
+            "lib/x86_64/libpizzora_uniffi.so" \
+            "lib/arm64-v8a/libjnidispatch.so" \
+            "lib/x86_64/libjnidispatch.so"; do
+            if ! echo "$ZIP_LIST" | grep -q "$entry"; then
+              echo "ERROR: Expected native library '$entry' missing from preview APK." >&2
+              exit 1
+            fi
+          done
 
       - name: Stage Preview APK Artifact
         id: stage
@@ -158,23 +769,12 @@ jobs:
           path: ${{ steps.stage.outputs.apk_path }}
           retention-days: 14
 
-  backend-docker:
-    name: Backend Docker Image (${{ github.ref_type == 'tag' && 'Release' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'Preview Push' || 'Validate Only') }})
-    needs: [security-audit, test-contracts-and-backend]
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/publish-backend.yml
-    with:
-      mode: ${{ (github.event_name == 'push' && github.ref_type == 'tag') && 'release' || ((github.event_name == 'push' && github.ref == 'refs/heads/main') && 'preview' || 'validate') }}
-      push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag') }}
-      tag_name: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-
   build-release-apk:
-    name: Build Signed Production Release APK
+    name: Stage 7 — Build Signed Production Release APK
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-    needs: [security-audit, test-contracts-and-backend, test-android]
+    needs: [preflight, kotlin-contracts-and-backend, android-prep, test-android, test-android-instrumented, test-rust-parity, test-rust-unit]
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     outputs:
@@ -270,8 +870,18 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Set up Rust Android cross-compilation toolchain (cargo-ndk 4.1.2 + NDK 27.2.12479018)
+        uses: ./.github/actions/setup-android-rust
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-dependency-path: |
+            gradle/libs.versions.toml
+            gradle/verification-metadata.xml
+            settings-gradle.lockfile
+            **/build.gradle.kts
+            gradle/wrapper/gradle-wrapper.properties
 
       - name: Build Signed Release APK
         env:
@@ -280,11 +890,11 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          gradle :app:assembleRelease --no-daemon \
+          ./gradlew :app:assembleRelease -PpizzoraRequireRust=true --no-daemon \
             -PpizzoraVersionCode="${{ steps.version.outputs.version_code }}" \
             -PpizzoraVersionName="${{ steps.version.outputs.version_name }}"
 
-      - name: Verify release APK signature and stage versioned asset
+      - name: Verify release APK signature, native ABIs, and stage versioned asset
         id: package
         shell: bash
         run: |
@@ -294,6 +904,17 @@ jobs:
             echo "ERROR: Expected signed release APK at $APK_SRC was not generated." >&2
             exit 1
           fi
+          ZIP_LIST="$(unzip -l "$APK_SRC")"
+          for entry in \
+            "lib/arm64-v8a/libpizzora_uniffi.so" \
+            "lib/x86_64/libpizzora_uniffi.so" \
+            "lib/arm64-v8a/libjnidispatch.so" \
+            "lib/x86_64/libjnidispatch.so"; do
+            if ! echo "$ZIP_LIST" | grep -q "$entry"; then
+              echo "ERROR: Expected native library '$entry' missing from release APK." >&2
+              exit 1
+            fi
+          done
 
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           APKSIGNER="$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
@@ -326,10 +947,11 @@ jobs:
           retention-days: 30
 
   publish-github-release:
-    name: Create GitHub Release
+    name: Stage 7 — Create GitHub Release
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-    needs: [build-release-apk, backend-docker]
+    needs: [build-release-apk, backend-docker, rust-docker]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -365,3 +987,84 @@ jobs:
             --generate-notes \
             --verify-tag \
             $PRERELEASE_FLAG
+
+  # ---------------------------------------------------------------------------
+  # Final observability: one CI summary across all stages. Never fails the run;
+  # purely reports stage results (skipped stages are reported as such).
+  # ---------------------------------------------------------------------------
+  ci-summary:
+    name: CI Summary
+    if: always()
+    needs:
+      - preflight
+      - rust-quality
+      - kotlin-contracts-and-backend
+      - android-prep
+      - test-rust-parity
+      - test-rust-unit
+      - test-rust-integration
+      - test-android
+      - test-android-instrumented
+      - backend-docker
+      - rust-docker
+      - build-preview-apk
+      - build-release-apk
+      - publish-github-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Report stage results
+        shell: bash
+        env:
+          PREFLIGHT: ${{ needs.preflight.result }}
+          RUST_QUALITY: ${{ needs.rust-quality.result }}
+          KOTLIN_TESTS: ${{ needs.kotlin-contracts-and-backend.result }}
+          ANDROID_PREP: ${{ needs.android-prep.result }}
+          RUST_PARITY: ${{ needs.test-rust-parity.result }}
+          RUST_UNIT: ${{ needs.test-rust-unit.result }}
+          RUST_INTEGRATION: ${{ needs.test-rust-integration.result }}
+          ANDROID_TESTS: ${{ needs.test-android.result }}
+          ANDROID_INSTRUMENTED: ${{ needs.test-android-instrumented.result }}
+          BACKEND_DOCKER: ${{ needs.backend-docker.result }}
+          RUST_DOCKER: ${{ needs.rust-docker.result }}
+          PREVIEW_APK: ${{ needs.build-preview-apk.result }}
+          RELEASE_APK: ${{ needs.build-release-apk.result }}
+          GH_RELEASE: ${{ needs.publish-github-release.result }}
+        run: |
+          set -euo pipefail
+          badge() {
+            case "$1" in
+              success) echo "✅" ;;
+              failure) echo "❌" ;;
+              cancelled) echo "🚫" ;;
+              skipped) echo "⏭️" ;;
+              *) echo "❓" ;;
+            esac
+          }
+          RELEASE_EVENT="${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}"
+          {
+            echo "### PIZZORA CI Summary — ${{ github.ref_name }} (${{ github.event_name }})"
+            echo ""
+            echo "| Stage | Check | Result |"
+            echo "|---|---|---|"
+            echo "| 0 | Security & repository preflight | $(badge "$PREFLIGHT") |"
+            echo "| 1 | Rust quality (fmt, clippy, workspace check) | $(badge "$RUST_QUALITY") |"
+            echo "| 1 | Kotlin contracts & backend tests | $(badge "$KOTLIN_TESTS") |"
+            echo "| 1 | Android build preparation (UniFFI bindgen) | $(badge "$ANDROID_PREP") |"
+            echo "| 2 | Rust/Kotlin parity gate | $(badge "$RUST_PARITY") |"
+            echo "| 3 | Rust workspace unit tests | $(badge "$RUST_UNIT") |"
+            echo "| 4 | PostgreSQL 18 & Redis integration | $(badge "$RUST_INTEGRATION") |"
+            echo "| 5 | Android unit & Robolectric tests | $(badge "$ANDROID_TESTS") |"
+            echo "| 5 | Android instrumentation tests (API 36) | $(badge "$ANDROID_INSTRUMENTED") |"
+            echo "| 6 | Kotlin backend Docker validation | $(badge "$BACKEND_DOCKER") |"
+            echo "| 6 | Rust backend Docker validation | $(badge "$RUST_DOCKER") |"
+            echo "| 7 | Preview APK (PR/main/dispatch) | $(badge "$PREVIEW_APK") |"
+            if [ "$RELEASE_EVENT" = "true" ]; then
+              echo "| 7 | Signed release APK | $(badge "$RELEASE_APK") |"
+              echo "| 7 | GitHub release publication | $(badge "$GH_RELEASE") |"
+            else
+              echo "| 7 | Release APK & GitHub release | ⏭️ not a release tag |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

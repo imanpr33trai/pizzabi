@@ -41,6 +41,7 @@ class CartViewModel(
   private val syncState = MutableStateFlow(SyncStatusState())
   private val _events = MutableSharedFlow<String>(extraBufferCapacity = 4)
   val events: SharedFlow<String> = _events.asSharedFlow()
+  private var sessionSyncJob: kotlinx.coroutines.Job? = null
 
   val uiState: StateFlow<CartUiState> = combine(
     cartRepository.observeCart(),
@@ -114,9 +115,10 @@ class CartViewModel(
   }
 
   fun syncOnSessionActive() {
-    viewModelScope.launch {
+    sessionSyncJob?.cancel()
+    sessionSyncJob = viewModelScope.launch {
       syncState.update { it.copy(isSyncing = true) }
-      val result = cartRepository.syncAndValidateCart(persistToServer = true)
+      val result = cartRepository.bootstrapFromServer()
       syncState.update {
         it.copy(
           isSyncing = false,
@@ -132,7 +134,8 @@ class CartViewModel(
   }
 
   fun validateAndSyncCart() {
-    viewModelScope.launch {
+    sessionSyncJob?.cancel()
+    sessionSyncJob = viewModelScope.launch {
       syncState.update { it.copy(isSyncing = true, statusMessage = null) }
       val result = cartRepository.syncAndValidateCart(persistToServer = true)
       val message = when {
@@ -148,5 +151,11 @@ class CartViewModel(
         )
       }
     }
+  }
+
+  fun clearSessionState() {
+    sessionSyncJob?.cancel()
+    sessionSyncJob = null
+    syncState.value = SyncStatusState()
   }
 }

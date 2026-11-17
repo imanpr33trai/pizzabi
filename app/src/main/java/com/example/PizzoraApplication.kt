@@ -5,13 +5,19 @@ import androidx.work.Configuration
 import com.example.core.di.AppContainer
 
 class PizzoraApplication : Application(), Configuration.Provider {
-  val appContainer: AppContainer by lazy {
+  internal var appContainerOverride: AppContainer? = null
+
+  private val defaultAppContainer: AppContainer by lazy {
     AppContainer(this)
   }
+
+  val appContainer: AppContainer
+    get() = appContainerOverride ?: defaultAppContainer
 
   override val workManagerConfiguration: Configuration
     get() = Configuration.Builder()
       .setWorkerFactory(appContainer.workerFactory)
+      .setDefaultProcessName(applicationInfo?.processName ?: packageName)
       .build()
 
   override fun onCreate() {

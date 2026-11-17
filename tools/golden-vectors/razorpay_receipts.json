@@ -1,0 +1,31 @@
+{
+  "formula": "rcpt_ + sha256_hex('pizzora:attempt:' + lowercase_uuid(order_id) + ':' + trimmed_key_or_attempt_id)[0..32]",
+  "max_length": 40,
+  "exact_length": 37,
+  "vectors": [
+    {
+      "order_id": "01936f30-7c4d-71a0-8f01-000000000001",
+      "key_or_attempt_id": "01936f30-7c4d-71a0-8f01-000000000101",
+      "canonical_input": "pizzora:attempt:01936f30-7c4d-71a0-8f01-000000000001:01936f30-7c4d-71a0-8f01-000000000101",
+      "expected_receipt": "rcpt_fd97ae4e6f0f12231584e326fbb410b2"
+    },
+    {
+      "order_id": "01936F30-7C4D-71A0-8F01-000000000001",
+      "key_or_attempt_id": "  retry-key-alpha-1  ",
+      "canonical_input": "pizzora:attempt:01936f30-7c4d-71a0-8f01-000000000001:retry-key-alpha-1",
+      "expected_receipt": "rcpt_38e1cb4b8e092907365c284f643624b5"
+    },
+    {
+      "order_id": "550e8400-e29b-41d4-a716-446655440000",
+      "key_or_attempt_id": "retry_2_550e8400-e29b-41d4-a716-446655440000",
+      "canonical_input": "pizzora:attempt:550e8400-e29b-41d4-a716-446655440000:retry_2_550e8400-e29b-41d4-a716-446655440000",
+      "expected_receipt": "rcpt_7cde88f9901cc2ad7a75b7bb874db65e"
+    },
+    {
+      "order_id": "550e8400-e29b-41d4-a716-446655440000",
+      "key_or_attempt_id": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+      "canonical_input": "pizzora:attempt:550e8400-e29b-41d4-a716-446655440000:kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+      "expected_receipt": "rcpt_6d895da8d99272a053e38a01a7fe5caf"
+    }
+  ]
+}

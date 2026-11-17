@@ -1,0 +1,19 @@
+[package]
+name = "pizzora-uniffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "pizzora_uniffi"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi_bindgen.rs"
+
+[dependencies]
+pizzora-core.workspace = true
+uniffi.workspace = true
+thiserror.workspace = true

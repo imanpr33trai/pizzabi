@@ -10,15 +10,15 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface CartDao {
   @Transaction
-  @Query("SELECT * FROM cart_items ORDER BY updated_at_ms DESC")
-  fun observeCartItemsWithToppings(): Flow<List<CartItemWithToppings>>
+  @Query("SELECT * FROM cart_items WHERE user_id = :userId ORDER BY updated_at_ms DESC")
+  fun observeCartItemsWithToppings(userId: String): Flow<List<CartItemWithToppings>>
 
   @Transaction
-  @Query("SELECT * FROM cart_items ORDER BY updated_at_ms DESC")
-  suspend fun getCartItemsWithToppingsOnce(): List<CartItemWithToppings>
+  @Query("SELECT * FROM cart_items WHERE user_id = :userId ORDER BY updated_at_ms DESC")
+  suspend fun getCartItemsWithToppingsOnce(userId: String): List<CartItemWithToppings>
 
-  @Query("SELECT COALESCE(SUM(quantity), 0) FROM cart_items")
-  fun observeCartBadgeCount(): Flow<Int>
+  @Query("SELECT COALESCE(SUM(quantity), 0) FROM cart_items WHERE user_id = :userId")
+  fun observeCartBadgeCount(userId: String): Flow<Int>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertItem(item: CartItemEntity)
@@ -26,8 +26,14 @@ interface CartDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertToppings(toppings: List<CartItemToppingEntity>)
 
-  @Query("DELETE FROM cart_item_toppings WHERE cart_item_id = :cartItemId")
-  suspend fun deleteToppingsForItem(cartItemId: String)
+  @Query(
+    """
+    DELETE FROM cart_item_toppings
+    WHERE cart_item_id = :cartItemId
+      AND cart_item_id IN (SELECT id FROM cart_items WHERE user_id = :userId)
+    """,
+  )
+  suspend fun deleteToppingsForItemForUser(userId: String, cartItemId: String)
 
   @Transaction
   suspend fun upsertItemWithToppings(
@@ -35,28 +41,51 @@ interface CartDao {
     toppings: List<CartItemToppingEntity>,
   ) {
     upsertItem(item)
-    deleteToppingsForItem(item.id)
+    deleteToppingsForItemForUser(item.userId, item.id)
     if (toppings.isNotEmpty()) {
       insertToppings(toppings)
     }
   }
 
   @Transaction
-  suspend fun replaceAllItems(entries: List<Pair<CartItemEntity, List<CartItemToppingEntity>>>) {
-    clearCart()
+  suspend fun replaceAllItemsForUser(
+    userId: String,
+    entries: List<Pair<CartItemEntity, List<CartItemToppingEntity>>>,
+  ) {
+    require(entries.all { it.first.userId == userId }) {
+      "All cart items must belong to active user $userId"
+    }
+    clearCartForUser(userId)
     entries.forEach { (item, toppings) ->
       upsertItemWithToppings(item, toppings)
     }
   }
 
-  @Query("UPDATE cart_items SET quantity = :quantity, updated_at_ms = :updatedAtMs WHERE id = :itemId")
-  suspend fun updateQuantity(itemId: String, quantity: Int, updatedAtMs: Long = System.currentTimeMillis())
+  @Query(
+    """
+    UPDATE cart_items
+    SET quantity = :quantity, updated_at_ms = :updatedAtMs
+    WHERE id = :itemId AND user_id = :userId
+    """,
+  )
+  suspend fun updateQuantity(
+    userId: String,
+    itemId: String,
+    quantity: Int,
+    updatedAtMs: Long = System.currentTimeMillis(),
+  )
 
-  @Query("DELETE FROM cart_items WHERE id = :itemId")
-  suspend fun deleteItemById(itemId: String)
+  @Query("DELETE FROM cart_items WHERE id = :itemId AND user_id = :userId")
+  suspend fun deleteItemById(userId: String, itemId: String)
 
+  @Query("DELETE FROM cart_items WHERE user_id = :userId")
+  suspend fun clearCartForUser(userId: String)
+
+  /**
+   * Session-boundary wipe invoked exclusively by SessionScopeCleaner during login/logout/refresh-failure.
+   */
   @Query("DELETE FROM cart_items")
-  suspend fun clearCart()
+  suspend fun clearAllUserCarts()
 }
 
 @Dao
@@ -96,11 +125,11 @@ interface CatalogCacheDao {
 
 @Dao
 interface NotificationInboxDao {
-  @Query("SELECT * FROM notification_inbox ORDER BY created_at_iso DESC")
-  fun observeNotifications(): Flow<List<NotificationInboxEntity>>
+  @Query("SELECT * FROM notification_inbox WHERE user_id = :userId ORDER BY created_at_iso DESC")
+  fun observeNotifications(userId: String): Flow<List<NotificationInboxEntity>>
 
-  @Query("SELECT COUNT(*) FROM notification_inbox WHERE is_read = 0")
-  fun observeUnreadCount(): Flow<Int>
+  @Query("SELECT COUNT(*) FROM notification_inbox WHERE user_id = :userId AND is_read = 0")
+  fun observeUnreadCount(userId: String): Flow<Int>
 
   @Insert(onConflict = OnConflictStrategy.IGNORE)
   suspend fun insertIgnore(items: List<NotificationInboxEntity>)
@@ -111,12 +140,18 @@ interface NotificationInboxDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertAll(items: List<NotificationInboxEntity>)
 
-  @Query("UPDATE notification_inbox SET is_read = 1 WHERE id = :id")
-  suspend fun markRead(id: String)
+  @Query("UPDATE notification_inbox SET is_read = 1 WHERE user_id = :userId AND id = :id")
+  suspend fun markRead(userId: String, id: String)
 
-  @Query("UPDATE notification_inbox SET is_read = 1")
-  suspend fun markAllRead()
+  @Query("UPDATE notification_inbox SET is_read = 1 WHERE user_id = :userId")
+  suspend fun markAllRead(userId: String)
 
+  @Query("DELETE FROM notification_inbox WHERE user_id = :userId")
+  suspend fun clearForUser(userId: String)
+
+  /**
+   * Session-boundary wipe invoked exclusively by SessionScopeCleaner during login/logout/refresh-failure.
+   */
   @Query("DELETE FROM notification_inbox")
   suspend fun clearAll()
 }

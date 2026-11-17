@@ -376,4 +376,10 @@ class CheckoutViewModel(
         .append(':').append(it.toppingIds.sorted().joinToString(",")).append(':').append(it.quantity).append(';')
     }
   }
+
+  fun clearSessionState() {
+    currentDraftSignature = null
+    currentIdempotencyKey = UUID.randomUUID().toString()
+    _uiState.value = CheckoutUiState()
+  }
 }

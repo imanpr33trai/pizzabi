@@ -90,7 +90,7 @@ else
     "$ARCHIVE_PATH"
 fi
 
-echo "[restore] Verifying Flyway schema history and critical tables..."
+echo "[restore] Verifying Flyway/SQLx schema history and critical tables..."
 "$PSQL_BIN" \
   --host="$PGHOST" \
   --port="$PGPORT" \
@@ -99,5 +99,25 @@ echo "[restore] Verifying Flyway schema history and critical tables..."
   --tuples-only \
   --no-align \
   --command="SELECT 'flyway_versions=' || COUNT(*), 'roles=' || (SELECT COUNT(*) FROM roles), 'orders=' || (SELECT COUNT(*) FROM orders), 'payments=' || (SELECT COUNT(*) FROM payments), 'audit_logs=' || (SELECT COUNT(*) FROM audit_logs), 'stream_cursor=' || (SELECT last_seq FROM event_stream_cursor WHERE id = 1) FROM flyway_schema_history WHERE success = TRUE;"
+
+SQLX_EXISTS="$("$PSQL_BIN" \
+  --host="$PGHOST" \
+  --port="$PGPORT" \
+  --username="$PGUSER" \
+  --dbname="$PGDATABASE" \
+  --tuples-only \
+  --no-align \
+  --command="SELECT CASE WHEN to_regclass('public._sqlx_migrations') IS NOT NULL THEN '1' ELSE '0' END;" | tr -d '[:space:]')"
+
+if [[ "$SQLX_EXISTS" == "1" ]]; then
+  "$PSQL_BIN" \
+    --host="$PGHOST" \
+    --port="$PGPORT" \
+    --username="$PGUSER" \
+    --dbname="$PGDATABASE" \
+    --tuples-only \
+    --no-align \
+    --command="SELECT 'sqlx_versions=' || COUNT(*) FROM _sqlx_migrations WHERE success = TRUE;"
+fi
 
 echo "[restore] PASS: Database restore and integrity verification completed."

@@ -22,6 +22,9 @@ import com.example.core.media.ImageCompressor
 import com.example.core.media.ProductImageUploader
 import com.example.core.network.PizzoraApiClient
 import com.example.core.network.WebSocketEventClient
+import com.example.core.security.DefaultSessionScopeCleaner
+import com.example.core.security.SessionScopeCleaner
+import com.example.core.security.SessionTransitionCoordinator
 import com.example.core.security.TokenManager
 import com.example.core.security.TokenStorage
 import com.example.kds.KdsChimePlayer
@@ -33,18 +36,27 @@ import com.example.notifications.NetworkNotificationRepository
 import com.example.notifications.NotificationHelper
 import com.example.notifications.NotificationRepository
 import com.example.notifications.NotificationsViewModel
+import com.example.notifications.OrderSyncScheduler
 import com.example.notifications.PizzoraWorkerFactory
+import com.example.orders.AndroidRazorpayCheckoutLauncher
 import com.example.orders.NetworkOrderRepository
 import com.example.orders.OrderRepository
 import com.example.orders.OrdersViewModel
+import com.example.orders.RazorpayCheckoutLauncher
 import com.example.owner.NetworkOwnerRepository
 import com.example.owner.OwnerRepository
 import com.example.owner.OwnerViewModel
 import com.example.profile.NetworkProfileRepository
 import com.example.profile.ProfileRepository
 import com.example.profile.ProfileViewModel
+import io.ktor.client.engine.HttpClientEngine
 
-class AppContainer(context: Context) {
+class AppContainer(
+  context: Context,
+  private val httpClientEngineOverride: HttpClientEngine? = null,
+  razorpayCheckoutLauncherOverride: RazorpayCheckoutLauncher? = null,
+  private val tokenStorageOverride: TokenStorage? = null,
+) {
   private val appContext = context.applicationContext
 
   val database: PizzoraDatabase by lazy {
@@ -52,24 +64,54 @@ class AppContainer(context: Context) {
   }
 
   val tokenStorage: TokenStorage by lazy {
-    TokenManager(appContext)
+    tokenStorageOverride ?: TokenManager(appContext)
+  }
+
+  val sessionScopeCleaner: SessionScopeCleaner by lazy {
+    DefaultSessionScopeCleaner(
+      cartDao = database.cartDao(),
+      notificationInboxDao = database.notificationInboxDao(),
+      realtimeEventStreamProvider = { webSocketEventClient },
+      onAuthCacheClear = { apiClient.clearAuthTokenCache() },
+      onAdditionalCleanup = { OrderSyncScheduler.cancelSync(appContext) },
+    )
+  }
+
+  val sessionCoordinator: SessionTransitionCoordinator by lazy {
+    SessionTransitionCoordinator(
+      tokenStorage = tokenStorage,
+      scopeCleanerProvider = { sessionScopeCleaner },
+    )
   }
 
   val apiClient: PizzoraApiClient by lazy {
-    PizzoraApiClient(
-      baseUrl = BuildConfig.API_BASE_URL,
-      tokenStorage = tokenStorage,
-    )
+    if (httpClientEngineOverride != null) {
+      PizzoraApiClient(
+        baseUrl = BuildConfig.API_BASE_URL,
+        tokenStorage = tokenStorage,
+        engine = httpClientEngineOverride,
+        sessionCoordinatorProvider = { sessionCoordinator },
+      )
+    } else {
+      PizzoraApiClient(
+        baseUrl = BuildConfig.API_BASE_URL,
+        tokenStorage = tokenStorage,
+        sessionCoordinatorProvider = { sessionCoordinator },
+      )
+    }
   }
 
   val webSocketEventClient: WebSocketEventClient by lazy {
     WebSocketEventClient(apiClient = apiClient)
   }
 
+  val domainBridge: com.example.core.domain.DomainBridge = com.example.core.domain.RustDomainBridge
+
   val authRepository: AuthRepository by lazy {
     NetworkAuthRepository(
       apiClient = apiClient,
       tokenStorage = tokenStorage,
+      sessionCoordinator = sessionCoordinator,
     )
   }
 
@@ -84,6 +126,9 @@ class AppContainer(context: Context) {
     NetworkCartRepository(
       apiClient = apiClient,
       cartDao = database.cartDao(),
+      tokenStorage = tokenStorage,
+      sessionCoordinator = sessionCoordinator,
+      domainBridge = domainBridge,
     )
   }
 
@@ -97,6 +142,10 @@ class AppContainer(context: Context) {
     NetworkOrderRepository(
       apiClient = apiClient,
     )
+  }
+
+  val razorpayCheckoutLauncher: RazorpayCheckoutLauncher by lazy {
+    razorpayCheckoutLauncherOverride ?: AndroidRazorpayCheckoutLauncher()
   }
 
   val kdsRepository: KdsRepository by lazy {
@@ -117,6 +166,7 @@ class AppContainer(context: Context) {
     ProductImageUploader(
       apiClient = apiClient,
       imageCompressor = imageCompressor,
+      domainBridge = domainBridge,
     )
   }
 
@@ -139,6 +189,8 @@ class AppContainer(context: Context) {
     NetworkNotificationRepository(
       apiClient = apiClient,
       notificationInboxDao = database.notificationInboxDao(),
+      tokenStorage = tokenStorage,
+      sessionCoordinator = sessionCoordinator,
     )
   }
 
@@ -209,6 +261,7 @@ class AppContainer(context: Context) {
       return OrdersViewModel(
         orderRepository = orderRepository,
         realtimeEventStream = webSocketEventClient,
+        domainBridge = domainBridge,
       ) as T
     }
   }
@@ -224,6 +277,7 @@ class AppContainer(context: Context) {
         tokenStorage = tokenStorage,
         chimePlayer = kdsChimePlayer,
         realtimeEventStream = webSocketEventClient,
+        domainBridge = domainBridge,
       ) as T
     }
   }

@@ -1,5 +1,5 @@
 [Unit]
-Description=PIZZORA Background Outbox & Reconciliation Worker
+Description=PIZZORA Rust Background Outbox & Reconciliation Worker (pizzora-workers)
 After=network-online.target postgresql.service pizzora-migrate.service
 Requires=pizzora-migrate.service
 Wants=network-online.target redis.service
@@ -12,7 +12,7 @@ WorkingDirectory=/opt/pizzora
 EnvironmentFile=/etc/pizzora/pizzora.env
 Environment=PIZZORA_ENV=production
 Environment=RUN_MIGRATIONS_ON_STARTUP=false
-ExecStart=/usr/bin/java -Xms256m -Xmx768m -XX:+UseG1GC -cp "/opt/pizzora/libs/*" com.pizzora.backend.worker.WorkerMainKt
+ExecStart=/usr/local/bin/pizzora-workers
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=25s

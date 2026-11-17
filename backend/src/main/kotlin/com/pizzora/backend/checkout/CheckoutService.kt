@@ -12,6 +12,7 @@ import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.coupons.CouponService
 import com.pizzora.backend.inventory.InventoryService
 import com.pizzora.backend.orders.OrderService
+import com.pizzora.backend.payments.RazorpayReceiptFormatter
 import com.pizzora.backend.recipes.RecipeDemandItem
 import com.pizzora.backend.recipes.RecipeService
 import com.pizzora.contracts.CheckoutRequest
@@ -350,7 +351,11 @@ class CheckoutService(
 
       val attemptId = UUID.randomUUID()
       val attemptStatus = if (isRazorpay) "INITIATING" else "AWAITING_CUSTOMER_PAYMENT"
-      val receipt = if (isRazorpay) attemptId.toString() else "cod:$attemptId"
+      val receipt = if (isRazorpay) {
+        RazorpayReceiptFormatter.formatReceipt(orderId, attemptId.toString())
+      } else {
+        "cod:$attemptId"
+      }
       conn.prepareStatement(
         """
         INSERT INTO payment_attempts (

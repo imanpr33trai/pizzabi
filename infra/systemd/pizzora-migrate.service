@@ -1,5 +1,5 @@
 [Unit]
-Description=PIZZORA Pre-Deploy Flyway Database Migration
+Description=PIZZORA Pre-Deploy Locked Database Migration (Rust)
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -9,7 +9,8 @@ User=pizzora
 Group=pizzora
 WorkingDirectory=/opt/pizzora
 EnvironmentFile=/etc/pizzora/pizzora.env
-ExecStart=/usr/bin/java -Xms128m -Xmx512m -cp "/opt/pizzora/libs/*" com.pizzora.backend.ApplicationKt --migrate-only
+Environment=PIZZORA_ENV=production
+ExecStart=/usr/local/bin/pizzora-api --migrate-only
 RemainAfterExit=yes
 StandardOutput=journal
 StandardError=journal

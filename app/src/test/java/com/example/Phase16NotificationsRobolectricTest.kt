@@ -557,6 +557,7 @@ class Phase16NotificationsRobolectricTest {
 
     val orderItem = NotificationInboxEntity(
       id = "helper-order-1",
+      userId = "cust-1",
       eventId = "helper-evt-1",
       title = "Order Baking",
       body = "Your sourdough pizza is in the oven.",
@@ -567,6 +568,7 @@ class Phase16NotificationsRobolectricTest {
     )
     val promoItem = NotificationInboxEntity(
       id = "helper-promo-1",
+      userId = "cust-1",
       eventId = "helper-evt-2",
       title = "Garlic Bread Special",
       body = "Free dip on orders above Rs 499.",
