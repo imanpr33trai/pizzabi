@@ -16,6 +16,10 @@
 # The single ADB restart below is bounded and followed by reconnection
 # verification inside the same state loop; it is never repeated.
 #
+# Every adb invocation is wrapped in `timeout`: adb logcat/shell can block
+# indefinitely ("- waiting for device -") when the device disappears, and an
+# unbounded call would hang the whole step instead of failing it.
+#
 # Budgets are in seconds and overridable for local dry-runs; CI uses the
 # documented defaults (worst case ~8 minutes before a clear failure).
 
@@ -41,13 +45,19 @@ fi
 log() { printf '[emulator-readiness] %s\n' "$*"; }
 
 get_state() {
-  "$ADB" get-state 2>/dev/null | tr -d '\r\n'
+  timeout "$CMD_TIMEOUT" "$ADB" get-state 2>/dev/null | tr -d '\r\n'
 }
 
 boot_props() {
   for prop in sys.boot_completed dev.bootcomplete ro.build.version.sdk ro.build.version.release; do
-    printf '%s=%s\n' "$prop" "$("$ADB" shell getprop "$prop" 2>/dev/null | tr -d '\r\n')"
+    printf '%s=%s\n' "$prop" "$(timeout "$CMD_TIMEOUT" "$ADB" shell getprop "$prop" 2>/dev/null | tr -d '\r\n')"
   done
+}
+
+# First non-blank line of a dump: dumpsys/pm output can start with blank
+# lines, which must not read as "no output" for the responsiveness probes.
+first_content_line() {
+  grep -m1 -v '^[[:space:]]*$' | tr -d '\r\n'
 }
 
 collect_diagnostics() {
@@ -58,9 +68,9 @@ collect_diagnostics() {
     echo "readiness failed at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     echo "reason: $reason"
     echo '--- adb devices -l'
-    "$ADB" devices -l 2>&1
+    timeout "$CMD_TIMEOUT" "$ADB" devices -l 2>&1
     echo '--- adb get-state'
-    "$ADB" get-state 2>&1
+    timeout "$CMD_TIMEOUT" "$ADB" get-state 2>&1
     echo '--- boot properties'
     boot_props
     echo '--- dumpsys window (first 80 lines)'
@@ -77,9 +87,9 @@ collect_diagnostics() {
 # ---------------------------------------------------------------------------
 # Phase 0: ADB server up.
 # ---------------------------------------------------------------------------
-"$ADB" start-server >/dev/null 2>&1 || true
+timeout "$CMD_TIMEOUT" "$ADB" start-server >/dev/null 2>&1 || true
 log 'adb server running; current device list:'
-"$ADB" devices -l
+timeout "$CMD_TIMEOUT" "$ADB" devices -l
 
 # ---------------------------------------------------------------------------
 # Phase 1: emulator serial appears at all (bounded).
@@ -117,8 +127,8 @@ while :; do
       if [ "$restart_attempted" -eq 0 ] && [ "$((now - phase_start))" -ge "$OFFLINE_GRACE" ]; then
         restart_attempted=1
         log "device offline for $((now - phase_start))s; performing the single bounded adb server restart"
-        "$ADB" kill-server >/dev/null 2>&1 || true
-        "$ADB" start-server >/dev/null 2>&1 || true
+        timeout "$CMD_TIMEOUT" "$ADB" kill-server >/dev/null 2>&1 || true
+        timeout "$CMD_TIMEOUT" "$ADB" start-server >/dev/null 2>&1 || true
       fi
       ;;
     *)
@@ -138,7 +148,7 @@ done
 phase_start="$(date +%s)"
 boot_completed=""
 while :; do
-  boot_completed="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')"
+  boot_completed="$(timeout "$CMD_TIMEOUT" "$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')"
   if [ "$boot_completed" = "1" ]; then
     log 'sys.boot_completed=1'
     break
@@ -153,21 +163,21 @@ done
 # ---------------------------------------------------------------------------
 # Phase 4: system image, package manager and framework responsiveness.
 # ---------------------------------------------------------------------------
-sdk_level="$("$ADB" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r\n')"
+sdk_level="$(timeout "$CMD_TIMEOUT" "$ADB" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r\n')"
 log "ro.build.version.sdk=$sdk_level (expected: 36)"
 if [ "$sdk_level" != "36" ]; then
   collect_diagnostics "system image API level mismatch: got '$sdk_level', expected '36'"
 fi
 
-pm_probe="$(timeout "$CMD_TIMEOUT" "$ADB" shell pm list packages 2>/dev/null | head -n 1 | tr -d '\r\n')"
+pm_probe="$(timeout "$CMD_TIMEOUT" "$ADB" shell pm list packages 2>/dev/null | first_content_line)"
 if [ -z "$pm_probe" ]; then
   collect_diagnostics "package manager is not responsive ('pm list packages' produced no output)"
 fi
 log "package manager responsive (sample: $pm_probe)"
 
-framework_probe="$(timeout "$CMD_TIMEOUT" "$ADB" shell dumpsys window 2>/dev/null | head -n 1 | tr -d '\r\n')"
+framework_probe="$(timeout "$CMD_TIMEOUT" "$ADB" shell dumpsys window 2>/dev/null | first_content_line)"
 if [ -z "$framework_probe" ]; then
-  collect_diagnostics "Android framework is not responsive ('dumpsys window' produced no output)"
+  collect_diagnostics "Android framework is not responsive ('dumpsys window' produced no content)"
 fi
 log "framework responsive (dumpsys window sample: $framework_probe)"
 
@@ -177,9 +187,9 @@ log "framework responsive (dumpsys window sample: $framework_probe)"
 {
   echo "readiness verified at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   echo '--- adb devices -l'
-  "$ADB" devices -l 2>&1
+  timeout "$CMD_TIMEOUT" "$ADB" devices -l 2>&1
   echo '--- adb get-state'
-  "$ADB" get-state 2>&1
+  timeout "$CMD_TIMEOUT" "$ADB" get-state 2>&1
   echo '--- boot properties'
   boot_props
 } > "$DIAG_DIR/boot-readiness-success.txt" 2>&1

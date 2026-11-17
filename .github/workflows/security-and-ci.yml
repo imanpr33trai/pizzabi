@@ -604,51 +604,26 @@ jobs:
           disable-animations: true
           # Documented input; explicitly bounds the action's internal boot wait.
           emulator-boot-timeout: 600
-          # NOTE: this action splits `script` on newlines and executes each line
-          # as a separate `sh -c`, so multi-line shell logic lives in the
-          # readiness script. The readiness gate must pass before the
-          # instrumentation command runs.
-          script: |
-            bash .github/scripts/android-emulator-readiness.sh
-            ./gradlew :app:connectedDebugAndroidTest -PpizzoraRequireRust=true --no-daemon
+          # NOTE: this action splits `script` on newlines and executes each
+          # line as a separate `sh -c`, so all shell logic lives in the
+          # wrapper script. It runs the bounded boot-readiness gate, then the
+          # exact instrumentation command, preserves its original exit code,
+          # and (via an EXIT trap) collects diagnostics while the emulator is
+          # still alive on every path.
+          script: bash .github/scripts/run-android-instrumentation.sh
 
       - name: Collect emulator diagnostics and test reports
         if: always()
         shell: bash
         run: |
-          # GitHub injects `-e` into `shell: bash`; diagnostics collection
-          # must tolerate individual command failures, so disable it
-          # explicitly. This step never changes the job outcome.
-          set +e +o pipefail
-          mkdir -p ci-diagnostics
-          # The emulator-runner action installs platform-tools and puts adb on
-          # the job PATH. Resolve it defensively so collection still produces
-          # diagnostics when the action never ran (e.g. failed startup).
-          ADB="$(command -v adb 2>/dev/null || true)"
-          if [ -z "$ADB" ]; then
-            ADB="${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools/adb"
-          fi
-          # The action terminates the emulator before this step on every code
-          # path, so adb commands are expected to fail here; their error text
-          # is captured verbatim.
-          {
-            echo "collected at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-            echo "adb binary: $ADB"
-            echo '--- adb devices -l'
-            "$ADB" devices -l 2>&1
-            echo '--- adb get-state'
-            "$ADB" get-state 2>&1
-            echo '--- boot properties'
-            "$ADB" shell getprop sys.boot_completed 2>&1
-            "$ADB" shell getprop dev.bootcomplete 2>&1
-            "$ADB" shell getprop ro.build.version.sdk 2>&1
-            echo '--- logcat (usually unavailable after emulator termination)'
-            "$ADB" logcat -d 2>&1 | tail -n 500
-          } > ci-diagnostics/adb-postmortem.txt
-          # Gradle instrumentation XML + HTML reports, if the test command ran.
-          cp -r app/build/outputs/androidTest-results ci-diagnostics/ 2>/dev/null || true
-          cp -r app/build/reports/androidTests ci-diagnostics/ 2>/dev/null || true
-          find ci-diagnostics -type f -printf '%p %s bytes\n'
+          # The wrapper already collected diagnostics while the emulator was
+          # alive. This post-termination pass appends an addendum and fills in
+          # any file the wrapper could not produce (e.g. when the action
+          # failed before running the wrapper). It must never change the job
+          # outcome, so it always exits 0; every adb call inside is bounded by
+          # `timeout` because adb blocks indefinitely without a device.
+          set +e
+          bash .github/scripts/collect-android-diagnostics.sh post
           exit 0
 
       - name: Upload instrumentation diagnostics & test reports
