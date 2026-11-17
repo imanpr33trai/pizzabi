@@ -87,9 +87,10 @@ impl OutboxDispatcherWorker {
     }
 
     pub async fn run_once(&self) -> Result<DispatchBatchSummary, WorkerError> {
-        let mut summary = DispatchBatchSummary::default();
-
-        summary.payment_events = self.dispatch_payment_lane().await?;
+        let mut summary = DispatchBatchSummary {
+            payment_events: self.dispatch_payment_lane().await?,
+            ..Default::default()
+        };
 
         let (emails, email_dlq) = self.dispatch_email_lane().await?;
         summary.email_events = emails;

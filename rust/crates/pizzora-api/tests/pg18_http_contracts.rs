@@ -39,7 +39,7 @@ use common::{seed_full_storefront_via_owner_api, setup_pool, TestServer};
 
 fn unique_pincode(seed: &uuid::Uuid) -> String {
     let bytes = seed.as_bytes();
-    let tail = 10_000 + ((u16::from(bytes[0]) << 8 | u16::from(bytes[1])) % 89_000);
+    let tail = 10_000 + ((u32::from(bytes[0]) << 8 | u32::from(bytes[1])) % 89_000);
     format!("5{tail:05}")
 }
 
@@ -873,8 +873,18 @@ async fn pg18_cart_coupons_checkout_razorpay_webhooks_kds_and_reports() {
         .and_then(|a| a.gateway_order_id.clone())
         .expect("retry gateway_order_id created");
     let gw_pay_id = format!("pay_rzp_{tag}");
-    srv.gateway
-        .record_captured_payment(&gw_ord2, &gw_pay_id, chk1_dto.order.total_paise);
+    srv.gateway.insert_mock_payment_for_order(
+        &gw_ord2,
+        pizzora_payments::GatewayPaymentResult {
+            gateway_payment_id: gw_pay_id.clone(),
+            gateway_order_id: gw_ord2.clone(),
+            amount_paise: chk1_dto.order.total_paise,
+            currency: "INR".to_owned(),
+            status: "captured".to_owned(),
+            error_code: None,
+            error_description: None,
+        },
+    );
 
     let mut mac = Hmac::<Sha256>::new_from_slice(srv.config.razorpay.key_secret().as_bytes())
         .expect("hmac init");

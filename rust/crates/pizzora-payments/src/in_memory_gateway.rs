@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use uuid::Uuid;
+use pizzora_db::new_uuid_v4;
 
 use crate::dto::{GatewayOrderResult, GatewayPaymentResult, GatewayRefundResult};
 use crate::error::RazorpayGatewayError;
@@ -149,7 +149,7 @@ impl RazorpayGateway for InMemoryRazorpayGateway {
             }
 
             let seq = self.order_seq.fetch_add(1, Ordering::SeqCst);
-            let short = &Uuid::new_v4().simple().to_string()[..6];
+            let short = &new_uuid_v4().simple().to_string()[..6];
             let result = GatewayOrderResult {
                 gateway_order_id: format!("order_gw_{seq}_{short}"),
                 receipt: receipt.to_owned(),
@@ -202,7 +202,7 @@ impl RazorpayGateway for InMemoryRazorpayGateway {
                     found
                 } else {
                     let seq = self.refund_seq.fetch_add(1, Ordering::SeqCst);
-                    let short = &Uuid::new_v4().simple().to_string()[..6];
+                    let short = &new_uuid_v4().simple().to_string()[..6];
                     notes.insert("idempotency_key".to_owned(), idempotency_key.to_owned());
                     let created = GatewayRefundResult {
                         gateway_refund_id: format!("rfnd_gw_{seq}_{short}"),

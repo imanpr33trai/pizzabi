@@ -19,7 +19,7 @@ use common::{seed_full_storefront_via_owner_api, setup_pool, TestServer, TestWsC
 
 fn unique_pincode(seed: &Uuid) -> String {
     let bytes = seed.as_bytes();
-    let tail = 10_000 + ((u16::from(bytes[0]) << 8 | u16::from(bytes[1])) % 89_000);
+    let tail = 10_000 + ((u32::from(bytes[0]) << 8 | u32::from(bytes[1])) % 89_000);
     format!("5{tail:05}")
 }
 

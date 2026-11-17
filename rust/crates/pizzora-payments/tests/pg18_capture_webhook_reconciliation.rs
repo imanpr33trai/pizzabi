@@ -7,8 +7,8 @@ use pizzora_core::{OrderStatus, PaymentAttemptStatus, PaymentMethod, PaymentStat
 use pizzora_db::{new_uuid_v4, AuditContext, OutboxRepository};
 use pizzora_payments::{
     compute_hmac_sha256_hex, GatewayPaymentResult, InMemoryRazorpayGateway, OwnerRefundRequest,
-    PaymentError, PaymentService, RazorpayReconciliationService, VerifyRazorpayPaymentRequest,
-    WebhookService,
+    PaymentError, PaymentService, RazorpayGateway, RazorpayReconciliationService,
+    VerifyRazorpayPaymentRequest, WebhookService,
 };
 use sqlx::Row as _;
 
@@ -160,17 +160,14 @@ async fn pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation
         cfg.key_secret(),
     );
     let wh_sig = compute_hmac_sha256_hex(wh_body.as_bytes(), cfg.webhook_secret());
+    let verify_req = VerifyRazorpayPaymentRequest {
+        order_id: order1.order_id.to_string(),
+        razorpay_order_id: gw_order_id.clone(),
+        razorpay_payment_id: gw_payment_id.clone(),
+        razorpay_signature: client_sig,
+    };
     let (res_v, res_w) = tokio::join!(
-        payment_service.verify_client_payment(
-            customer_id,
-            &VerifyRazorpayPaymentRequest {
-                order_id: order1.order_id.to_string(),
-                razorpay_order_id: gw_order_id.clone(),
-                razorpay_payment_id: gw_payment_id.clone(),
-                razorpay_signature: client_sig,
-            },
-            &audit_cust,
-        ),
+        payment_service.verify_client_payment(customer_id, &verify_req, &audit_cust),
         webhook_service.handle_razorpay_webhook(
             wh_body.as_bytes(),
             Some(&wh_sig),

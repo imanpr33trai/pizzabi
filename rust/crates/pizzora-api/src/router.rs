@@ -2,7 +2,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderName, Method, StatusCode};
 use axum::middleware as axum_mw;
 use axum::response::Response;
-use axum::routing::{delete, get, patch, post, put};
+use axum::routing::{delete, get, patch, post};
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
 

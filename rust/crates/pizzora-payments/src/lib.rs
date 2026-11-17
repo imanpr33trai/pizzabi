@@ -57,6 +57,7 @@ mod tests {
 
     use pizzora_config::{AppConfig, RazorpayConfig};
     use pizzora_core::PaymentMethod;
+    use pizzora_db::new_uuid_v4;
     use uuid::Uuid;
 
     use super::*;
@@ -108,7 +109,7 @@ mod tests {
 
     #[test]
     fn format_razorpay_receipt_rejects_blank_input() {
-        let oid = Uuid::new_v4();
+        let oid = new_uuid_v4();
         let err = format_razorpay_receipt(oid, "   \t  ").expect_err("blank input must fail");
         assert!(matches!(
             err,
@@ -121,8 +122,8 @@ mod tests {
 
     #[test]
     fn retry_fingerprint_is_deterministic_and_sensitive_to_parameters() {
-        let order_id = Uuid::new_v4();
-        let payment_id = Uuid::new_v4();
+        let order_id = new_uuid_v4();
+        let payment_id = new_uuid_v4();
 
         let fp_base = compute_retry_fingerprint(
             order_id,
@@ -220,7 +221,7 @@ mod tests {
         assert!(!client_dbg.contains("super_secret_key_never_logged"));
 
         let req = VerifyRazorpayPaymentRequest {
-            order_id: Uuid::new_v4().to_string(),
+            order_id: new_uuid_v4().to_string(),
             razorpay_order_id: "order_123".to_owned(),
             razorpay_payment_id: "pay_123".to_owned(),
             razorpay_signature: "deadbeef_secret_sig_999".to_owned(),

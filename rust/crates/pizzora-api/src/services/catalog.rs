@@ -185,7 +185,7 @@ impl CatalogService {
         let created = self
             .load_single_product_in_tx(&mut tx, product_id)
             .await?
-            .ok_or_else(|| ApiError::internal())?;
+            .ok_or_else(ApiError::internal)?;
 
         let after_val = serde_json::to_value(&created).ok();
         let entity_id = product_id.to_string();

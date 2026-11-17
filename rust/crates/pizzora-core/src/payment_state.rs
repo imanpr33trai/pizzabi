@@ -35,6 +35,47 @@ pub enum RefundStatus {
     Failed,
 }
 
+impl PaymentStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unpaid => "UNPAID",
+            Self::CodPending => "COD_PENDING",
+            Self::CodCollected => "COD_COLLECTED",
+            Self::Captured => "CAPTURED",
+            Self::Expired => "EXPIRED",
+            Self::Cancelled => "CANCELLED",
+            Self::RefundPending => "REFUND_PENDING",
+            Self::PartiallyRefunded => "PARTIALLY_REFUNDED",
+            Self::Refunded => "REFUNDED",
+        }
+    }
+}
+
+impl PaymentAttemptStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Initiating => "INITIATING",
+            Self::AwaitingCustomerPayment => "AWAITING_CUSTOMER_PAYMENT",
+            Self::Authorized => "AUTHORIZED",
+            Self::Captured => "CAPTURED",
+            Self::Failed => "FAILED",
+            Self::Expired => "EXPIRED",
+            Self::Cancelled => "CANCELLED",
+        }
+    }
+}
+
+impl RefundStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "PENDING",
+            Self::Processing => "PROCESSING",
+            Self::Processed => "PROCESSED",
+            Self::Failed => "FAILED",
+        }
+    }
+}
+
 pub struct PaymentStateMachine;
 
 impl PaymentStateMachine {

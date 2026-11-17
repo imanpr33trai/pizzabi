@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 //! Standalone Axum 0.8 HTTP + WebSocket API server runtime (`pizzora-api`).
 //! Strictly process-independent: zero worker loop or `pizzora-workers` coupling.
 

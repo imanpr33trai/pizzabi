@@ -159,17 +159,18 @@ impl AppConfig {
             }
         };
 
-        if is_production {
-            if jwt_secret.len() < 32
+        if is_production
+            && (jwt_secret.len() < 32
                 || DISALLOWED_PRODUCTION_JWT_SECRETS
                     .iter()
-                    .any(|disallowed| jwt_secret.as_str() == *disallowed)
-            {
-                return Err(ConfigError::InvalidValue {
-                    var: "JWT_SECRET",
-                    reason: "must be at least 32 characters and not a development placeholder in production".to_owned(),
-                });
-            }
+                    .any(|disallowed| jwt_secret.as_str() == *disallowed))
+        {
+            return Err(ConfigError::InvalidValue {
+                var: "JWT_SECRET",
+                reason:
+                    "must be at least 32 characters and not a development placeholder in production"
+                        .to_owned(),
+            });
         }
 
         let auth = AuthConfig {
@@ -365,6 +366,24 @@ pub struct SmtpConfig {
 }
 
 impl SmtpConfig {
+    pub fn new(
+        host: impl Into<String>,
+        port: u16,
+        from_address: impl Into<String>,
+        username: Option<String>,
+        password: Option<String>,
+        use_starttls: bool,
+    ) -> Self {
+        Self {
+            host: host.into(),
+            port,
+            from_address: from_address.into(),
+            username,
+            password: password.map(Zeroizing::new),
+            use_starttls,
+        }
+    }
+
     pub fn password(&self) -> Option<&str> {
         self.password.as_deref().map(String::as_str)
     }

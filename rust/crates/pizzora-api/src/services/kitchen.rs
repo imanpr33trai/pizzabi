@@ -129,6 +129,7 @@ impl KitchenService {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn transition_ticket(
         &self,
         order_id: Uuid,
@@ -208,8 +209,7 @@ impl KitchenService {
             return Err(ApiError::conflict(
                 "INVALID_PRIORITY_STATE",
                 format!(
-                    "Cannot change priority for order {} while in status {}.",
-                    order_number, status_raw
+                    "Cannot change priority for order {order_number} while in status {status_raw}.",
                 ),
             ));
         }
@@ -534,14 +534,14 @@ pub fn parse_payment_method(raw: &str) -> Result<PaymentMethod, ApiError> {
 pub fn parse_payment_status(raw: &str) -> Result<PaymentStatus, ApiError> {
     match raw.trim().to_ascii_uppercase().as_str() {
         "UNPAID" => Ok(PaymentStatus::Unpaid),
-        "AUTHORIZED" => Ok(PaymentStatus::Authorized),
+        "COD_PENDING" => Ok(PaymentStatus::CodPending),
+        "COD_COLLECTED" => Ok(PaymentStatus::CodCollected),
         "CAPTURED" => Ok(PaymentStatus::Captured),
-        "FAILED" => Ok(PaymentStatus::Failed),
+        "EXPIRED" => Ok(PaymentStatus::Expired),
+        "CANCELLED" => Ok(PaymentStatus::Cancelled),
         "REFUND_PENDING" => Ok(PaymentStatus::RefundPending),
         "PARTIALLY_REFUNDED" => Ok(PaymentStatus::PartiallyRefunded),
         "REFUNDED" => Ok(PaymentStatus::Refunded),
-        "COD_PENDING" => Ok(PaymentStatus::CodPending),
-        "COD_COLLECTED" => Ok(PaymentStatus::CodCollected),
         other => Err(ApiError::from(DbError::CatalogInvariantViolation(format!(
             "Unsupported payment_status '{other}'"
         )))),

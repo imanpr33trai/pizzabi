@@ -222,6 +222,12 @@ impl From<PaymentError> for ApiError {
     }
 }
 
+impl From<pizzora_payments::RazorpayGatewayError> for ApiError {
+    fn from(value: pizzora_payments::RazorpayGatewayError) -> Self {
+        Self::from(PaymentError::Gateway(value))
+    }
+}
+
 impl From<ConfigError> for ApiError {
     fn from(value: ConfigError) -> Self {
         error!(error = %value, "Configuration error surfaced during request");

@@ -92,9 +92,9 @@ pub fn resolve_target_rooms(
         "order.status_changed" => {
             rooms.insert(ROOM_OWNER_DASHBOARD.to_owned());
             let to_status = payload.get("to_status").and_then(|v| v.as_str());
-            if to_status != Some("EXPIRED") && from_status != Some("PENDING_PAYMENT") {
-                rooms.insert(ROOM_KDS_KITCHEN.to_owned());
-            } else if to_status == Some("PLACED") {
+            if (to_status != Some("EXPIRED") && from_status != Some("PENDING_PAYMENT"))
+                || to_status == Some("PLACED")
+            {
                 rooms.insert(ROOM_KDS_KITCHEN.to_owned());
             }
         }
@@ -447,7 +447,7 @@ pub fn spawn_redis_pubsub_subscriber(
     hub: Arc<RealtimeHub>,
     shutdown: CancellationToken,
 ) {
-    let url = redis_config.url.trim().to_owned();
+    let url = redis_config.url().trim().to_owned();
     if url.is_empty() {
         return;
     }

@@ -810,14 +810,16 @@ async fn pg18_expiry_sweep_reconciler_broadcast_health_metrics_and_graceful_shut
     let att2 = new_uuid_v4();
     let gwo2 = format!("order_reconcile_{}", &order2.simple().to_string()[..8]);
     let gwp2 = format!("pay_reconcile_{}", &order2.simple().to_string()[..8]);
-    gateway.seed_order_payment(
+    gateway.insert_mock_payment_for_order(
         &gwo2,
         GatewayPaymentResult {
             gateway_payment_id: gwp2.clone(),
-            gateway_order_id: Some(gwo2.clone()),
+            gateway_order_id: gwo2.clone(),
             amount_paise: 42_000,
             currency: "INR".to_owned(),
             status: "captured".to_owned(),
+            error_code: None,
+            error_description: None,
         },
     );
     let mut tx3 = pool.begin().await.unwrap();

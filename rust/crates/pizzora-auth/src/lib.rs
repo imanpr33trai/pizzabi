@@ -270,14 +270,14 @@ mod tests {
 
     #[test]
     fn smtp_message_builder_sets_deterministic_message_id_and_outbox_header() {
-        let smtp_cfg = SmtpConfig {
-            host: "localhost".to_owned(),
-            port: 1025,
-            from_address: "no-reply@pizzora.local".to_owned(),
-            username: None,
-            password: None,
-            use_starttls: false,
-        };
+        let smtp_cfg = SmtpConfig::new(
+            "localhost",
+            1025,
+            "no-reply@pizzora.local",
+            None,
+            None,
+            false,
+        );
         let provider = LettreSmtpEmailDeliveryProvider::new(smtp_cfg);
         let event_id = Uuid::parse_str("11111111-2222-4333-8444-555555555555").unwrap();
         let req = OutboundEmail {
@@ -745,14 +745,14 @@ mod tests {
         assert!(!hasher.verify("StrongPass123!", "$argon2id$v=19$corrupted"));
         assert!(hasher.hash("short").is_err());
 
-        let invalid_from_provider = LettreSmtpEmailDeliveryProvider::new(SmtpConfig {
-            host: "localhost".to_owned(),
-            port: 1025,
-            from_address: "not-an-email".to_owned(),
-            username: None,
-            password: None,
-            use_starttls: false,
-        });
+        let invalid_from_provider = LettreSmtpEmailDeliveryProvider::new(SmtpConfig::new(
+            "localhost",
+            1025,
+            "not-an-email",
+            None,
+            None,
+            false,
+        ));
         let req = OutboundEmail {
             outbox_event_id: new_uuid_v4(),
             template: EmailTemplateKind::Verification,
@@ -767,14 +767,14 @@ mod tests {
         assert!(!from_err.is_transient);
         assert!(!from_err.to_string().contains("secret_tok_987"));
 
-        let valid_from_provider = LettreSmtpEmailDeliveryProvider::new(SmtpConfig {
-            host: "localhost".to_owned(),
-            port: 1025,
-            from_address: "no-reply@pizzora.local".to_owned(),
-            username: None,
-            password: None,
-            use_starttls: false,
-        });
+        let valid_from_provider = LettreSmtpEmailDeliveryProvider::new(SmtpConfig::new(
+            "localhost",
+            1025,
+            "no-reply@pizzora.local",
+            None,
+            None,
+            false,
+        ));
         let bad_recipient = OutboundEmail {
             to_email: Zeroizing::new("invalid-recipient".to_owned()),
             ..req

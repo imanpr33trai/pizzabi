@@ -115,9 +115,7 @@ impl EphemeralCacheStore for RedisStore {
 
     fn get<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<String>> {
         Box::pin(async move {
-            let Some(mut conn) = self.get_or_connect().await else {
-                return None;
-            };
+            let mut conn = self.get_or_connect().await?;
             match timeout(self.timeout, conn.get::<_, Option<String>>(key)).await {
                 Ok(Ok(v)) => v,
                 Ok(Err(err)) => {
@@ -134,9 +132,7 @@ impl EphemeralCacheStore for RedisStore {
 
     fn get_del<'a>(&'a self, key: &'a str) -> BoxFuture<'a, Option<String>> {
         Box::pin(async move {
-            let Some(mut conn) = self.get_or_connect().await else {
-                return None;
-            };
+            let mut conn = self.get_or_connect().await?;
             match timeout(self.timeout, conn.get_del::<_, Option<String>>(key)).await {
                 Ok(Ok(v)) => v,
                 Ok(Err(err)) => {
@@ -176,9 +172,7 @@ impl EphemeralCacheStore for RedisStore {
         window_seconds: u64,
     ) -> BoxFuture<'a, Option<i64>> {
         Box::pin(async move {
-            let Some(mut conn) = self.get_or_connect().await else {
-                return None;
-            };
+            let mut conn = self.get_or_connect().await?;
             let res: Result<i64, redis::RedisError> = match timeout(self.timeout, async {
                 let count: i64 = conn.incr(key, 1i64).await?;
                 if count == 1 {

@@ -192,8 +192,8 @@ pub async fn run_locked_handoff_with_hook<F, Fut>(
     on_lock_acquired: F,
 ) -> Result<HandoffOutcome, DbError>
 where
-    F: FnOnce(i32) -> Fut,
-    Fut: Future<Output = Result<(), DbError>>,
+    F: FnOnce(i32) -> Fut + Send,
+    Fut: Future<Output = Result<(), DbError>> + Send,
 {
     let mut conn = pool.acquire().await?;
 
@@ -210,7 +210,7 @@ where
 
     let work_result = async {
         on_lock_acquired(backend_pid).await?;
-        execute_locked_handoff(&mut *conn, backend_pid).await
+        execute_locked_handoff(&mut conn, backend_pid).await
     }
     .await;
 
@@ -260,7 +260,7 @@ async fn execute_locked_handoff(
         verify_catalog_invariants(conn).await?;
         ensure_sqlx_baseline_1_to_3(conn).await?;
         verify_existing_sqlx_migrations(conn).await?;
-        MIGRATOR.run(&mut *conn).await?;
+        MIGRATOR.run_direct(&mut *conn).await?;
         let versions = collect_applied_versions(conn).await?;
         info!(
             backend_pid,
@@ -274,7 +274,7 @@ async fn execute_locked_handoff(
         })
     } else if sqlx_exists {
         verify_existing_sqlx_migrations(conn).await?;
-        MIGRATOR.run(&mut *conn).await?;
+        MIGRATOR.run_direct(&mut *conn).await?;
         verify_catalog_invariants(conn).await?;
         let versions = collect_applied_versions(conn).await?;
         info!(
@@ -300,7 +300,7 @@ async fn execute_locked_handoff(
             )));
         }
 
-        MIGRATOR.run(&mut *conn).await?;
+        MIGRATOR.run_direct(&mut *conn).await?;
         verify_catalog_invariants(conn).await?;
         let versions = collect_applied_versions(conn).await?;
         info!(
@@ -855,7 +855,7 @@ mod tests {
         use sqlx::postgres::PgPoolOptions;
 
         let base_url = match std::env::var("TEST_POSTGRES_URL") {
-            Ok(v) if !v.trim().is_empty() => v,
+            Ok(v) if !v.trim().is_empty() => zeroize::Zeroizing::new(v),
             _ => AppConfig::from_env()
                 .expect("config from env")
                 .database

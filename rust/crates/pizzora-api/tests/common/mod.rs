@@ -33,9 +33,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use uuid::Uuid;
 
+type StoredObjectMap = HashMap<String, (Vec<u8>, Option<String>)>;
+
 #[derive(Clone, Default)]
 pub struct MockObjectStorageClient {
-    objects: Arc<Mutex<HashMap<String, (Vec<u8>, Option<String>)>>>,
+    objects: Arc<Mutex<StoredObjectMap>>,
 }
 
 impl MockObjectStorageClient {
@@ -693,6 +695,7 @@ pub enum WsFrame {
     Close(Option<u16>),
 }
 
+#[derive(Debug)]
 pub struct TestWsClient {
     stream: TcpStream,
     buf: Vec<u8>,

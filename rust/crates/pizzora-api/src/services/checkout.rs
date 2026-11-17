@@ -95,7 +95,9 @@ impl CheckoutService {
                     "Idempotency-Key was already used with a different checkout payload.",
                 ));
             }
-            let detail = OrderService::load_order_detail_in_tx(&mut tx, existing_id).await?;
+            let detail = OrderService::load_order_detail_in_tx(&mut tx, existing_id)
+                .await?
+                .ok_or_else(ApiError::internal)?;
             tx.commit().await?;
             return Ok(CheckoutResponse {
                 order: detail,
@@ -617,7 +619,9 @@ impl CheckoutService {
         )
         .await?;
 
-        let detail = OrderService::load_order_detail_in_tx(&mut tx, order_id).await?;
+        let detail = OrderService::load_order_detail_in_tx(&mut tx, order_id)
+            .await?
+            .ok_or_else(ApiError::internal)?;
         tx.commit().await?;
 
         Ok(CheckoutResponse {

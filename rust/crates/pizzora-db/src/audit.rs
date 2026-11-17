@@ -15,6 +15,22 @@ pub struct AuditContext {
     pub ip_address: Option<String>,
 }
 
+impl AuditContext {
+    pub fn new(
+        actor_user_id: Option<Uuid>,
+        actor_role: impl Into<String>,
+        correlation_id: impl Into<String>,
+        ip_address: Option<&str>,
+    ) -> Self {
+        Self {
+            actor_user_id,
+            actor_role: actor_role.into(),
+            correlation_id: correlation_id.into(),
+            ip_address: ip_address.map(str::to_owned),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditLogEntryDto {
     pub id: String,

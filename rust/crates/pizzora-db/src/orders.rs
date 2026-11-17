@@ -405,6 +405,7 @@ impl OrderService {
         Ok(detail)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn transition_order_status(
         &self,
         order_id: Uuid,

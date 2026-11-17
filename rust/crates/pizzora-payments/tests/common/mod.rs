@@ -38,7 +38,7 @@ pub struct SeededCustomerOrder {
 
 pub async fn seed_user(pool: &PgPool, prefix: &str) -> Uuid {
     let user_id = new_uuid_v4();
-    let email = format!("{prefix}-{}@pizzora.test", user_id);
+    let email = format!("{prefix}-{user_id}@pizzora.test");
     sqlx::query(
         r#"
         INSERT INTO users (id, email, email_verified_at, password_hash, full_name, phone, is_active)
@@ -55,7 +55,7 @@ pub async fn seed_user(pool: &PgPool, prefix: &str) -> Uuid {
 
 #[allow(dead_code)]
 pub async fn seed_owner_staff(pool: &PgPool) -> Uuid {
-    let owner_id = seed_user(pool, "owner");
+    let owner_id = seed_user(pool, "owner").await;
     let role_id: Uuid = sqlx::query_scalar("SELECT id FROM roles WHERE code = 'OWNER'")
         .fetch_one(pool)
         .await

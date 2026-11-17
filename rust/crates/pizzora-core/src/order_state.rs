@@ -23,6 +23,20 @@ pub enum OrderStatus {
 }
 
 impl OrderStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::PendingPayment => "PENDING_PAYMENT",
+            Self::Placed => "PLACED",
+            Self::Accepted => "ACCEPTED",
+            Self::Preparing => "PREPARING",
+            Self::Ready => "READY",
+            Self::OutForDelivery => "OUT_FOR_DELIVERY",
+            Self::Completed => "COMPLETED",
+            Self::Cancelled => "CANCELLED",
+            Self::Expired => "EXPIRED",
+        }
+    }
+
     pub const fn is_terminal(self) -> bool {
         matches!(self, Self::Completed | Self::Cancelled | Self::Expired)
     }

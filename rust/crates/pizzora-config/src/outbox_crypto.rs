@@ -12,7 +12,7 @@ pub const DEV_OUTBOX_KEY_ID: &str = "k_dev_local_01";
 /// and no outbox encryption env vars are provided. Rejected in production.
 pub const DEV_OUTBOX_KEY_B64: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct OutboxEncryptionConfig {
     pub current_key_id: String,
     keys: BTreeMap<String, Zeroizing<[u8; 32]>>,
