@@ -25,6 +25,7 @@ use crate::dto::{
     WsEventsFrame,
 };
 use crate::error::ApiErrorEnvelope;
+use crate::listener::HttpValidationListener;
 use crate::openapi::build_openapi_document;
 use crate::rate_limit::{RateLimitDecision, ResilientRateLimiter};
 use crate::router::build_router;
@@ -65,14 +66,16 @@ async fn spawn_offline_server(env_overrides: &[(&str, &str)]) -> SocketAddr {
     )
     .expect("AppState builds offline");
 
+    let is_production = state.config.is_production();
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind ephemeral port");
     let addr = listener.local_addr().expect("local_addr");
+    let validated_listener = HttpValidationListener::new(listener, is_production);
 
     let app = build_router(state).into_make_service_with_connect_info::<SocketAddr>();
     tokio::spawn(async move {
-        let _ = axum::serve(listener, app).await;
+        let _ = axum::serve(validated_listener, app).await;
     });
 
     addr
@@ -881,6 +884,44 @@ async fn http_body_size_limits_chunked_overflow_and_rate_limit_429() {
         "Expected 400 for invalid Content-Length, got: {bad_cl_resp}"
     );
     assert!(bad_cl_resp.contains("INVALID_CONTENT_LENGTH"));
+    let (_, bad_cl_body) = bad_cl_resp
+        .split_once("\r\n\r\n")
+        .expect("http header/body separator");
+    let bad_cl_env: ApiErrorEnvelope =
+        serde_json::from_str(bad_cl_body).expect("structured ApiErrorEnvelope for bad CL");
+    assert_eq!(bad_cl_env.error.code, "INVALID_CONTENT_LENGTH");
+
+    // 3b. Negative / duplicate mismatched Content-Length preserves x-request-id + structured 400
+    for (req_id, cl_headers) in [
+        ("corr-neg-cl-01", "Content-Length: -5\r\n"),
+        ("corr-dup-cl-01", "Content-Length: 2\r\nContent-Length: 9\r\n"),
+    ] {
+        let mut s = TcpStream::connect(addr).await.expect("connect raw tcp");
+        let req = format!(
+            "POST /api/v1/auth/verify-email HTTP/1.1\r\n\
+             Host: 127.0.0.1\r\n\
+             Content-Type: application/json\r\n\
+             X-Request-Id: {req_id}\r\n\
+             {cl_headers}\
+             Connection: close\r\n\r\n{{}}"
+        );
+        s.write_all(req.as_bytes()).await.unwrap();
+        let mut resp = String::new();
+        s.read_to_string(&mut resp).await.unwrap();
+        assert!(
+            resp.starts_with("HTTP/1.1 400 "),
+            "Expected 400 for invalid Content-Length ({cl_headers}), got: {resp}"
+        );
+        let (head, body) = resp.split_once("\r\n\r\n").expect("http separator");
+        let expected_hdr = format!("x-request-id: {req_id}");
+        assert!(
+            head.to_ascii_lowercase().contains(&expected_hdr),
+            "Expected x-request-id {req_id} in headers: {head}"
+        );
+        let env: ApiErrorEnvelope = serde_json::from_str(body).expect("ApiErrorEnvelope json");
+        assert_eq!(env.error.code, "INVALID_CONTENT_LENGTH");
+        assert_eq!(env.correlation_id, req_id);
+    }
 
     // 4. Webhook endpoint permits >128 bytes up to MAX_WEBHOOK_BODY_BYTES (512), fails at >512 bytes
     let mid_webhook = format!("{{\"event\":\"{}\"}}", "w".repeat(250));

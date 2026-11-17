@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use pizzora_api::listener::HttpValidationListener;
 use pizzora_api::router::build_router;
 use pizzora_api::services::realtime::spawn_redis_pubsub_subscriber;
 use pizzora_api::state::AppState;
@@ -174,8 +175,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let shutdown = CancellationToken::new();
     spawn_redis_pubsub_subscriber(redis_config, state.realtime_hub.clone(), shutdown.clone());
 
+    let is_production = state.config.is_production();
     let app = build_router(state);
-    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
+    let listener = HttpValidationListener::new(
+        tokio::net::TcpListener::bind(bind_addr).await?,
+        is_production,
+    );
 
     info!(
         environment = %environment,

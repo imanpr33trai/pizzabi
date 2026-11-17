@@ -110,16 +110,20 @@ impl ApiError {
         )
     }
 
-    pub fn into_response_with_correlation(self, correlation_id: &str) -> Response {
-        let envelope = ApiErrorEnvelope {
+    pub fn to_envelope(&self, correlation_id: &str) -> ApiErrorEnvelope {
+        ApiErrorEnvelope {
             error: ApiErrorDetail {
-                code: self.code,
-                message: self.message,
-                details: self.details,
+                code: self.code.clone(),
+                message: self.message.clone(),
+                details: self.details.clone(),
             },
             correlation_id: correlation_id.to_owned(),
             timestamp: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
-        };
+        }
+    }
+
+    pub fn into_response_with_correlation(self, correlation_id: &str) -> Response {
+        let envelope = self.to_envelope(correlation_id);
 
         let mut resp = (self.status, Json(envelope)).into_response();
         if let Ok(cid_val) = HeaderValue::from_str(correlation_id) {

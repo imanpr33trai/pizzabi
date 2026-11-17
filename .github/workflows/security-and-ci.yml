@@ -228,10 +228,21 @@ jobs:
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -d "$SDK_ROOT/ndk/27.2.12479018" ]; then
-            yes | "$SDKMANAGER" "ndk;27.2.12479018"
+          NDK_DIR="$SDK_ROOT/ndk/27.2.12479018"
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "ERROR: Android sdkmanager not found at '$SDKMANAGER'." >&2
+            exit 1
           fi
-          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          if [ ! -d "$NDK_DIR" ]; then
+            ACCEPT_INPUT="$(printf 'y\n%.0s' {1..100})"
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses <<< "$ACCEPT_INPUT" >/dev/null
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" "ndk;27.2.12479018" <<< "$ACCEPT_INPUT"
+          fi
+          if [ ! -d "$NDK_DIR" ]; then
+            echo "ERROR: Expected Android NDK directory '$NDK_DIR' does not exist after installation." >&2
+            exit 1
+          fi
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -295,10 +306,22 @@ jobs:
             cargo install cargo-ndk --version 4.1.2 --locked
           fi
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          if [ ! -d "$SDK_ROOT/ndk/27.2.12479018" ]; then
-            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null || true
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          NDK_DIR="$SDK_ROOT/ndk/27.2.12479018"
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "ERROR: Android sdkmanager not found at '$SDKMANAGER'." >&2
+            exit 1
           fi
-          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          if [ ! -d "$NDK_DIR" ]; then
+            ACCEPT_INPUT="$(printf 'y\n%.0s' {1..100})"
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses <<< "$ACCEPT_INPUT" >/dev/null
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" "ndk;27.2.12479018" <<< "$ACCEPT_INPUT"
+          fi
+          if [ ! -d "$NDK_DIR" ]; then
+            echo "ERROR: Expected Android NDK directory '$NDK_DIR' does not exist after installation." >&2
+            exit 1
+          fi
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -506,10 +529,22 @@ jobs:
             cargo install cargo-ndk --version 4.1.2 --locked
           fi
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          if [ ! -d "$SDK_ROOT/ndk/27.2.12479018" ]; then
-            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" >/dev/null || true
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          NDK_DIR="$SDK_ROOT/ndk/27.2.12479018"
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "ERROR: Android sdkmanager not found at '$SDKMANAGER'." >&2
+            exit 1
           fi
-          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          if [ ! -d "$NDK_DIR" ]; then
+            ACCEPT_INPUT="$(printf 'y\n%.0s' {1..100})"
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses <<< "$ACCEPT_INPUT" >/dev/null
+            "$SDKMANAGER" --sdk_root="$SDK_ROOT" "ndk;27.2.12479018" <<< "$ACCEPT_INPUT"
+          fi
+          if [ ! -d "$NDK_DIR" ]; then
+            echo "ERROR: Expected Android NDK directory '$NDK_DIR' does not exist after installation." >&2
+            exit 1
+          fi
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

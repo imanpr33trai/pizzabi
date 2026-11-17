@@ -12,6 +12,7 @@ use pizzora_api::dto::{
     RecipeTargetType, ScheduledSlotDto, ToppingDto,
 };
 use pizzora_api::error::ApiError;
+use pizzora_api::listener::HttpValidationListener;
 use pizzora_api::router::build_router;
 use pizzora_api::state::AppState;
 use pizzora_api::storage::{
@@ -224,14 +225,16 @@ impl TestServer {
             state = state.with_ws_heartbeat_interval(hb);
         }
 
+        let is_production = config.is_production();
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind TestServer ephemeral port");
         let addr = listener.local_addr().expect("local_addr");
+        let validated_listener = HttpValidationListener::new(listener, is_production);
         let router =
             build_router(state.clone()).into_make_service_with_connect_info::<SocketAddr>();
         tokio::spawn(async move {
-            let _ = axum::serve(listener, router).await;
+            let _ = axum::serve(validated_listener, router).await;
         });
 
         let client = reqwest::Client::builder()

@@ -7,6 +7,7 @@ pub mod dto;
 pub mod error;
 pub mod extractors;
 pub mod health;
+pub mod listener;
 pub mod metrics;
 pub mod middleware;
 pub mod openapi;
