@@ -6,6 +6,12 @@ on:
     tags: [ 'v[0-9]*.[0-9]*.[0-9]*' ]
   pull_request:
   workflow_dispatch:
+  # Nightly full regression: runs the complete validation suite (Rust unit +
+  # PostgreSQL/Redis integration, Android unit + API 36 instrumentation,
+  # Docker validation, security policy audit, lockfile & verification checks)
+  # without publishing anything and without building APK artifacts.
+  schedule:
+    - cron: '17 2 * * *'
 
 permissions:
   contents: read
@@ -13,8 +19,10 @@ permissions:
 concurrency:
   # One group per PR number (so force-pushes replace the run), or per ref otherwise.
   # Release tags always get their own group and are never cancelled by development pushes.
+  # Cancel outdated work only for PRs and ordinary feature-branch pushes; main pushes
+  # (preview publishing) and release tags must never be cancelled mid-run.
   group: pizzora-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch' && github.ref != 'refs/heads/main') }}
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -221,6 +229,10 @@ jobs:
 
   android-prep:
     name: Stage 1 — Android Build Preparation (JDK, Rust, UniFFI Bindgen)
+    # Tier gate: run on PRs, schedule, dispatch and release tags; skip on all
+    # branch pushes (feature = fast CI, main = expensive Android work was
+    # validated by the PR pipeline; no preview APK is built from main).
+    if: ${{ github.event_name != 'push' || github.ref_type == 'tag' }}
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -280,6 +292,9 @@ jobs:
   # ---------------------------------------------------------------------------
   test-rust-parity:
     name: Stage 2 — Rust/Kotlin Parity Gate (Golden Vectors & Wire Contracts)
+    # Tier gate: skipped only on ordinary feature-branch pushes (fast CI);
+    # runs on PRs, main pushes, schedule, dispatch and release tags.
+    if: ${{ github.event_name != 'push' || github.ref_type == 'tag' || github.ref == 'refs/heads/main' }}
     needs: [preflight, rust-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -334,7 +349,12 @@ jobs:
   # ---------------------------------------------------------------------------
   test-rust-unit:
     name: Stage 3 — Rust Workspace Unit Tests
-    needs: [preflight, rust-quality, test-rust-parity]
+    # Fast tier job: runs on every event (fast Rust unit tests for feature
+    # pushes per the tiered CI policy). Deliberately does NOT depend on the
+    # parity gate so it can run on feature pushes where the parity gate is
+    # skipped; the parity gate still gates integration tests, Android tests
+    # and the release APK.
+    needs: [preflight, rust-quality]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -365,6 +385,10 @@ jobs:
   # ---------------------------------------------------------------------------
   test-rust-integration:
     name: Stage 4 — PostgreSQL 18.6 & Redis Integration
+    # Tier gate: skipped only on ordinary feature-branch pushes (fast CI);
+    # runs on PRs, main pushes (it gates preview image publishing from main),
+    # schedule, dispatch and release tags.
+    if: ${{ github.event_name != 'push' || github.ref_type == 'tag' || github.ref == 'refs/heads/main' }}
     needs: [preflight, rust-quality, test-rust-parity, test-rust-unit]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -424,6 +448,9 @@ jobs:
   # ---------------------------------------------------------------------------
   test-android:
     name: Stage 5 — Android Unit & Robolectric Tests
+    # Tier gate: run on PRs, schedule, dispatch and release tags; skip on all
+    # branch pushes (feature = fast CI, main = validated by the PR pipeline).
+    if: ${{ github.event_name != 'push' || github.ref_type == 'tag' }}
     needs: [preflight, rust-quality, test-rust-parity, android-prep]
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -482,6 +509,9 @@ jobs:
 
   test-android-instrumented:
     name: Stage 5 — Android Instrumentation Tests (API 36 Emulator)
+    # Tier gate: run on PRs, schedule, dispatch and release tags; skip on all
+    # branch pushes (feature = fast CI, main = validated by the PR pipeline).
+    if: ${{ github.event_name != 'push' || github.ref_type == 'tag' }}
     needs: [preflight, rust-quality, test-rust-parity, test-android]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -613,6 +643,10 @@ jobs:
   # ---------------------------------------------------------------------------
   backend-docker:
     name: Stage 6 — Kotlin Backend Docker (${{ github.ref_type == 'tag' && 'Release' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'Preview Push' || 'Validate Only') }})
+    # Tier gate: skipped only on ordinary feature-branch pushes (fast CI — no
+    # Docker work on feature pushes). PRs validate, main publishes previews,
+    # release tags publish production images (unchanged mode/push logic).
+    if: ${{ github.event_name != 'push' || github.ref_type == 'tag' || github.ref == 'refs/heads/main' }}
     needs: [preflight, kotlin-contracts-and-backend]
     permissions:
       contents: read
@@ -625,6 +659,11 @@ jobs:
 
   rust-docker:
     name: Stage 6 — Rust Backend Docker (${{ github.ref_type == 'tag' && 'Release' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'Preview Push' || 'Validate Only') }})
+    # Tier gate: skipped only on ordinary feature-branch pushes (fast CI — no
+    # Docker work on feature pushes). All of its needs (quality, parity, unit,
+    # integration) execute in every tier where this job runs, so a skipped
+    # need can never cascade into a skipped publish.
+    if: ${{ github.event_name != 'push' || github.ref_type == 'tag' || github.ref == 'refs/heads/main' }}
     needs: [preflight, rust-quality, test-rust-parity, test-rust-unit, test-rust-integration]
     permissions:
       contents: read
@@ -641,7 +680,11 @@ jobs:
   # ---------------------------------------------------------------------------
   build-preview-apk:
     name: Stage 7 — Build Android Debug Preview APK
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    # Tier gate: PRs and manual dispatch only. Main pushes no longer rebuild a
+    # debug APK (the full Android pipeline already ran on the PR that was
+    # merged, and release artifacts come from version tags); feature pushes
+    # are fast CI; release tags build the signed production APK instead.
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
     needs: [preflight, kotlin-contracts-and-backend, android-prep, test-android, test-android-instrumented]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -1002,8 +1045,22 @@ jobs:
             esac
           }
           RELEASE_EVENT="${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}"
+          TIER="full validation"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "branch" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            TIER="fast CI (feature branch push)"
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TIER="post-merge validation & preview publishing (main)"
+          elif [ "$RELEASE_EVENT" = "true" ]; then
+            TIER="production release (tag)"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            TIER="nightly full regression (no publishing, no APK artifacts)"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TIER="manual full validation"
+          fi
           {
             echo "### PIZZORA CI Summary — ${{ github.ref_name }} (${{ github.event_name }})"
+            echo ""
+            echo "Execution tier: **$TIER** — ⏭️ marks stages intentionally skipped for this tier (gating decisions in the workflow), not missing validation."
             echo ""
             echo "| Stage | Check | Result |"
             echo "|---|---|---|"
@@ -1018,7 +1075,7 @@ jobs:
             echo "| 5 | Android instrumentation tests (API 36) | $(badge "$ANDROID_INSTRUMENTED") |"
             echo "| 6 | Kotlin backend Docker validation | $(badge "$BACKEND_DOCKER") |"
             echo "| 6 | Rust backend Docker validation | $(badge "$RUST_DOCKER") |"
-            echo "| 7 | Preview APK (PR/main/dispatch) | $(badge "$PREVIEW_APK") |"
+            echo "| 7 | Preview APK (PR/dispatch) | $(badge "$PREVIEW_APK") |"
             if [ "$RELEASE_EVENT" = "true" ]; then
               echo "| 7 | Signed release APK | $(badge "$RELEASE_APK") |"
               echo "| 7 | GitHub release publication | $(badge "$GH_RELEASE") |"
