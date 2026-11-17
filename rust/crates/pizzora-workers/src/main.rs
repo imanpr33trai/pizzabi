@@ -31,7 +31,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let outcome = run_locked_handoff(&pool).await?;
         info!(
             mode = ?outcome.mode,
-            applied_sqlx_migrations = outcome.applied_sqlx_migrations,
+            backend_pid = outcome.backend_pid,
+            applied_or_verified_versions = ?outcome.applied_or_verified_versions,
             "Pre-deploy migration step completed from worker binary"
         );
         pool.close().await;
@@ -42,7 +43,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let outcome = run_locked_handoff(&pool).await?;
         info!(
             mode = ?outcome.mode,
-            applied_sqlx_migrations = outcome.applied_sqlx_migrations,
+            backend_pid = outcome.backend_pid,
+            applied_or_verified_versions = ?outcome.applied_or_verified_versions,
             "Startup database migrations finished"
         );
     } else {

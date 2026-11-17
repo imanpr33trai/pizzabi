@@ -96,6 +96,21 @@ pub struct HandoffOutcome {
     pub applied_or_verified_versions: Vec<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct MigrationPreflightReport {
+    pub flyway_table_exists: bool,
+    pub sqlx_table_exists: bool,
+    pub flyway_verified: bool,
+    pub sqlx_verified: bool,
+    pub catalog_invariants_ok: bool,
+    pub flyway_versions: Vec<String>,
+    pub sqlx_versions: Vec<i64>,
+    pub outbox_dead_letter_count: i64,
+    pub outbox_pending_count: i64,
+    pub stream_high_water_seq: i64,
+    pub active_worker_sessions: i64,
+}
+
 /// Computes the exact signed 32-bit CRC checksum matching `org.flywaydb:flyway-core:11.3.4`:
 /// - Reads the input as UTF-8 text line-by-line (splitting on `\r\n`, `\n`, or `\r`)
 /// - Strips a leading UTF-8 BOM (`0xEF 0xBB 0xBF`) from the first line if present
@@ -294,6 +309,102 @@ async fn execute_locked_handoff(
             applied_or_verified_versions: versions,
         })
     }
+}
+
+/// Strictly read-only preflight verification for Phase 9 production cutover (Step 3).
+/// Performs zero DDL or table mutations: verifies `flyway_schema_history` (and `_sqlx_migrations`
+/// if present), checks all 46 tables / 13 V3 indexes / constraints / V2 seeds, and reports
+/// outbox dead-letter backlog and active worker sessions from `pg_stat_activity`.
+pub async fn verify_migration_readiness_readonly(
+    pool: &PgPool,
+) -> Result<MigrationPreflightReport, DbError> {
+    let mut conn = pool.acquire().await?;
+
+    let flyway_table_exists: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.flyway_schema_history') IS NOT NULL")
+            .fetch_one(&mut *conn)
+            .await?;
+
+    let sqlx_table_exists: bool =
+        sqlx::query_scalar("SELECT to_regclass('public._sqlx_migrations') IS NOT NULL")
+            .fetch_one(&mut *conn)
+            .await?;
+
+    if !flyway_table_exists && !sqlx_table_exists {
+        return Err(DbError::UnsafeDatabaseState(
+            "neither flyway_schema_history nor _sqlx_migrations exists; database is not ready for cutover"
+                .to_owned(),
+        ));
+    }
+
+    let mut flyway_verified = false;
+    let mut flyway_versions = Vec::new();
+    if flyway_table_exists {
+        verify_flyway_history(&mut conn).await?;
+        flyway_verified = true;
+        flyway_versions = sqlx::query_scalar(
+            "SELECT version FROM flyway_schema_history WHERE success = TRUE AND version IS NOT NULL ORDER BY installed_rank ASC",
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+    }
+
+    let mut sqlx_verified = false;
+    let mut sqlx_versions = Vec::new();
+    if sqlx_table_exists {
+        verify_existing_sqlx_migrations(&mut conn).await?;
+        sqlx_verified = true;
+        sqlx_versions = collect_applied_versions(&mut conn).await?;
+    }
+
+    verify_catalog_invariants(&mut conn).await?;
+
+    let outbox_dead_letter_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM outbox_events WHERE dispatch_status = 'DEAD_LETTER'",
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    let outbox_pending_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM outbox_events WHERE dispatch_status IN ('PENDING', 'PROCESSING')",
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    let stream_high_water_seq: i64 =
+        sqlx::query_scalar("SELECT COALESCE((SELECT last_seq FROM event_stream_cursor WHERE id = 1), 0)")
+            .fetch_one(&mut *conn)
+            .await?;
+
+    let active_worker_sessions: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND pid <> pg_backend_pid()
+          AND state IS NOT NULL
+          AND (
+            application_name ILIKE '%worker%'
+            OR query ILIKE '%outbox_events%FOR UPDATE SKIP LOCKED%'
+          )
+        "#,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    Ok(MigrationPreflightReport {
+        flyway_table_exists,
+        sqlx_table_exists,
+        flyway_verified,
+        sqlx_verified,
+        catalog_invariants_ok: true,
+        flyway_versions,
+        sqlx_versions,
+        outbox_dead_letter_count,
+        outbox_pending_count,
+        stream_high_water_seq,
+        active_worker_sessions,
+    })
 }
 
 async fn verify_flyway_history(conn: &mut PgConnection) -> Result<(), DbError> {
@@ -831,11 +942,28 @@ mod tests {
             .expect("insert Flyway V1..V3 row");
         }
 
+        let preflight_before = verify_migration_readiness_readonly(&adopt_pool)
+            .await
+            .expect("read-only preflight succeeds on valid Flyway V1-V3 DB");
+        assert!(preflight_before.flyway_table_exists);
+        assert!(!preflight_before.sqlx_table_exists);
+        assert!(preflight_before.flyway_verified);
+        assert!(!preflight_before.sqlx_verified);
+        assert!(preflight_before.catalog_invariants_ok);
+        assert_eq!(preflight_before.flyway_versions, vec!["1", "2", "3"]);
+        assert!(preflight_before.sqlx_versions.is_empty());
+
         let adopt_outcome = run_locked_handoff(&adopt_pool)
             .await
             .expect("adopt Flyway V1..V3 without re-running DDL");
         assert_eq!(adopt_outcome.mode, HandoffMode::AdoptedExistingFlyway);
         assert_eq!(adopt_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        let preflight_after = verify_migration_readiness_readonly(&adopt_pool)
+            .await
+            .expect("read-only preflight succeeds after SQLx adoption");
+        assert!(preflight_after.sqlx_table_exists);
+        assert!(preflight_after.sqlx_verified);
+        assert_eq!(preflight_after.sqlx_versions, vec![1, 2, 3]);
         let zero_exec_rows: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM _sqlx_migrations WHERE version BETWEEN 1 AND 3 AND execution_time = 0",
         )

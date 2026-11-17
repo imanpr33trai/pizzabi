@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: pizzora-prod-postgres
     restart: unless-stopped
     env_file:
@@ -28,7 +28,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - pizzora_prod_pgdata:/var/lib/postgresql/data
+      - pizzora_prod_pgdata:/var/lib/postgresql
       - pizzora_prod_backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${POSTGRES_DB}"]
@@ -66,20 +66,25 @@ services:
         limits:
           memory: 384M
 
-  # Pre-deploy Flyway migration job separated from API & Worker runtime startup.
+  # Pre-deploy locked Flyway-to-SQLx migration job separated from API & Worker runtime startup.
   migrate:
-    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:latest}
+    image: ${RUST_BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-rust-backend:latest}
     container_name: pizzora-prod-migrate
     restart: "no"
     env_file:
       - .env.prod
+    environment:
+      PIZZORA_ENV: production
+      DATABASE_MAX_POOL_SIZE: "4"
+      DATABASE_MIN_CONNECTIONS: "1"
+      S3_ENABLED: "${S3_ENABLED:-false}"
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["java", "-cp", "/app/libs/*", "com.pizzora.backend.ApplicationKt", "--migrate-only"]
+    command: ["/usr/local/bin/pizzora-api", "--migrate-only"]
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:latest}
+    image: ${RUST_BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-rust-backend:latest}
     container_name: pizzora-prod-api
     restart: unless-stopped
     stop_grace_period: 20s
@@ -89,6 +94,11 @@ services:
       PIZZORA_ENV: production
       RUN_MIGRATIONS_ON_STARTUP: "false"
       PORT: "8080"
+      SHUTDOWN_TIMEOUT_SECS: "15"
+      DATABASE_MAX_POOL_SIZE: "${API_DATABASE_MAX_POOL_SIZE:-15}"
+      DATABASE_MIN_CONNECTIONS: "2"
+      S3_ENABLED: "${S3_ENABLED:-false}"
+    command: ["/usr/local/bin/pizzora-api"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,18 +107,18 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/health/ready >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/v1/health/ready >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 4s
       retries: 6
-      start_period: 20s
+      start_period: 15s
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 512M
 
   worker:
-    image: ${BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-backend:latest}
+    image: ${RUST_BACKEND_IMAGE:-ghcr.io/imanpr33trai/pizzora-rust-backend:latest}
     container_name: pizzora-prod-worker
     restart: unless-stopped
     stop_grace_period: 20s
@@ -118,7 +128,11 @@ services:
       PIZZORA_ENV: production
       RUN_MIGRATIONS_ON_STARTUP: "false"
       WORKER_HEALTH_PORT: "8081"
-    command: ["java", "-cp", "/app/libs/*", "com.pizzora.backend.worker.WorkerMainKt"]
+      SHUTDOWN_TIMEOUT_SECS: "15"
+      DATABASE_MAX_POOL_SIZE: "${WORKER_DATABASE_MAX_POOL_SIZE:-5}"
+      DATABASE_MIN_CONNECTIONS: "1"
+      S3_ENABLED: "${S3_ENABLED:-false}"
+    command: ["/usr/local/bin/pizzora-workers"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -127,15 +141,15 @@ services:
     ports:
       - "127.0.0.1:8081:8081"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health/worker >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health/worker >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 4s
       retries: 6
-      start_period: 20s
+      start_period: 15s
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 384M
 
   caddy:
     image: caddy:2.9-alpine

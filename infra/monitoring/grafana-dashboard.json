@@ -37,13 +37,15 @@
     },
     {
       "id": 4,
-      "title": "HikariCP Pool & JVM Heap",
+      "title": "PostgreSQL Pool (SQLx / HikariCP)",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
       "targets": [
-        { "expr": "pizzora_hikari_connections_active", "legendFormat": "Active DB Conns" },
-        { "expr": "pizzora_hikari_connections_idle", "legendFormat": "Idle DB Conns" },
-        { "expr": "pizzora_hikari_threads_awaiting", "legendFormat": "Threads Awaiting" }
+        { "expr": "pizzora_db_pool_connections{state=\"total\"}", "legendFormat": "{{job}} Total DB Conns" },
+        { "expr": "pizzora_db_pool_connections{state=\"idle\"}", "legendFormat": "{{job}} Idle DB Conns" },
+        { "expr": "pizzora_hikari_connections_active", "legendFormat": "Hikari Active Conns" },
+        { "expr": "pizzora_hikari_connections_idle", "legendFormat": "Hikari Idle Conns" },
+        { "expr": "pizzora_hikari_threads_awaiting", "legendFormat": "Hikari Threads Awaiting" }
       ]
     },
     {

@@ -20,7 +20,7 @@ PIZZORA separates schema migration from API and background-worker runtime startu
 3. Bootstrap the initial Owner account (once):
    ```bash
    docker compose -f infra/docker-compose.prod.yml exec backend \
-     java -cp "/app/libs/*" com.pizzora.backend.ApplicationKt --bootstrap-owner
+     /usr/local/bin/pizzora-api --bootstrap-owner
    ```
 
 ### Option B: Bare-Metal / VPS Systemd Units
@@ -114,7 +114,7 @@ docker compose -f infra/docker-compose.yml pull
 docker compose -f infra/docker-compose.yml up -d
 ```
 
-For production, configure `BACKEND_IMAGE` to a tested version tag (for example, `ghcr.io/imanpr33trai/pizzora-backend:1.0.0`) in the deployment environment, then pull and start the stack:
+For production, configure `RUST_BACKEND_IMAGE` to a tested version tag or digest (for example, `ghcr.io/imanpr33trai/pizzora-rust-backend:1.0.0`), then pull and start the stack (use `BACKEND_IMAGE` with `infra/docker-compose.ktor-rollback.yml` if rolling back to Ktor):
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml pull
@@ -232,4 +232,90 @@ Never commit `.env` files, paste production values into docs/issues, or leave de
    ```
 4. **Android Staging End-to-End Verification**:
    - Build a debug/staging APK pointing strictly at the isolated Railway staging URL (`PIZZORA_API_BASE_URL=https://<your-railway-staging-api-domain>` `./gradlew :app:assembleDebug -PpizzoraRequireRust=true`) and verify customer registration/email verification, menu browsing, cart sync, checkout + Razorpay sandbox payment + webhook delivery, KDS live WebSocket order progression, and owner catalog/notification updates.
+
+---
+
+## 12. Phase 9 — Railway Production Cutover, Expand-and-Contract Rollback & Ktor Retirement
+
+> **Critical Safety Rule:** Never alter production Railway services, run production migrations, or retire Ktor code/images without explicit written approval for the cutover window and exact service names (`pizzabi`, `pizzabi-worker` in Railway project `bubbly-peace`). Keep `RUN_MIGRATIONS_ON_STARTUP=false` on both Rust runtime services and Ktor rollback deployments.
+
+### 12.1 Pre-Cutover Gates
+Before executing Step 1 of the cutover sequence, confirm all six gates:
+1. **Change Window Approval:** Written user approval for the exact production cutover window, Railway project (`bubbly-peace`), and services (`pizzabi`, `pizzabi-worker`).
+2. **Backup & Verified Restore Proof:** Fresh production PostgreSQL 18.6 `pg_dump` created, stored off-container (encrypted S3 / backup host), and validated via `bash infra/scripts/verify-backup-restore.sh` / `infra/scripts/restore-postgres.sh`.
+3. **Artifact & Environment Inventory:**
+   - Record current production Ktor deploy ID and pinned rollback image digest (`BACKEND_IMAGE=ghcr.io/imanpr33trai/pizzora-backend@sha256:...`).
+   - Record approved Rust release image digest (`RUST_BACKEND_IMAGE=ghcr.io/imanpr33trai/pizzora-rust-backend@sha256:...`).
+   - Verify production Railway variables on both `pizzabi` and `pizzabi-worker`: `PIZZORA_ENV=production`, `RUN_MIGRATIONS_ON_STARTUP=false`, `DATABASE_MAX_POOL_SIZE` (`15` API / `5` Worker — within PG `max_connections` minus reserved migrate/admin connections), strong `JWT_SECRET`, production `OUTBOX_EMAIL_KEY_CURRENT_ID` + `OUTBOX_EMAIL_KEYS`, production Razorpay keys (`rzp_live_*` + webhook secret), and SMTP credentials.
+4. **Schema Compatibility:** Production remains `V1`–`V3` parity on initial cutover; any future `V4+` migration is strictly additive and expand-and-contract reviewed.
+5. **Staging Sign-Off & Backlog Check:** Zero unresolved P0/P1 defects, all staging suites green, and zero unacknowledged dead-letter rows (`outbox_events WHERE dispatch_status = 'DEAD_LETTER'`).
+6. **Worker Drain Proof:** Confirmed procedure to stop Ktor workers and verify `0` active worker sessions in `pg_stat_activity` before starting `pizzora-workers`.
+
+### 12.2 Production Cutover Sequence
+1. **Freeze Schema Changes & Record Identifiers:** Announce schema freeze and record active Ktor deploy ID / rollback digest (`ghcr.io/imanpr33trai/pizzora-backend@sha256:...`).
+2. **Production Backup & Off-Host Verification:**
+   ```bash
+   BACKUP_DIR=/var/backups/pizzora/postgres BACKUP_S3_URI="<off-host-s3-uri>" \
+     bash infra/scripts/backup-postgres.sh
+   ```
+   Verify restoreability onto an isolated temporary PG 18.6 target before touching production services.
+3. **Read-Only Production Preflight Check (Zero Mutation):**
+   ```bash
+   PIZZORA_ENV=production \
+     /usr/local/bin/pizzora-api --preflight-only --require-zero-dead-letters
+   ```
+   Confirm `flyway_schema_history` shows `V1`–`V3` intact, `catalog_invariants_ok: true`, and inspect `active_worker_sessions` and `stream_high_water_seq`.
+4. **Stop Ktor Workers & Prove Drain:**
+   Stop any Ktor worker process (`pizzora-worker` or embedded worker instance) and assert zero worker DB sessions remain:
+   ```bash
+   PIZZORA_ENV=production \
+     /usr/local/bin/pizzora-api --preflight-only --require-zero-workers --require-zero-dead-letters
+   ```
+   Do **not** run Ktor and Rust workers concurrently against the same production queue.
+5. **Run Pre-Deploy Locked Migration / Handoff Once:**
+   ```bash
+   PIZZORA_ENV=production DATABASE_MAX_POOL_SIZE=4 \
+     /usr/local/bin/pizzora-api --migrate-only
+   ```
+   Capture logs and confirm `mode: AdoptExistingFlywayV1ToV3`, `pg_advisory_lock(884210001)` acquired/released cleanly, `applied_or_verified_versions: [1, 2, 3]`, and zero `V1`–`V3` DDL re-execution.
+6. **Deploy Rust API & Rust Worker:**
+   Apply `.railway/railway.ts` (targeting `infra/Dockerfile.rust`, `pizzabi` preDeploy `/usr/local/bin/pizzora-api --migrate-only`, start `/usr/local/bin/pizzora-api`, healthcheck `/api/v1/health/ready`; `pizzabi-worker` start `/usr/local/bin/pizzora-workers`, healthcheck `/health/worker`) or roll the VPS/Compose production stack via `docker compose -f infra/docker-compose.prod.yml up -d`.
+7. **Run Cutover Smoke Tests:**
+   ```bash
+   BASE_URL=https://api.pizzora.app \
+   SMOKE_TEST_EMAIL="<dedicated-smoke-account>" \
+   SMOKE_TEST_PASSWORD="<smoke-password>" \
+   WORKER_INTERNAL_URL="http://127.0.0.1:8081" \
+     bash infra/scripts/verify-production-cutover.sh
+   ```
+   Verify `/api/v1/health/ready`, catalog/config/OpenAPI, external `/metrics` blocked, auth/refresh/logout, cart/notifications/orders/ws-ticket, invalid webhook signature rejection, KDS WebSocket sequence progression, and worker `/health/worker` across all 4 loops.
+8. **Monitor Post-Cutover SLOs:**
+   Watch `infra/monitoring/grafana-dashboard.json` and `infra/monitoring/alerts.yml` for:
+   - HTTP 5xx rate (`PizzoraHttp5xxSpike`)
+   - SQLx DB pool saturation (`PizzoraDbPoolExhaustion`)
+   - Outbox unsequenced / pending dispatch backlog & dead-letter count (`PizzoraOutboxSequencerBacklog`, `PizzoraOutboxDeadLetterDetected`)
+   - Failed Razorpay refunds (`PizzoraFailedRefundsPending`)
+   - Worker loop heartbeats & loop errors (`PizzoraWorkerDown`, `PizzoraWorkerLoopErrors`)
+9. **Hold Ktor Rollback Assets Warm:** Keep `.railway/railway.ktor-rollback.ts`, `infra/docker-compose.ktor-rollback.yml`, `infra/Dockerfile.backend`, `backend/`, `.github/workflows/publish-backend.yml`, and the pinned Ktor image digest available throughout the agreed production stability window.
+
+### 12.3 Rollback Triggers & Exact Rollback Procedure
+Trigger immediate rollback if any of the following occur:
+- Sustained elevated HTTP 5xx rate or `/api/v1/health/ready` failures.
+- Auth login/refresh failures, cart ownership regression, or checkout/payment/refund state inconsistency.
+- Unbounded worker outbox backlog, duplicate payment/refund dispatches, schema drift, or loss of critical metrics/logs.
+
+**Rollback Sequence (Order Matters):**
+1. **Stop Rust Worker First:** Scale down/stop `pizzabi-worker` (or `docker compose stop worker`) so no dual workers touch `outbox_events`. Verify `SELECT pid, application_name, query FROM pg_stat_activity WHERE state <> 'idle'` shows no active Rust worker transactions.
+2. **Route Away / Stop Rust API:** Drain or stop `pizzabi` Rust runtime.
+3. **Restore Pinned Ktor Image with Migrations Disabled:**
+   - Railway: deploy `.railway/railway.ktor-rollback.ts` (pinned pre-cutover `infra/Dockerfile.backend` / release digest) with `RUN_MIGRATIONS_ON_STARTUP=false` and **no** Flyway pre-deploy run.
+   - Docker Compose / VPS: `BACKEND_IMAGE=<pinned-ktor-digest> docker compose -f infra/docker-compose.ktor-rollback.yml up -d`.
+4. **Verify Ktor Health & Smoke Tests:** Confirm `/api/v1/health/ready`, `/metrics` (`pizzora_hikari_*`), login/catalog/checkout, and single-worker operation.
+5. **No Unnecessary DB Restore:** Do **not** run `restore-postgres.sh` unless schema/data corruption is proven; PostgreSQL `V1`–`V3` + `_sqlx_migrations` leaves Ktor schema untouched.
+
+### 12.4 Expand-and-Contract Policy (`V4+`) & Ktor Retirement
+- **Expand-and-Contract (`V4+`):** Before Ktor retirement, every new SQLx migration (`V4+`) MUST be backward-compatible with running/rollback Ktor instances (additive nullable columns, defaults, or side tables only; no destructive column drops, renames, or incompatible constraint tightening until the contract phase after Ktor is retired).
+- **Ktor Retirement Criteria (Explicit User Approval Required):** Only after completing the agreed production stability window with clean SLO metrics and explicit written user sign-off may Ktor backend runtime source (`backend/`), `infra/Dockerfile.backend`, `.github/workflows/publish-backend.yml`, `.railway/railway.ktor-rollback.ts`, and `infra/docker-compose.ktor-rollback.yml` be archived/removed.
+- **Permanent Retention:** **Never** delete historical Flyway migrations (`V1__core_schema.sql`–`V3__hot_path_indexes.sql`), backup artifacts, or audit/cutover evidence.
+
 

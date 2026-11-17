@@ -26,9 +26,10 @@ pub use inventory::{
 };
 pub use migrator::{
     ensure_sqlx_baseline_1_to_3, flyway_crc32, run_locked_handoff, run_locked_handoff_with_hook,
-    verify_catalog_invariants, verify_flyway_history, HandoffMode, HandoffOutcome,
-    CANONICAL_V1_BYTES, CANONICAL_V2_BYTES, CANONICAL_V3_BYTES, EXPECTED_TABLES,
-    EXPECTED_V3_INDEXES, MIGRATION_ADVISORY_LOCK_KEY, MIGRATOR,
+    verify_catalog_invariants, verify_flyway_history, verify_migration_readiness_readonly,
+    HandoffMode, HandoffOutcome, MigrationPreflightReport, CANONICAL_V1_BYTES, CANONICAL_V2_BYTES,
+    CANONICAL_V3_BYTES, EXPECTED_TABLES, EXPECTED_V3_INDEXES, MIGRATION_ADVISORY_LOCK_KEY,
+    MIGRATOR,
 };
 pub use notifications::{
     MarkAllNotificationsReadResponse, MarkNotificationReadResponse, NotificationDeliveryStatus,

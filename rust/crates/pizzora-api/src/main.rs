@@ -7,7 +7,10 @@ use pizzora_api::services::realtime::spawn_redis_pubsub_subscriber;
 use pizzora_api::state::AppState;
 use pizzora_auth::{BootstrapOwner, PasswordHasher};
 use pizzora_config::AppConfig;
-use pizzora_db::{connect_pg_pool, run_locked_handoff, verify_catalog_invariants, RedisStore};
+use pizzora_db::{
+    connect_pg_pool, run_locked_handoff, verify_catalog_invariants,
+    verify_migration_readiness_readonly, RedisStore,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -22,6 +25,9 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args: Vec<String> = std::env::args().collect();
+    let preflight_only = args.iter().any(|a| a == "--preflight-only");
+    let require_zero_workers = args.iter().any(|a| a == "--require-zero-workers");
+    let require_zero_dead_letters = args.iter().any(|a| a == "--require-zero-dead-letters");
     let migrate_only = args.iter().any(|a| a == "--migrate-only");
     let bootstrap_owner = args.iter().any(|a| a == "--bootstrap-owner");
 
@@ -30,11 +36,33 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let pool = connect_pg_pool(&config.database).await?;
 
+    if preflight_only {
+        let report = verify_migration_readiness_readonly(&pool).await?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        pool.close().await;
+        if require_zero_workers && report.active_worker_sessions > 0 {
+            return Err(format!(
+                "Cutover preflight failed: {} active worker DB session(s) detected; stop Ktor workers first",
+                report.active_worker_sessions
+            )
+            .into());
+        }
+        if require_zero_dead_letters && report.outbox_dead_letter_count > 0 {
+            return Err(format!(
+                "Cutover preflight failed: {} dead-letter outbox row(s) detected",
+                report.outbox_dead_letter_count
+            )
+            .into());
+        }
+        return Ok(());
+    }
+
     if migrate_only {
         let outcome = run_locked_handoff(&pool).await?;
         info!(
             mode = ?outcome.mode,
-            applied_sqlx_migrations = outcome.applied_sqlx_migrations,
+            backend_pid = outcome.backend_pid,
+            applied_or_verified_versions = ?outcome.applied_or_verified_versions,
             "Pre-deploy migration step completed"
         );
         pool.close().await;
@@ -45,7 +73,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let outcome = run_locked_handoff(&pool).await?;
         info!(
             mode = ?outcome.mode,
-            applied_sqlx_migrations = outcome.applied_sqlx_migrations,
+            backend_pid = outcome.backend_pid,
+            applied_or_verified_versions = ?outcome.applied_or_verified_versions,
             "Startup database migrations finished"
         );
     } else {
