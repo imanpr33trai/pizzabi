@@ -10,7 +10,7 @@ use pizzora_auth::{
     EmailTemplateKind, InMemoryEmailDeliveryProvider, PasswordHasher, RegisterRequest,
     VerifyEmailRequest,
 };
-use pizzora_config::{AppConfig, OutboxEncryptionConfig};
+use pizzora_config::{AppConfig, DatabaseConfig, NormalizedDatabaseUrl, OutboxEncryptionConfig};
 use pizzora_core::{OrderStatus, PaymentAttemptStatus, PaymentStatus, RefundStatus};
 use pizzora_db::{
     connect_pg_pool, new_uuid_v4, run_locked_handoff, InMemoryCacheStore, OutboxRepository,
@@ -28,15 +28,75 @@ use tracing_subscriber::layer::{Context, SubscriberExt as _};
 use tracing_subscriber::{Layer, Registry};
 use uuid::Uuid;
 
+/// Isolated test-database strategy (same rationale as
+/// `crates/pizzora-api/tests/common/mod.rs::setup_pool`): every ignored
+/// integration test runs against its own `pizzora_it_<12 hex>` database so the
+/// outbox dispatcher lanes cannot claim stale PENDING rows left behind by
+/// earlier tests that share the database — which would otherwise consume
+/// injected faults or fill claim batches before the rows under test.
+///
+/// Leftover `pizzora_it_%` databases from previous runs are dropped first.
+/// This is safe because the integration suites run with `--test-threads=1`
+/// and cargo executes test binaries sequentially.
 async fn setup_pool_and_config() -> (AppConfig, PgPool) {
     let mut cfg = AppConfig::from_env().expect("AppConfig::from_env must succeed");
     cfg.worker.lease_seconds = 1;
+
+    let admin_pool = connect_pg_pool(&cfg.database)
+        .await
+        .expect("connect admin pool for isolated test-database management");
+    sqlx::query(
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity \
+         WHERE datname LIKE 'pizzora_it_%' AND pid <> pg_backend_pid()",
+    )
+    .execute(&admin_pool)
+    .await
+    .expect("terminate leftover isolated test-database connections");
+    let leftover_dbs: Vec<String> = sqlx::query(
+        "SELECT datname FROM pg_database WHERE datname LIKE 'pizzora_it_%' AND datname <> current_database()",
+    )
+    .fetch_all(&admin_pool)
+    .await
+    .expect("list leftover isolated test databases")
+    .into_iter()
+    .map(|row| row.get::<String, _>("datname"))
+    .collect();
+    // DROP DATABASE cannot run inside a transaction block, so each drop is a
+    // standalone autocommit statement.
+    for db in leftover_dbs {
+        sqlx::query(&format!("DROP DATABASE \"{db}\""))
+            .execute(&admin_pool)
+            .await
+            .unwrap_or_else(|err| panic!("drop leftover isolated test database {db}: {err}"));
+    }
+    let db_name = format!("pizzora_it_{}", &new_uuid_v4().simple().to_string()[..12]);
+    sqlx::query(&format!("CREATE DATABASE \"{db_name}\""))
+        .execute(&admin_pool)
+        .await
+        .expect("create isolated test database");
+    admin_pool.close().await;
+
+    let base_url = cfg.database.url.normalized_postgres_url();
+    let base_str = base_url.as_str();
+    let db_start = base_str
+        .rfind('/')
+        .expect("normalized PostgreSQL URL has a database segment");
+    let test_url = format!("{}/{}", &base_str[..db_start], db_name);
+    cfg.database = DatabaseConfig {
+        url: NormalizedDatabaseUrl::parse(&test_url, None, None)
+            .expect("isolated test database URL parses"),
+        max_pool_size: cfg.database.max_pool_size,
+        min_connections: cfg.database.min_connections,
+        connect_timeout_ms: cfg.database.connect_timeout_ms,
+        run_migrations_on_startup: cfg.database.run_migrations_on_startup,
+    };
+
     let pool = connect_pg_pool(&cfg.database)
         .await
-        .expect("Connect to PostgreSQL 18.6");
+        .expect("Connect to isolated PG 18.6 test database");
     run_locked_handoff(&pool)
         .await
-        .expect("Apply / adopt migrations cleanly");
+        .expect("Apply / adopt migrations cleanly in the isolated test database");
     (cfg, pool)
 }
 

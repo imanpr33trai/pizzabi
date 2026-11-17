@@ -559,7 +559,7 @@ mod tests {
             .expect("create staff");
         assert_eq!(staff_dto.role, UserRole::KitchenStaff);
         assert!(rbac
-            .has_permission(UserRole::KitchenStaff, "kds:view")
+            .has_permission(UserRole::KitchenStaff, "kds:read")
             .await
             .expect("kds permission"));
         assert!(!rbac

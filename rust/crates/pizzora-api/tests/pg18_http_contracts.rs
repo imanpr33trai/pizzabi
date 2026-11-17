@@ -539,7 +539,8 @@ async fn pg18_catalog_zones_slots_images_and_disabled_storage() {
         .iter()
         .any(|s| s.id == seeded.delivery_slot.id && s.is_bookable));
 
-    // Past-cutoff slot reports "Cutoff time passed", and deleting unused slot returns 204
+    // Past-cutoff slot reports "Booking cutoff passed" (matches the Kotlin
+    // ScheduledSlotService), and deleting unused slot returns 204
     let past_cutoff = (Utc::now() - Duration::minutes(15)).to_rfc3339();
     let expired_slot_resp = srv
         .client
@@ -563,7 +564,7 @@ async fn pg18_catalog_zones_slots_images_and_disabled_storage() {
     assert!(!expired_slot.is_bookable);
     assert_eq!(
         expired_slot.unavailable_reason.as_deref(),
-        Some("Cutoff time passed")
+        Some("Booking cutoff passed")
     );
 
     let del_unused = srv

@@ -37,6 +37,7 @@ jobs:
     name: Security Audit & Rust Workspace Check (Manual Dispatch)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
@@ -52,24 +53,54 @@ jobs:
           toolchain: "1.88.0"
           components: rustfmt, clippy
 
-      - name: Verify formatting and run Rust workspace unit tests
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-ci
+          prefix-key: v1
+          cache-on-failure: true
+
+      - name: Verify formatting, clippy and run Rust workspace unit tests
         working-directory: rust
         run: |
           set -euo pipefail
-          LOCK_FLAG=""
-          if [ -f Cargo.lock ]; then LOCK_FLAG="--locked"; fi
           cargo fmt --all -- --check
-          cargo clippy --workspace --all-targets --all-features $LOCK_FLAG -- -D warnings
-          cargo test --workspace --all-features $LOCK_FLAG
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo test --workspace --all-features --locked
 
   build-and-publish-rust:
-    name: Build & Publish Rust Backend Docker Image
+    name: Build, Validate & Publish Rust Backend Docker Image
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || needs.verify-rust-for-manual-dispatch.result == 'success') }}
     needs: [verify-rust-for-manual-dispatch]
     permissions:
       contents: read
       packages: write
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: pizzora
+          POSTGRES_PASSWORD: pizzora_dev_password
+          POSTGRES_DB: pizzora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U pizzora -d pizzora"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -171,13 +202,84 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-,format=short
 
-      - name: Build (and optionally push) Rust backend Docker image
+      # Build first without pushing so runtime validation can gate publication.
+      # Docker layer caches make the second (push) build nearly free.
+      - name: Build Rust backend Docker image (local, for validation)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/Dockerfile.rust
-          push: ${{ steps.mode.outputs.should_push == 'true' }}
+          load: true
+          push: false
           tags: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.tags || steps.meta_preview.outputs.tags }}
           labels: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.labels || steps.meta_preview.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=rust-backend-image
+          cache-to: type=gha,scope=rust-backend-image,mode=max
+
+      - name: Runtime smoke validation (entrypoint, health, runtime libs, non-root, PG/Redis config)
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODE="${{ steps.mode.outputs.mode }}"
+          if [ "$MODE" = "release" ]; then
+            IMAGE="$(printf '%s' "${{ steps.meta_release.outputs.tags }}" | head -n 1)"
+          else
+            IMAGE="$(printf '%s' "${{ steps.meta_preview.outputs.tags }}" | head -n 1)"
+          fi
+          echo "Smoke-validating image: $IMAGE"
+
+          docker run -d --name pizzora-rust-smoke --network host \
+            -e DATABASE_URL="postgres://pizzora:pizzora_dev_password@127.0.0.1:5432/pizzora" \
+            -e REDIS_URL="redis://127.0.0.1:6379" \
+            -e RUN_MIGRATIONS_ON_STARTUP=true \
+            -e PIZZORA_ENV=development \
+            -e S3_ENABLED=false \
+            -e PORT=8080 \
+            "$IMAGE"
+
+          cleanup() {
+            docker logs pizzora-rust-smoke 2>&1 | tail -40 || true
+            docker rm -f pizzora-rust-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          UP=""
+          for _ in $(seq 1 45); do
+            if curl -sf http://127.0.0.1:8080/api/v1/health/live >/dev/null 2>&1; then UP=1; break; fi
+            sleep 2
+          done
+          if [ -z "$UP" ]; then
+            echo "ERROR: Rust backend container did not serve /api/v1/health/live within 90s." >&2
+            exit 1
+          fi
+
+          READY_BODY="$(curl -sf http://127.0.0.1:8080/api/v1/health/ready)" || {
+            echo "ERROR: /api/v1/health/ready did not respond successfully." >&2
+            exit 1
+          }
+          echo "$READY_BODY"
+          if ! echo "$READY_BODY" | grep -q '"service":"pizzora-api"'; then
+            echo "ERROR: Unexpected readiness payload; expected pizzora-api service identity." >&2
+            exit 1
+          fi
+
+          RUN_AS="$(docker exec pizzora-rust-smoke id -un)"
+          if [ "$RUN_AS" != "pizzora" ]; then
+            echo "ERROR: Rust container must run as non-root user 'pizzora' (got '$RUN_AS')." >&2
+            exit 1
+          fi
+          docker exec pizzora-rust-smoke test -x /usr/local/bin/pizzora-api
+          docker exec pizzora-rust-smoke test -x /usr/local/bin/pizzora-workers
+          echo "Rust image runtime validation passed."
+
+      - name: Push Rust backend Docker image to GHCR
+        if: steps.mode.outputs.should_push == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/Dockerfile.rust
+          push: true
+          tags: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.tags || steps.meta_preview.outputs.tags }}
+          labels: ${{ steps.mode.outputs.mode == 'release' && steps.meta_release.outputs.labels || steps.meta_preview.outputs.labels }}
+          cache-from: type=gha,scope=rust-backend-image
+          cache-to: type=gha,scope=rust-backend-image,mode=max

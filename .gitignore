@@ -23,4 +23,6 @@ debug.keystore
 rust/target/
 rust/**/*.so
 *.profraw
+/backend/build
+/shared/contracts/build
 

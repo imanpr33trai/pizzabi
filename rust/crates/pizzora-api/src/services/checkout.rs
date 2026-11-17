@@ -357,15 +357,6 @@ impl CheckoutService {
             .collect();
         let required_ingredients =
             RecipeService::compute_required_ingredients_for_items(&mut tx, &demand_inputs).await?;
-        InventoryService::reserve_for_order(
-            &mut tx,
-            order_id,
-            &required_ingredients,
-            expires_at,
-            immediate_commit,
-            Some(customer_id),
-        )
-        .await?;
 
         let order_number = generate_order_number(order_id);
         let delivery_json = delivery_snapshot
@@ -415,6 +406,20 @@ impl CheckoutService {
         .bind(coupon_snapshot)
         .bind(expires_at)
         .execute(&mut *tx)
+        .await?;
+
+        // Inventory reservation writes `inventory_ledger` rows that reference
+        // `orders(id)` via a non-deferrable foreign key, so the order row must
+        // exist first. Failing reservations (e.g. INSUFFICIENT_INVENTORY) abort
+        // the transaction and roll back the order insert as well.
+        InventoryService::reserve_for_order(
+            &mut tx,
+            order_id,
+            &required_ingredients,
+            expires_at,
+            immediate_commit,
+            Some(customer_id),
+        )
         .await?;
 
         if let Some(code) = coupon_raw {

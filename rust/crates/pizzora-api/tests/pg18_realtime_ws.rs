@@ -303,7 +303,8 @@ async fn pg18_events_replay_and_ws_resume_with_room_isolation() {
         .unwrap();
     let cod_order_id = cod_resp.order.id.clone();
 
-    // KDS ack -> ORDER_STATUS_CHANGED outbox event
+    // KDS ack -> KITCHEN_ACKNOWLEDGED outbox event (maps to wire `kitchen.acknowledged`,
+    // matching the Kotlin KitchenRoutes ack contract)
     let ack_resp: KdsTicketActionResponse = srv
         .client
         .post(srv.url(&format!("/api/v1/kds/orders/{cod_order_id}/ack")))
@@ -315,6 +316,19 @@ async fn pg18_events_replay_and_ws_resume_with_room_isolation() {
         .await
         .unwrap();
     assert_eq!(ack_resp.ticket.id, cod_order_id);
+
+    // KDS start-prep -> ORDER_STATUS_CHANGED outbox event (maps to wire `order.status_changed`)
+    let prep_resp: KdsTicketActionResponse = srv
+        .client
+        .post(srv.url(&format!("/api/v1/kds/orders/{cod_order_id}/start-prep")))
+        .bearer_auth(&kds_tokens.access_token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(prep_resp.ticket.id, cod_order_id);
 
     // Razorpay checkout -> inserts internal PAYMENT_GATEWAY_ORDER_REQUESTED (must NEVER replay)
     let rzp_resp = srv
@@ -382,7 +396,7 @@ async fn pg18_events_replay_and_ws_resume_with_room_isolation() {
     assert!(replay_a
         .events
         .iter()
-        .any(|e| e.aggregate_id == cod_order_id && e.event_type == "order.status_changed"));
+        .any(|e| e.aggregate_id == cod_order_id && e.event_type == "kitchen.acknowledged"));
     assert!(replay_a.events.iter().any(
         |e| e.event_id == notif_event_id.to_string() && e.event_type == "notification.created"
     ));

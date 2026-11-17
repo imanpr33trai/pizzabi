@@ -13,32 +13,26 @@ COPY rust/crates /workspace/rust/crates
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
-ARG REQUIRE_CARGO_LOCK=false
 COPY --from=planner /workspace/rust/recipe.json /workspace/rust/recipe.json
 COPY rust/rust-toolchain.toml /workspace/rust/rust-toolchain.toml
 COPY rust/Cargo.* /workspace/rust/
+# Dependency resolution must be reproducible: Cargo.lock is committed, so
+# --locked is always enforced. A missing lockfile is a packaging error, not a
+# warning.
 RUN set -eux; \
-    LOCK_FLAG=""; \
-    if [ -f /workspace/rust/Cargo.lock ]; then \
-        LOCK_FLAG="--locked"; \
-    elif [ "${REQUIRE_CARGO_LOCK}" = "true" ]; then \
-        echo "ERROR: rust/Cargo.lock is missing and REQUIRE_CARGO_LOCK=true." >&2; \
+    if [ ! -f /workspace/rust/Cargo.lock ]; then \
+        echo "ERROR: rust/Cargo.lock must be committed; run 'cd rust && cargo generate-lockfile'." >&2; \
         exit 1; \
-    else \
-        echo "WARNING: rust/Cargo.lock not found; run 'cd rust && cargo generate-lockfile' for reproducible --locked builds." >&2; \
     fi; \
-    cargo chef cook --release ${LOCK_FLAG} --recipe-path recipe.json
+    cargo chef cook --release --locked --recipe-path recipe.json
 
 COPY rust/crates /workspace/rust/crates
 RUN set -eux; \
-    LOCK_FLAG=""; \
-    if [ -f /workspace/rust/Cargo.lock ]; then \
-        LOCK_FLAG="--locked"; \
-    elif [ "${REQUIRE_CARGO_LOCK}" = "true" ]; then \
-        echo "ERROR: rust/Cargo.lock is missing and REQUIRE_CARGO_LOCK=true." >&2; \
+    if [ ! -f /workspace/rust/Cargo.lock ]; then \
+        echo "ERROR: rust/Cargo.lock must be committed; run 'cd rust && cargo generate-lockfile'." >&2; \
         exit 1; \
     fi; \
-    cargo build --release ${LOCK_FLAG} --bin pizzora-api --bin pizzora-workers; \
+    cargo build --release --locked --bin pizzora-api --bin pizzora-workers; \
     strip /workspace/rust/target/release/pizzora-api /workspace/rust/target/release/pizzora-workers
 
 FROM debian:bookworm-slim AS runtime
@@ -70,5 +64,8 @@ ENV PIZZORA_ENV=production \
 
 EXPOSE 8080 8081
 STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8080/api/v1/health/live >/dev/null 2>&1 || exit 1
 
 CMD ["/usr/local/bin/pizzora-api"]

@@ -1,0 +1,57 @@
+name: 'Setup Rust Android cross-compilation toolchain'
+description: >-
+  Installs the pinned Rust 1.88.0 toolchain with Android targets, ensures
+  cargo-ndk is exactly version 4.1.2 (reusing a previously cached install when
+  possible), and installs the pinned Android NDK 27.2.12479018. Pair it with
+  Swatinem/rust-cache (shared-key: pizzora-rust-android-ndk, with
+  cache-directories including ~/.cargo/bin) so cargo-ndk is not reinstalled on
+  every run.
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Rust toolchain with Android targets (pinned 1.88.0)
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "1.88.0"
+        targets: x86_64-unknown-linux-gnu,aarch64-linux-android,x86_64-linux-android
+
+    - name: Ensure cargo-ndk 4.1.2 (skip install when cached version is present)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v cargo-ndk >/dev/null 2>&1; then
+          INSTALLED="$(cargo-ndk --version 2>/dev/null | awk '{print $2}')"
+          if [ "$INSTALLED" = "4.1.2" ]; then
+            echo "cargo-ndk 4.1.2 already available; skipping reinstall."
+          else
+            echo "ERROR: cargo-ndk '$INSTALLED' found but version 4.1.2 is required; refusing to silently swap versions." >&2
+            exit 1
+          fi
+        else
+          cargo install cargo-ndk --version 4.1.2 --locked
+        fi
+        cargo-ndk --version
+
+    - name: Install pinned Android NDK 27.2.12479018
+      shell: bash
+      run: |
+        set -euo pipefail
+        SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+        SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+        NDK_DIR="$SDK_ROOT/ndk/27.2.12479018"
+        if [ ! -x "$SDKMANAGER" ]; then
+          echo "ERROR: Android sdkmanager not found at '$SDKMANAGER'." >&2
+          exit 1
+        fi
+        if [ ! -d "$NDK_DIR" ]; then
+          ACCEPT_INPUT="$(printf 'y\n%.0s' {1..100})"
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses <<< "$ACCEPT_INPUT" >/dev/null
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "ndk;27.2.12479018" <<< "$ACCEPT_INPUT"
+        fi
+        if [ ! -d "$NDK_DIR" ]; then
+          echo "ERROR: Expected Android NDK directory '$NDK_DIR' does not exist after installation." >&2
+          exit 1
+        fi
+        echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
+        echo "Android NDK 27.2.12479018 ready at $NDK_DIR"

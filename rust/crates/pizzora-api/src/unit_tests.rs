@@ -75,7 +75,7 @@ async fn spawn_offline_server(env_overrides: &[(&str, &str)]) -> SocketAddr {
 
     let app = build_router(state).into_make_service_with_connect_info::<SocketAddr>();
     tokio::spawn(async move {
-        let _ = axum::serve(validated_listener, app).await;
+        let _ = axum::serve(validated_listener.into_serve_listener(), app).await;
     });
 
     addr

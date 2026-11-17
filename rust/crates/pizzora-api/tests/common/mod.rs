@@ -22,7 +22,7 @@ use pizzora_auth::{
     unseal_outbox_email_payload, AuthTokensResponse, BootstrapOwner, CreateStaffRequest,
     LoginRequest, OutboxEmailPayload, PasswordHasher, RegisterRequest, VerifyEmailRequest,
 };
-use pizzora_config::AppConfig;
+use pizzora_config::{AppConfig, DatabaseConfig, NormalizedDatabaseUrl};
 use pizzora_core::{FulfillmentType, SizeCode, UserRole};
 use pizzora_db::{
     connect_pg_pool, new_uuid_v4, run_locked_handoff, EphemeralCacheStore, InMemoryCacheStore,
@@ -136,14 +136,79 @@ impl ObjectStorageClient for MockObjectStorageClient {
     }
 }
 
+/// Isolated test-database strategy:
+/// Every ignored integration test gets its own uniquely-named database
+/// (`pizzora_it_<12 hex>`), created by cloning the connection settings of the
+/// configured database. A shared database is not viable because the schema has
+/// cross-test global unique constraints — e.g. `scheduled_slots UNIQUE
+/// (slot_date, fulfillment_type, start_time_ist)` — while the tests seed fixed
+/// slot times (19:00/20:00 IST on `now + 3 days`), so two tests running against
+/// the same database collide.
+///
+/// Leftover `pizzora_it_%` databases from previous runs are dropped first. This
+/// cleanup is safe because the integration suites run with `--test-threads=1`
+/// and cargo executes test binaries sequentially.
 pub async fn setup_pool() -> PgPool {
     let cfg = AppConfig::from_env().expect("env config for PG 18.6 integration test");
-    let pool = connect_pg_pool(&cfg.database)
+
+    let admin_pool = connect_pg_pool(&cfg.database)
         .await
-        .expect("connect to PG 18.6");
+        .expect("connect admin pool for isolated test-database management");
+    sqlx::query(
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity \
+         WHERE datname LIKE 'pizzora_it_%' AND pid <> pg_backend_pid()",
+    )
+    .execute(&admin_pool)
+    .await
+    .expect("terminate leftover isolated test-database connections");
+    let leftover_dbs: Vec<String> = sqlx::query(
+        "SELECT datname FROM pg_database WHERE datname LIKE 'pizzora_it_%' AND datname <> current_database()",
+    )
+    .fetch_all(&admin_pool)
+    .await
+    .expect("list leftover isolated test databases")
+    .into_iter()
+    .map(|row| row.get::<String, _>("datname"))
+    .collect();
+    // DROP DATABASE cannot run inside a transaction block, so each drop is a
+    // standalone autocommit statement instead of a DO block.
+    for db in leftover_dbs {
+        sqlx::query(&format!("DROP DATABASE \"{db}\""))
+            .execute(&admin_pool)
+            .await
+            .unwrap_or_else(|err| panic!("drop leftover isolated test database {db}: {err}"));
+    }
+
+    let db_name = format!("pizzora_it_{}", &new_uuid_v4().simple().to_string()[..12]);
+    sqlx::query(&format!("CREATE DATABASE \"{db_name}\""))
+        .execute(&admin_pool)
+        .await
+        .expect("create isolated test database");
+    admin_pool.close().await;
+
+    // Rebuild the database config against the isolated database, preserving the
+    // pool sizing and timeouts of the configured database.
+    let base_url = cfg.database.url.normalized_postgres_url();
+    let base_str = base_url.as_str();
+    let db_start = base_str
+        .rfind('/')
+        .expect("normalized PostgreSQL URL has a database segment");
+    let test_url = format!("{}/{}", &base_str[..db_start], db_name);
+    let test_cfg = DatabaseConfig {
+        url: NormalizedDatabaseUrl::parse(&test_url, None, None)
+            .expect("isolated test database URL parses"),
+        max_pool_size: cfg.database.max_pool_size,
+        min_connections: cfg.database.min_connections,
+        connect_timeout_ms: cfg.database.connect_timeout_ms,
+        run_migrations_on_startup: cfg.database.run_migrations_on_startup,
+    };
+
+    let pool = connect_pg_pool(&test_cfg)
+        .await
+        .expect("connect to isolated PG 18.6 test database");
     run_locked_handoff(&pool)
         .await
-        .expect("run Flyway->SQLx handoff migrations");
+        .expect("run Flyway->SQLx handoff migrations in the isolated test database");
     pool
 }
 
@@ -234,7 +299,7 @@ impl TestServer {
         let router =
             build_router(state.clone()).into_make_service_with_connect_info::<SocketAddr>();
         tokio::spawn(async move {
-            let _ = axum::serve(validated_listener, router).await;
+            let _ = axum::serve(validated_listener.into_serve_listener(), router).await;
         });
 
         let client = reqwest::Client::builder()

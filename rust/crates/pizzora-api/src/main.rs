@@ -192,7 +192,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let shutdown_signal_token = shutdown.clone();
     let serve_result = axum::serve(
-        listener,
+        listener.into_serve_listener(),
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(async move {

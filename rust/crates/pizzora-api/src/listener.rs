@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use axum::serve::Listener;
+use axum::serve::{Listener, ListenerExt, TapIo};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -24,6 +24,24 @@ impl HttpValidationListener {
             inner,
             is_production,
         }
+    }
+
+    /// Prepare this listener for `axum::serve` together with
+    /// `into_make_service_with_connect_info::<SocketAddr>()`.
+    ///
+    /// Axum's connect-info plumbing (`Connected<IncomingStream<'_, L>>`) is
+    /// implemented by axum itself only for its built-in listeners; foreign crates
+    /// cannot implement it for `SocketAddr` with their own listener type because
+    /// both the trait and `IncomingStream` are foreign (orphan rule, E0117). Axum's
+    /// supported escape hatch is [`ListenerExt::tap_io`]: a tapped listener gets a
+    /// blanket `impl Connected<IncomingStream<'_, TapIo<L, F>>> for L::Addr`, so the
+    /// original remote `SocketAddr` captured in `Listener::accept` reaches
+    /// `ConnectInfo<SocketAddr>` extractors, connect-info middleware, and
+    /// IP-aware middleware untouched. The tap callback is a no-op: validation still
+    /// happens inside the stream itself, and no stream properties are altered.
+    pub fn into_serve_listener(self) -> TapIo<Self, fn(&mut ValidatedHttpStream)> {
+        fn noop_tap(_stream: &mut ValidatedHttpStream) {}
+        self.tap_io(noop_tap)
     }
 }
 
