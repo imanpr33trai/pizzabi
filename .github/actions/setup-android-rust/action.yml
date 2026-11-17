@@ -20,8 +20,10 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        # Invoke as `cargo ndk ...`, never `cargo-ndk ...`: the binary requires
+        # cargo's subcommand argv[0] and exits 1 when called directly.
         if command -v cargo-ndk >/dev/null 2>&1; then
-          INSTALLED="$(cargo-ndk --version 2>/dev/null | awk '{print $2}')"
+          INSTALLED="$(cargo ndk --version 2>/dev/null | awk '{print $2}')"
           if [ "$INSTALLED" = "4.1.2" ]; then
             echo "cargo-ndk 4.1.2 already available; skipping reinstall."
           else
@@ -31,7 +33,7 @@ runs:
         else
           cargo install cargo-ndk --version 4.1.2 --locked
         fi
-        cargo-ndk --version
+        cargo ndk --version
 
     - name: Install pinned Android NDK 27.2.12479018
       shell: bash
