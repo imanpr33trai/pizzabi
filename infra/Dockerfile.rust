@@ -13,19 +13,40 @@ COPY rust/crates /workspace/rust/crates
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
+ARG REQUIRE_CARGO_LOCK=false
 COPY --from=planner /workspace/rust/recipe.json /workspace/rust/recipe.json
 COPY rust/rust-toolchain.toml /workspace/rust/rust-toolchain.toml
-RUN cargo chef cook --release --recipe-path recipe.json
-
 COPY rust/Cargo.* /workspace/rust/
+RUN set -eux; \
+    LOCK_FLAG=""; \
+    if [ -f /workspace/rust/Cargo.lock ]; then \
+        LOCK_FLAG="--locked"; \
+    elif [ "${REQUIRE_CARGO_LOCK}" = "true" ]; then \
+        echo "ERROR: rust/Cargo.lock is missing and REQUIRE_CARGO_LOCK=true." >&2; \
+        exit 1; \
+    else \
+        echo "WARNING: rust/Cargo.lock not found; run 'cd rust && cargo generate-lockfile' for reproducible --locked builds." >&2; \
+    fi; \
+    cargo chef cook --release ${LOCK_FLAG} --recipe-path recipe.json
+
 COPY rust/crates /workspace/rust/crates
 RUN set -eux; \
     LOCK_FLAG=""; \
-    if [ -f /workspace/rust/Cargo.lock ]; then LOCK_FLAG="--locked"; fi; \
+    if [ -f /workspace/rust/Cargo.lock ]; then \
+        LOCK_FLAG="--locked"; \
+    elif [ "${REQUIRE_CARGO_LOCK}" = "true" ]; then \
+        echo "ERROR: rust/Cargo.lock is missing and REQUIRE_CARGO_LOCK=true." >&2; \
+        exit 1; \
+    fi; \
     cargo build --release ${LOCK_FLAG} --bin pizzora-api --bin pizzora-workers; \
     strip /workspace/rust/target/release/pizzora-api /workspace/rust/target/release/pizzora-workers
 
 FROM debian:bookworm-slim AS runtime
+LABEL org.opencontainers.image.title="PIZZORA Rust Backend" \
+      org.opencontainers.image.description="PIZZORA standalone Axum API (pizzora-api) and background outbox worker (pizzora-workers)" \
+      org.opencontainers.image.source="https://github.com/imanpr33trai/pizzabi"
+
+# ca-certificates for TLS (Razorpay/SMTP/S3); wget for Docker Compose local healthchecks.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates wget \
     && rm -rf /var/lib/apt/lists/* \
@@ -35,16 +56,19 @@ RUN apt-get update \
     && chown pizzora:pizzora /app
 
 WORKDIR /app
-COPY --from=builder --chown=pizzora:pizzora /workspace/rust/target/release/pizzora-api /usr/local/bin/pizzora-api
-COPY --from=builder --chown=pizzora:pizzora /workspace/rust/target/release/pizzora-workers /usr/local/bin/pizzora-workers
+COPY --from=builder --chown=pizzora:pizzora --chmod=0755 /workspace/rust/target/release/pizzora-api /usr/local/bin/pizzora-api
+COPY --from=builder --chown=pizzora:pizzora --chmod=0755 /workspace/rust/target/release/pizzora-workers /usr/local/bin/pizzora-workers
 
 USER pizzora
 
 ENV PIZZORA_ENV=production \
     PORT=8080 \
     WORKER_HEALTH_PORT=8081 \
+    SHUTDOWN_TIMEOUT_SECS=15 \
+    RUN_MIGRATIONS_ON_STARTUP=false \
     RUST_LOG=info,sqlx::query=warn,tower_http=info
 
 EXPOSE 8080 8081
+STOPSIGNAL SIGTERM
 
 CMD ["/usr/local/bin/pizzora-api"]

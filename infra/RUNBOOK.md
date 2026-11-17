@@ -3,15 +3,15 @@
 ## 1. Architecture & Pre-Deploy Migration Separation
 
 PIZZORA separates schema migration from API and background-worker runtime startup:
-- **Pre-deploy migration**: `ApplicationKt --migrate-only` runs Flyway migrations (`V1`–`V3`+) against PostgreSQL and exits.
-- **API & Worker runtime**: Start with `PIZZORA_ENV=production` and `RUN_MIGRATIONS_ON_STARTUP=false`. On startup, `DatabaseFactory.connect(dataSource, verifyMigrated = true)` verifies zero pending Flyway migrations and fails fast if the pre-deploy migration step was skipped.
+- **Pre-deploy migration**: `/usr/local/bin/pizzora-api --migrate-only` acquires PostgreSQL session advisory lock `884210001` on a dedicated connection, verifies Flyway `V1`–`V3` checksums/invariants, records `_sqlx_migrations` baseline `1..=3` (or applies additive `V4+` migrations), and exits cleanly. *(During Ktor rollback, pre-deploy Flyway is skipped; `DatabaseFactory.connect(dataSource, verifyMigrated = true)` validates schema compatibility read-only.)*
+- **API & Worker runtime**: Start with `PIZZORA_ENV=production` and `RUN_MIGRATIONS_ON_STARTUP=false`. Startup verifies schema invariants read-only and aborts on drift without executing migrations.
 
 ---
 
 ## 2. Initial Production Provisioning (Container or Systemd)
 
 ### Option A: Docker Compose Production Stack
-1. Copy `infra/.env.production.example` to `infra/.env.prod` and set strong random values for `JWT_SECRET`, `DATABASE_PASSWORD`, `S3_SECRET_KEY`, and Razorpay credentials.
+1. Copy `infra/.env.production.example` to `infra/.env.prod` and set strong random values for `JWT_SECRET`, `DATABASE_PASSWORD`, `OUTBOX_EMAIL_KEYS`, `SMTP_PASSWORD`, and Razorpay credentials (plus `S3_SECRET_KEY` if `S3_ENABLED=true`).
 2. Run pre-deploy migrations and boot the stack:
    ```bash
    docker compose -f infra/docker-compose.prod.yml up -d --build
@@ -24,7 +24,7 @@ PIZZORA separates schema migration from API and background-worker runtime startu
    ```
 
 ### Option B: Bare-Metal / VPS Systemd Units
-1. Install `/opt/pizzora/libs/*` from `gradle :backend:installDist`, place environment config at `/etc/pizzora/pizzora.env` (`chmod 600`), and install Caddy (`/infra/caddy/Caddyfile`) or Nginx (`/infra/nginx/pizzora.conf`).
+1. Install `/usr/local/bin/pizzora-api` and `/usr/local/bin/pizzora-workers` (extracted from the verified `RUST_BACKEND_IMAGE` container or built via `cargo build --release --bin pizzora-api --bin pizzora-workers`), copy `infra/.env.production.example` to `/etc/pizzora/pizzora.env` (`chmod 600`), create `pizzora` system user + `/opt/pizzora`, and install Caddy (`/infra/caddy/Caddyfile`) or Nginx (`/infra/nginx/pizzora.conf`).
 2. Install units from `infra/systemd/`:
    ```bash
    sudo cp infra/systemd/pizzora-*.service infra/systemd/pizzora-backup.timer /etc/systemd/system/
@@ -318,4 +318,74 @@ Trigger immediate rollback if any of the following occur:
 - **Ktor Retirement Criteria (Explicit User Approval Required):** Only after completing the agreed production stability window with clean SLO metrics and explicit written user sign-off may Ktor backend runtime source (`backend/`), `infra/Dockerfile.backend`, `.github/workflows/publish-backend.yml`, `.railway/railway.ktor-rollback.ts`, and `infra/docker-compose.ktor-rollback.yml` be archived/removed.
 - **Permanent Retention:** **Never** delete historical Flyway migrations (`V1__core_schema.sql`–`V3__hot_path_indexes.sql`), backup artifacts, or audit/cutover evidence.
 
+---
 
+## 13. Railway Multi-Service Deployment & Reusable Template Architecture
+
+### 13.1 Service Inventory & Responsibilities
+
+| Service | Source / Runtime | Responsibility | Exposure |
+| :--- | :--- | :--- | :--- |
+| `pizzabi-api` *(or `pizzabi` in `bubbly-peace`)* | `infra/Dockerfile.rust` (`/usr/local/bin/pizzora-api`) | Axum HTTP API, OpenAPI, Prometheus `/metrics`, WebSockets `/ws/v1/events`, and single pre-deploy migration runner | Public HTTPS domain (`0.0.0.0:$PORT`, default `8080`) |
+| `pizzabi-worker` | `infra/Dockerfile.rust` (`/usr/local/bin/pizzora-workers`) | 4 supervised loops: `EventSequencerWorker`, `OutboxDispatcherWorker`, `ExpirySweepWorker`, `RazorpayReconciliationWorker` | Private network only (`0.0.0.0:8081`; **no** public domain) |
+| `postgres` | Railway managed PostgreSQL (PG 18) | System-of-record relational database (`V1`–`V3` Flyway + `V4+` SQLx) | Private network (`*.railway.internal`) |
+| `redis` | Railway managed Redis | Ephemeral menu cache, rate limiting, WS ticket cache, WebSocket Pub/Sub fanout | Private network (`*.railway.internal`) |
+| Object Storage *(optional)* | `S3_ENABLED=false` default; S3-compatible bucket + public proxy when enabled | Product image upload (`presign`/`confirm`/`delete`) and public image URLs | External HTTPS endpoint / CDN proxy |
+| `mailpit` *(staging/dev only)* | `axllent/mailpit:v1.22` | Private SMTP sink (`:1025`) & web inbox UI (`:8025`) for staging email testing | Private SMTP; optional staging-only UI |
+
+### 13.2 Exact Build, Start, Pre-Deploy, and Healthcheck Settings
+
+All services built from this repo share `infra/Dockerfile.rust` (multi-stage `cargo-chef` with `rust:1.88.0-bookworm`, stripped non-root `debian:bookworm-slim` runtime `pizzora:pizzora`, `STOPSIGNAL SIGTERM`) and root `.dockerignore` (which preserves both Rust and `infra/Dockerfile.backend` Ktor rollback inputs while excluding `app/` and `rust/target/`).
+
+| Setting | `pizzabi-api` / `pizzabi` | `pizzabi-worker` | `mailpit` *(staging only)* |
+| :--- | :--- | :--- | :--- |
+| **Dockerfile** | `infra/Dockerfile.rust` | `infra/Dockerfile.rust` | Image `axllent/mailpit:v1.22` |
+| **Pre-Deploy** | `["/usr/local/bin/pizzora-api", "--migrate-only"]` | *(None — never duplicate migrations)* | *(None)* |
+| **Start Command** | `/usr/local/bin/pizzora-api` | `/usr/local/bin/pizzora-workers` | *(Image default)* |
+| **Bind & Port** | `0.0.0.0:$PORT` (default `8080`) | `0.0.0.0:$WORKER_HEALTH_PORT` (set `PORT=8081` & `WORKER_HEALTH_PORT=8081`) | SMTP `:1025`, UI `PORT=8025` |
+| **Healthcheck** | `GET /api/v1/health/ready` (`300s` timeout) | `GET /health/worker` (`300s` timeout) | `GET /api/v1/info` (`120s` timeout) |
+| **Public Domain** | Enabled | **Disabled** (private only) | Optional in staging; **never** in prod |
+
+> **Critical Worker `$PORT` Rule:** Railway healthchecks always probe `$PORT`, whereas `pizzora-workers` binds `$WORKER_HEALTH_PORT` (`8081`), and `infra/Dockerfile.rust` sets `ENV PORT=8080`. Always keep **both** `PORT=8081` and `WORKER_HEALTH_PORT=8081` configured on `pizzabi-worker` in Railway.
+
+### 13.3 Service-by-Service Environment Variables (Non-Secrets vs Secrets)
+
+Reference template: `infra/.env.railway.example`. Startup fails fast in `PIZZORA_ENV=production` if any mandatory secret is absent or uses a dev default (printing only the variable name, never its value).
+
+- **API Non-Secrets (`pizzabi-api` / `pizzabi`):** `PIZZORA_ENV=production`, `PORT=8080`, `RUN_MIGRATIONS_ON_STARTUP=false`, `SHUTDOWN_TIMEOUT_SECS=15`, `DATABASE_MAX_POOL_SIZE=15`, `DATABASE_MIN_CONNECTIONS=2`, `DATABASE_CONNECT_TIMEOUT_MS=5000`, `REDIS_TIMEOUT_MS=500`, `REDIS_REQUIRED=false`, `S3_ENABLED=false`, `RATE_LIMIT_ENABLED=true`, `RUST_LOG=info,sqlx::query=warn,tower_http=info`.
+- **Worker Non-Secrets (`pizzabi-worker`):** Same non-secret flags except `PORT=8081`, `WORKER_HEALTH_PORT=8081`, `DATABASE_MAX_POOL_SIZE=5`, `DATABASE_MIN_CONNECTIONS=1`, plus `WORKER_SEQUENCER_POLL_MS=150`, `WORKER_DISPATCHER_POLL_MS=150`, `WORKER_EXPIRY_SWEEP_MS=15000`, `WORKER_RECONCILER_POLL_MS=30000`, `WORKER_MAX_ATTEMPTS=5`, `WORKER_BATCH_SIZE=10`, `WORKER_LEASE_SECONDS=30`, `WORKER_OUTBOX_RETENTION_DAYS=7`.
+- **Shared Secrets (Railway Variables / Secrets only, per environment):** `DATABASE_URL` (`${{postgres.DATABASE_URL}}`), `REDIS_URL` (`${{redis.REDIS_URL}}`), `JWT_SECRET` (`>=32` random chars), `OUTBOX_EMAIL_KEY_CURRENT_ID` + `OUTBOX_EMAIL_KEYS` (`<kid>:<base64_32byte_key>`), `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_STARTTLS`), and if `S3_ENABLED=true`, `S3_ACCESS_KEY` + `S3_SECRET_KEY`.
+
+### 13.4 Single Image Without Duplicate Migrations or Duplicate Worker Loops
+
+- Both `pizzabi-api` and `pizzabi-worker` build from `infra/Dockerfile.rust`, which packages both `/usr/local/bin/pizzora-api` and `/usr/local/bin/pizzora-workers` inside one immutable runtime image.
+- **Single Migration Mechanism:** Only `pizzabi-api` runs `preDeploy: ["/usr/local/bin/pizzora-api", "--migrate-only"]` (acquiring `pg_advisory_lock(884210001)` on a single `PgConnection`, verifying Flyway `V1`–`V3` checksums, baselining `_sqlx_migrations`, and applying `V4+`). Both `pizzabi-api` and `pizzabi-worker` run with `RUN_MIGRATIONS_ON_STARTUP=false`, so runtime startup only calls `verify_catalog_invariants` read-only. On a brand-new project deploy where `pizzabi-worker` boots before `preDeploy` finishes, `verify_catalog_invariants` exits non-zero cleanly and Railway restarts `pizzabi-worker` until the schema is ready.
+- **Single Worker Owner:** `pizzora-api` never spawns outbox/reconciliation background loops; only `pizzabi-worker` executes those loops using `FOR UPDATE SKIP LOCKED` leases.
+
+### 13.5 PostgreSQL Connection Budget & Redis Degraded Mode
+
+- **Pool Sizing:** Starting defaults are `DATABASE_MAX_POOL_SIZE=15` (`pizzabi-api`) + `5` (`pizzabi-worker`) + `4` transient during `preDeploy` (`24` peak during rollout, `20` steady-state), leaving safe headroom for superuser/monitoring connections against Railway PostgreSQL (`max_connections=100` typical default; verify `SHOW max_connections;` on the target plan before scaling replicas).
+- **Redis (`REDIS_REQUIRED=false`):** Redis speeds up menu caching, rate limiting, and multi-instance WebSocket Pub/Sub fanout. If Redis is temporarily unreachable when `REDIS_REQUIRED=false`, `/api/v1/health/ready` returns HTTP `200 DEGRADED`, checkout/KDS/WS tickets fall back cleanly to PostgreSQL, and outbox `stream_seq` + `/api/v1/events/replay` prevent dropped realtime events.
+
+### 13.6 Object Storage (`S3_ENABLED=false` vs `S3_ENABLED=true` & MinIO/Bucket Notes)
+
+- When `S3_ENABLED=false`, API startup skips S3 validation, `/api/v1/health/ready` reports `status: "HEALTHY"` with S3 disabled, and owner image upload routes return HTTP `503 OBJECT_STORAGE_UNAVAILABLE`.
+- Upstream `minio/minio` open-source development is archived/unmaintained, so Railway templates should **not** deploy unmanaged MinIO containers in production.
+- **Railway Storage Buckets Compatibility Note:** Railway native Storage Buckets (`t3.storageapi.dev`) are **private by default** and use **virtual-hosted-style URLs**, whereas `pizzora-api`'s `S3ObjectStorageClient` signs **path-style** canonical URIs (`/{bucket}/{key}`) and serves unsigned `S3_PUBLIC_URL/{key}` links to Android clients. Therefore, keep `S3_ENABLED=false` by default in templates unless pairing a path-style-compatible S3 endpoint (e.g., Cloudflare R2, AWS S3 regional endpoint, or Garage) with a publicly readable `S3_PUBLIC_URL` CDN/proxy.
+
+### 13.7 Staging vs Production Isolation & Reusable Template Deployment
+
+- **Staging (`mailpit` + Sandbox Keys):** Uses separate Railway `postgres` + `redis`, `mailpit` (`axllent/mailpit:v1.22`) wired via `SMTP_HOST=${{mailpit.RAILWAY_PRIVATE_DOMAIN}}`, `SMTP_PORT=1025`, `SMTP_STARTTLS=false`, Razorpay test keys (`rzp_test_*`), and dedicated staging `JWT_SECRET` + `OUTBOX_EMAIL_KEYS`.
+- **Live Production Guardrail (`bubbly-peace`):** `.railway/railway.ts` keeps `export const partial = "pizzabi"` targeting `project("bubbly-peace")` with ONLY `pizzabi` and `pizzabi-worker` so production DB, Redis, volumes, domains, and secrets remain untouched.
+- **Reusable New Stack / Template Provisioning:** Use `.railway/railway.template.ts` (targeting a **new** Railway project, never `bubbly-peace`) or create a Railway Dashboard Template mirroring `.railway/railway.template.ts` + `infra/.env.railway.example`.
+
+### 13.8 Common Railway Failure Troubleshooting
+
+| Symptom | Root Cause | Resolution |
+| :--- | :--- | :--- |
+| **`pizzabi-worker` healthcheck times out (`Service Unavailable`)** | Worker listens on `WORKER_HEALTH_PORT` (`8081`) while Railway probes `$PORT` (`8080` from Dockerfile `ENV`). | Set **both** `PORT=8081` and `WORKER_HEALTH_PORT=8081` on `pizzabi-worker`. |
+| **Crash loop immediately after deploy naming `JWT_SECRET` / `OUTBOX_EMAIL_KEYS` / `RAZORPAY_*`** | `PIZZORA_ENV=production` fail-fast validation rejected a missing secret, short `<32`-char `JWT_SECRET`, or dev placeholder. | Populate distinct strong secrets in Railway Variables for that service/environment. |
+| **API `preDeploy` fails with `FLYWAY_CHECKSUM_MISMATCH` or missing table** | Schema drift against `V1`–`V3` Flyway checksums or dirty migration state. | Inspect `flyway_schema_history` and `_sqlx_migrations` manually; do not auto-repair blindly. Run `--preflight-only` to inspect invariants. |
+| **Worker logs `verify_catalog_invariants` error on first boot of empty DB** | `pizzabi-worker` booted concurrently while `pizzabi-api` `preDeploy` (`--migrate-only`) was still applying `V1`–`V3`. | Wait for `pizzabi-api` `preDeploy` to complete; Railway auto-restart brings `pizzabi-worker` healthy (`200 HEALTHY`). |
+| **`too many clients` / pool timeout** | Combined `DATABASE_MAX_POOL_SIZE` across replicas + `preDeploy` exceeded Postgres `max_connections`. | Check `SHOW max_connections;`, lower pool sizes or enable Railway PgBouncer (`DATABASE_URL` pooled + `DATABASE_UNPOOLED_URL` for `preDeploy`). |
+| **API `DEGRADED` (`redis: DOWN`)** | `REDIS_URL` wrong/unreachable with `REDIS_REQUIRED=false`. | Verify `${{redis.REDIS_URL}}` private network binding; API stays operational on PostgreSQL fallbacks. |

@@ -1,0 +1,42 @@
+# Exclude VCS, CI, IDE, and local workspace caches from Docker build contexts.
+# Used by both `infra/Dockerfile.rust` and `infra/Dockerfile.backend`.
+.git
+.github
+.gradle
+.kotlin
+.idea
+.build-outputs
+.railway
+.DS_Store
+
+# Exclude Android application module and artifacts (not used by Rust or Ktor server builds).
+app
+**/*.apk
+**/*.aab
+debug.keystore
+debug.keystore.base64
+local.properties
+*.jks
+*.keystore
+
+# Exclude generated Gradle/Rust targets and native binaries.
+build
+**/build
+rust/target
+rust/**/*.so
+*.profraw
+
+# Exclude secrets and local env files while preserving example templates.
+.env
+.env.*
+**/.env
+**/.env.*
+!infra/.env.production.example
+!infra/.env.rust-staging.example
+!infra/.env.railway.example
+
+# Exclude documentation, static site assets, and auxiliary helper scripts not needed by builds.
+public
+tools
+*.md
+!rust/crates/**/README.md
