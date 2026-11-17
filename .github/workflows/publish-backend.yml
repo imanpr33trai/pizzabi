@@ -55,13 +55,6 @@ jobs:
 
       - name: Set up Gradle (dependency and build cache)
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-dependency-path: |
-            gradle/libs.versions.toml
-            gradle/verification-metadata.xml
-            settings-gradle.lockfile
-            **/build.gradle.kts
-            gradle/wrapper/gradle-wrapper.properties
 
       - name: Run shared contracts & backend tests (S3 disabled by default)
         env:
