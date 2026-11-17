@@ -534,8 +534,29 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
-            echo "ERROR: /dev/kvm is still not accessible for user '$(id -un)' after applying the kvm4all udev rule." >&2
+          # udev processes triggered uevents asynchronously: the permission
+          # change is not guaranteed to be visible right after `trigger`
+          # returns. Settle the udev queue, then verify with a bounded retry
+          # loop before giving up.
+          sudo udevadm settle || true
+          kvm_ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              kvm_ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$kvm_ok" -ne 1 ]; then
+            # Direct permission fallback so this runner is not left on QEMU
+            # TCG software emulation; the udev rule stays in place regardless.
+            sudo chmod 0666 /dev/kvm || true
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              kvm_ok=1
+            fi
+          fi
+          if [ "$kvm_ok" -ne 1 ]; then
+            echo "ERROR: /dev/kvm is still not accessible for user '$(id -un)' after the kvm4all udev rule, udevadm settle, 10 retries and a chmod fallback." >&2
             ls -l /dev/kvm
             getent group kvm || true
             exit 1
@@ -595,23 +616,34 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set -uo pipefail
+          # GitHub injects `-e` into `shell: bash`; diagnostics collection
+          # must tolerate individual command failures, so disable it
+          # explicitly. This step never changes the job outcome.
+          set +e +o pipefail
           mkdir -p ci-diagnostics
+          # The emulator-runner action installs platform-tools and puts adb on
+          # the job PATH. Resolve it defensively so collection still produces
+          # diagnostics when the action never ran (e.g. failed startup).
+          ADB="$(command -v adb 2>/dev/null || true)"
+          if [ -z "$ADB" ]; then
+            ADB="${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools/adb"
+          fi
           # The action terminates the emulator before this step on every code
           # path, so adb commands are expected to fail here; their error text
-          # is captured verbatim. This step never changes the job outcome.
+          # is captured verbatim.
           {
             echo "collected at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "adb binary: $ADB"
             echo '--- adb devices -l'
-            adb devices -l 2>&1
+            "$ADB" devices -l 2>&1
             echo '--- adb get-state'
-            adb get-state 2>&1
+            "$ADB" get-state 2>&1
             echo '--- boot properties'
-            adb shell getprop sys.boot_completed 2>&1
-            adb shell getprop dev.bootcomplete 2>&1
-            adb shell getprop ro.build.version.sdk 2>&1
+            "$ADB" shell getprop sys.boot_completed 2>&1
+            "$ADB" shell getprop dev.bootcomplete 2>&1
+            "$ADB" shell getprop ro.build.version.sdk 2>&1
             echo '--- logcat (usually unavailable after emulator termination)'
-            adb logcat -d 2>&1 | tail -n 500
+            "$ADB" logcat -d 2>&1 | tail -n 500
           } > ci-diagnostics/adb-postmortem.txt
           # Gradle instrumentation XML + HTML reports, if the test command ran.
           cp -r app/build/outputs/androidTest-results ci-diagnostics/ 2>/dev/null || true
