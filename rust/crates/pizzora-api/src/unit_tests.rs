@@ -894,7 +894,10 @@ async fn http_body_size_limits_chunked_overflow_and_rate_limit_429() {
     // 3b. Negative / duplicate mismatched Content-Length preserves x-request-id + structured 400
     for (req_id, cl_headers) in [
         ("corr-neg-cl-01", "Content-Length: -5\r\n"),
-        ("corr-dup-cl-01", "Content-Length: 2\r\nContent-Length: 9\r\n"),
+        (
+            "corr-dup-cl-01",
+            "Content-Length: 2\r\nContent-Length: 9\r\n",
+        ),
     ] {
         let mut s = TcpStream::connect(addr).await.expect("connect raw tcp");
         let req = format!(
