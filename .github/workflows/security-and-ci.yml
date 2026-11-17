@@ -190,13 +190,6 @@ jobs:
 
       - name: Set up Gradle (dependency and build cache)
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-dependency-path: |
-            gradle/libs.versions.toml
-            gradle/verification-metadata.xml
-            settings-gradle.lockfile
-            **/build.gradle.kts
-            gradle/wrapper/gradle-wrapper.properties
 
       - name: Run Shared Contracts Tests + Backend Test Suite (S3 disabled by default)
         env:
@@ -265,13 +258,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-dependency-path: |
-            gradle/libs.versions.toml
-            gradle/verification-metadata.xml
-            settings-gradle.lockfile
-            **/build.gradle.kts
-            gradle/wrapper/gradle-wrapper.properties
 
       - name: Generate UniFFI Kotlin bindings (builds host pizzora-uniffi cdylib)
         run: ./gradlew :app:generateUniFfiKotlinBindings -PpizzoraRequireRust=true --no-daemon
@@ -481,13 +467,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-dependency-path: |
-            gradle/libs.versions.toml
-            gradle/verification-metadata.xml
-            settings-gradle.lockfile
-            **/build.gradle.kts
-            gradle/wrapper/gradle-wrapper.properties
 
       - name: Run UniFFI Host Bindgen and Android Unit & Robolectric Tests
         run: ./gradlew :app:generateUniFfiKotlinBindings :app:testDebugUnitTest -PpizzoraRequireRust=true --no-daemon
@@ -574,13 +553,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-dependency-path: |
-            gradle/libs.versions.toml
-            gradle/verification-metadata.xml
-            settings-gradle.lockfile
-            **/build.gradle.kts
-            gradle/wrapper/gradle-wrapper.properties
 
       - name: Create temporary debug keystore
         run: |
@@ -696,13 +668,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-dependency-path: |
-            gradle/libs.versions.toml
-            gradle/verification-metadata.xml
-            settings-gradle.lockfile
-            **/build.gradle.kts
-            gradle/wrapper/gradle-wrapper.properties
 
       - name: Create temporary debug keystore for preview build
         run: |
@@ -875,13 +840,6 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-dependency-path: |
-            gradle/libs.versions.toml
-            gradle/verification-metadata.xml
-            settings-gradle.lockfile
-            **/build.gradle.kts
-            gradle/wrapper/gradle-wrapper.properties
 
       - name: Build Signed Release APK
         env:
