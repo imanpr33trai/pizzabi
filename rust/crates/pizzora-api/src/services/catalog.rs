@@ -8,12 +8,12 @@ use sqlx::{PgPool, Row as _};
 use uuid::Uuid;
 
 use crate::dto::{
-    CategoryDto, CheeseOptionDto, CreateCategoryRequest, CreateCheeseRequest, CreateCrustRequest,
-    CreateProductRequest, CreateSauceRequest, CreateToppingRequest, CreateVariantRequest,
-    CrustOptionDto, PizzaSizeRuleDto, ProductDto, ProductImageDto, ProductImageStatus,
-    ProductVariantDto, PublicMenuResponse, SauceOptionDto, ToppingDto, UpdateCheeseRequest,
-    UpdateCrustRequest, UpdatePizzaSizeRuleRequest, UpdateProductRequest, UpdateSauceRequest,
-    UpdateToppingRequest, UpdateVariantRequest,
+    CategoryDto, CheeseOptionDto, CreateCheeseRequest, CreateCrustRequest, CreateProductRequest,
+    CreateSauceRequest, CreateToppingRequest, CreateVariantRequest, CrustOptionDto,
+    PizzaSizeRuleDto, ProductDto, ProductImageDto, ProductImageStatus, ProductVariantDto,
+    PublicMenuResponse, SauceOptionDto, ToppingDto, UpdateCheeseRequest, UpdateCrustRequest,
+    UpdatePizzaSizeRuleRequest, UpdateProductRequest, UpdateSauceRequest, UpdateToppingRequest,
+    UpdateVariantRequest,
 };
 use crate::error::{format_iso8601, ApiError};
 use crate::extractors::parse_uuid_param;
