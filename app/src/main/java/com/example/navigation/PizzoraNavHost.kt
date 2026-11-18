@@ -550,6 +550,9 @@ fun CustomerRoleShell(
               onAddCustomizedToCart = { prod, variant, crust, toppings, qty ->
                 cartViewModel?.addCustomizedPizza(prod, variant, crust, toppings, qty)
               },
+              onAddConfiguredToCart = { input, displayName ->
+                cartViewModel?.addConfiguredPizza(input, menuState.publicMenuSnapshot, displayName)
+              },
               modifier = Modifier.weight(1f),
             )
           }

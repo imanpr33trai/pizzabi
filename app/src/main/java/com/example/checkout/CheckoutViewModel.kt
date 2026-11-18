@@ -2,6 +2,7 @@ package com.example.checkout
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cart.toCartItemInputDto
 import com.example.core.database.CartItemWithToppings
 import com.example.core.network.PizzoraApiException
 import com.example.orders.OrderRepository
@@ -309,17 +310,7 @@ class CheckoutViewModel(
 
     val effectiveSlotId = if (state.scheduleType == ScheduleType.SCHEDULED) state.selectedSlotId else null
     val req = CheckoutRequest(
-      items = available.map { entry ->
-        CartItemInputDto(
-          id = entry.item.id,
-          productId = entry.item.productId,
-          variantId = entry.item.variantId,
-          crustId = entry.item.crustId,
-          toppingIds = entry.toppings.map { it.toppingId },
-          quantity = entry.item.quantity,
-          clientUnitPricePaise = entry.item.unitPricePaise,
-        )
-      },
+      items = available.map { entry -> entry.toCartItemInputDto() },
       fulfillmentType = fulfillmentType,
       scheduleType = state.scheduleType,
       scheduledSlotId = effectiveSlotId,
@@ -372,8 +363,19 @@ class CheckoutViewModel(
     append(req.paymentMethod).append('|')
     append(req.couponCode.orEmpty()).append('|')
     req.items.forEach {
+      val tops = if (it.toppingSelections.isNotEmpty()) {
+        it.toppingSelections.sortedWith(compareBy({ t -> t.toppingId }, { t -> t.placement.name }))
+          .joinToString(",") { t -> "${t.toppingId}:${t.placement.name}:${t.quantity}" }
+      } else {
+        it.toppingIds.sorted().joinToString(",")
+      }
       append(it.productId).append(':').append(it.variantId).append(':').append(it.crustId)
-        .append(':').append(it.toppingIds.sorted().joinToString(",")).append(':').append(it.quantity).append(';')
+        .append(':').append(it.cheeseId.orEmpty()).append(':').append(it.extraCheese)
+        .append(':').append(it.sauceId.orEmpty()).append(':').append(it.extraSauce)
+        .append(':').append(it.isHalfAndHalf).append(':').append(it.rightProductId.orEmpty())
+        .append(':').append(it.rightVariantId.orEmpty()).append(':').append(it.rightSauceId.orEmpty())
+        .append(':').append(it.removedIncludedToppingIds.sorted().joinToString(","))
+        .append(':').append(tops).append(':').append(it.quantity).append(';')
     }
   }
 

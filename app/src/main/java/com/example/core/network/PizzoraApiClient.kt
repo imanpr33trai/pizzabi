@@ -53,6 +53,8 @@ import com.pizzora.contracts.OrderPaymentStatusResponse
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OwnerDashboardResponse
 import com.pizzora.contracts.OwnerRefundRequest
+import com.pizzora.contracts.PizzaBuilderQuoteRequest
+import com.pizzora.contracts.PizzaBuilderQuoteResponse
 import com.pizzora.contracts.PresignProductImageRequest
 import com.pizzora.contracts.PresignProductImageResponse
 import com.pizzora.contracts.PricingQuoteRequest
@@ -469,6 +471,14 @@ class PizzoraApiClient(
 
   suspend fun quotePricing(request: PricingQuoteRequest): PricingQuoteResponse {
     val response = httpClient.post("/api/v1/pricing/quote") {
+      contentType(ContentType.Application.Json)
+      setBody(request)
+    }
+    return decodeOrThrow(response)
+  }
+
+  suspend fun previewCustomPizza(request: PizzaBuilderQuoteRequest): PizzaBuilderQuoteResponse {
+    val response = httpClient.post("/api/v1/pizza-builder/quote") {
       contentType(ContentType.Application.Json)
       setBody(request)
     }

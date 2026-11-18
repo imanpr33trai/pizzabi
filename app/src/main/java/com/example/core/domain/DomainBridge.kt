@@ -1,13 +1,16 @@
 package com.example.core.domain
 
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CausalDecision
 import com.pizzora.contracts.CouponCalculationSpec
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.PaymentAttemptStatus
 import com.pizzora.contracts.PaymentStatus
+import com.pizzora.contracts.PizzaBuilderEvaluation
 import com.pizzora.contracts.PriceBreakdownDto
 import com.pizzora.contracts.PricedLineInput
+import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.RealtimeEventDto
 import com.pizzora.contracts.UserRole
 
@@ -65,6 +68,16 @@ interface DomainBridge {
     deliveryFeePaise: Long = 0L,
     coupon: CouponCalculationSpec? = null,
   ): PriceBreakdownDto
+
+  fun computePizzaConfigurationSignature(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse? = null,
+  ): String
+
+  fun evaluatePizzaCustomization(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse,
+  ): PizzaBuilderEvaluation
 
   fun normalizeCouponCode(raw: String): String
   fun canCustomerCancel(status: OrderStatus): Boolean

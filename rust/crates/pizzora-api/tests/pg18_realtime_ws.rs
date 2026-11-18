@@ -277,6 +277,7 @@ async fn pg18_events_replay_and_ws_resume_with_room_isolation() {
         topping_ids: vec![seeded.topping.id.clone()],
         quantity: 1,
         client_unit_price_paise: None,
+        ..Default::default()
     };
 
     // COD checkout -> ORDER_PLACED outbox event

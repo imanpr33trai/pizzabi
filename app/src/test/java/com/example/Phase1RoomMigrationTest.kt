@@ -116,7 +116,7 @@ class Phase1RoomMigrationTest {
 
     val db = Room.databaseBuilder(context, PizzoraDatabase::class.java, dbName)
       .allowMainThreadQueries()
-      .addMigrations(PizzoraDatabase.MIGRATION_2_3)
+      .addMigrations(PizzoraDatabase.MIGRATION_2_3, PizzoraDatabase.MIGRATION_3_4)
       .addCallback(PizzoraDatabase.FOREIGN_KEY_CALLBACK)
       .build()
     migratedDb = db
@@ -237,5 +237,132 @@ class Phase1RoomMigrationTest {
     )
     assertEquals(1, notifDao.observeNotifications("user-a").first().size)
     assertEquals(1, notifDao.observeNotifications("user-b").first().size)
+  }
+
+  private fun createAuthenticV3DatabaseWithSeedData() {
+    val config = SupportSQLiteOpenHelper.Configuration.builder(context)
+      .name(dbName)
+      .callback(
+        object : SupportSQLiteOpenHelper.Callback(3) {
+          override fun onCreate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+              "CREATE TABLE IF NOT EXISTS `cart_items` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `product_id` TEXT NOT NULL, `product_name` TEXT NOT NULL, `image_url` TEXT, `variant_id` TEXT NOT NULL, `size_code` TEXT NOT NULL, `crust_id` TEXT NOT NULL, `crust_name` TEXT NOT NULL, `unit_price_paise` INTEGER NOT NULL, `quantity` INTEGER NOT NULL, `is_available` INTEGER NOT NULL, `unavailable_reason` TEXT, `updated_at_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+            db.execSQL(
+              "CREATE INDEX IF NOT EXISTS `index_cart_items_user_id` ON `cart_items` (`user_id`)",
+            )
+            db.execSQL(
+              "CREATE TABLE IF NOT EXISTS `cart_item_toppings` (`cart_item_id` TEXT NOT NULL, `topping_id` TEXT NOT NULL, `topping_name` TEXT NOT NULL, `extra_price_paise` INTEGER NOT NULL, PRIMARY KEY(`cart_item_id`, `topping_id`), FOREIGN KEY(`cart_item_id`) REFERENCES `cart_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+            )
+            db.execSQL(
+              "CREATE INDEX IF NOT EXISTS `index_cart_item_toppings_cart_item_id` ON `cart_item_toppings` (`cart_item_id`)",
+            )
+            db.execSQL(
+              "CREATE TABLE IF NOT EXISTS `cached_products` (`id` TEXT NOT NULL, `category_id` TEXT NOT NULL, `category_name` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `is_veg` INTEGER NOT NULL, `image_url` TEXT, `min_price_paise` INTEGER NOT NULL, `payload_json` TEXT NOT NULL, `cached_at_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+            db.execSQL(
+              "CREATE TABLE IF NOT EXISTS `cached_menu_snapshot` (`id` INTEGER NOT NULL, `payload_json` TEXT NOT NULL, `cached_at_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+            db.execSQL(
+              "CREATE TABLE IF NOT EXISTS `notification_inbox` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `event_id` TEXT NOT NULL, `title` TEXT NOT NULL, `body` TEXT NOT NULL, `category` TEXT NOT NULL, `reference_id` TEXT, `is_read` INTEGER NOT NULL, `created_at_iso` TEXT NOT NULL, PRIMARY KEY(`id`))",
+            )
+            db.execSQL(
+              "CREATE UNIQUE INDEX IF NOT EXISTS `index_notification_inbox_user_id_event_id` ON `notification_inbox` (`user_id`, `event_id`)",
+            )
+            db.execSQL(
+              "CREATE INDEX IF NOT EXISTS `index_notification_inbox_user_id` ON `notification_inbox` (`user_id`)",
+            )
+            db.execSQL(
+              "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+            )
+            db.execSQL(
+              "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bfe1970f116d4cc65e4a0d92ee10277a')",
+            )
+          }
+
+          override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        },
+      )
+      .build()
+
+    val helper = FrameworkSQLiteOpenHelperFactory().create(config)
+    helper.writableDatabase.use { db ->
+      db.execSQL(
+        "INSERT INTO cart_items (id, user_id, product_id, product_name, image_url, variant_id, size_code, crust_id, crust_name, unit_price_paise, quantity, is_available, unavailable_reason, updated_at_ms) VALUES ('ci-v3-1', 'user-v3', 'prod-1', 'Margherita Verace', NULL, 'var-1', 'LARGE', 'crust-1', 'Classic', 57400, 2, 1, NULL, 1700000000000)",
+      )
+      db.execSQL(
+        "INSERT INTO cart_item_toppings (cart_item_id, topping_id, topping_name, extra_price_paise) VALUES ('ci-v3-1', 'top-1', 'Extra Basil', 2500)",
+      )
+    }
+    helper.close()
+  }
+
+  @Test
+  fun `v3 to v4 migration preserves existing cart rows and enables half-and-half composite topping keys`() = runBlocking {
+    createAuthenticV3DatabaseWithSeedData()
+
+    val db = Room.databaseBuilder(context, PizzoraDatabase::class.java, dbName)
+      .allowMainThreadQueries()
+      .addMigrations(PizzoraDatabase.MIGRATION_2_3, PizzoraDatabase.MIGRATION_3_4)
+      .addCallback(PizzoraDatabase.FOREIGN_KEY_CALLBACK)
+      .build()
+    migratedDb = db
+
+    val writable = db.openHelper.writableDatabase
+    writable.query("PRAGMA foreign_keys").use { cursor ->
+      assertTrue(cursor.moveToFirst())
+      assertEquals(1, cursor.getInt(0))
+    }
+    writable.query("PRAGMA foreign_key_check").use { cursor ->
+      assertFalse("Expected zero foreign_key_check violations after v3->v4", cursor.moveToFirst())
+    }
+
+    val cartDao = db.cartDao()
+    val migratedItems = cartDao.observeCartItemsWithToppings("user-v3").first()
+    assertEquals(1, migratedItems.size)
+    val preserved = migratedItems.first()
+    assertEquals("ci-v3-1", preserved.item.id)
+    assertEquals(2, preserved.item.quantity)
+    assertFalse(preserved.item.isHalfAndHalf)
+    assertFalse(preserved.item.extraCheese)
+    assertEquals("[]", preserved.item.removedIncludedToppingIdsJson)
+    assertEquals("", preserved.item.configurationSignature)
+    assertEquals(1, preserved.toppings.size)
+    assertEquals("WHOLE", preserved.toppings.first().placement)
+    assertEquals(1, preserved.toppings.first().quantity)
+
+    // Verify same topping_id can now be inserted with LEFT and RIGHT placements on the same cart_item_id
+    cartDao.upsertItemWithToppings(
+      CartItemEntity(
+        id = "ci-v4-half",
+        userId = "user-v3",
+        productId = "prod-1",
+        productName = "Half & Half: Margherita / Farmhouse",
+        variantId = "var-2",
+        sizeCode = "LARGE",
+        crustId = "crust-1",
+        crustName = "Classic",
+        unitPricePaise = 69_900L,
+        quantity = 1,
+        isHalfAndHalf = true,
+        rightProductId = "prod-2",
+        rightProductName = "Farmhouse",
+        rightVariantId = "var-right-2",
+      ),
+      listOf(
+        CartItemToppingEntity("ci-v4-half", "top-shared", "Jalapenos", 3_000L, placement = "LEFT", quantity = 1),
+        CartItemToppingEntity("ci-v4-half", "top-shared", "Jalapenos", 3_000L, placement = "RIGHT", quantity = 2),
+      ),
+    )
+
+    val allUserV3 = cartDao.observeCartItemsWithToppings("user-v3").first()
+    assertEquals(2, allUserV3.size)
+    val halfEntry = allUserV3.first { it.item.id == "ci-v4-half" }
+    assertEquals(2, halfEntry.toppings.size)
+    assertEquals(setOf("LEFT", "RIGHT"), halfEntry.toppings.map { it.placement }.toSet())
+
+    // Deleting parent cascades to composite-PK topping rows
+    cartDao.deleteItemById("user-v3", "ci-v4-half")
+    assertEquals(1, cartDao.observeCartItemsWithToppings("user-v3").first().size)
   }
 }

@@ -91,7 +91,7 @@ pub fn build_openapi_document(server_url: &str) -> Value {
                 "get": { "summary": "List active menu categories", "tags": ["Catalog"] }
             },
             "/api/v1/catalog/menu": {
-                "get": { "summary": "Fetch full active public pizza menu, variants, crusts, toppings, and active images", "tags": ["Catalog"] }
+                "get": { "summary": "Fetch full active public pizza menu, variants, size rules, crusts, cheeses, sauces, toppings, and active images", "tags": ["Catalog"] }
             },
             "/api/v1/owner/categories": {
                 "get": { "summary": "List all categories (Owner)", "tags": ["Owner"] },
@@ -101,6 +101,26 @@ pub fn build_openapi_document(server_url: &str) -> Value {
                 "get": { "summary": "List all products and variants (Owner)", "tags": ["Owner"] },
                 "post": { "summary": "Create product and size variants atomically (Owner)", "tags": ["Owner"] }
             },
+            "/api/v1/owner/size-rules": {
+                "get": { "summary": "List configurable pizza size rules (Owner)", "tags": ["Owner"] }
+            },
+            "/api/v1/owner/size-rules/{sizeCode}": {
+                "patch": { "summary": "Update pizza size rule limits and half-and-half support (Owner)", "tags": ["Owner"] }
+            },
+            "/api/v1/owner/cheeses": {
+                "get": { "summary": "List cheese options (Owner)", "tags": ["Owner"] },
+                "post": { "summary": "Create cheese option (Owner)", "tags": ["Owner"] }
+            },
+            "/api/v1/owner/cheeses/{id}": {
+                "patch": { "summary": "Update cheese option (Owner)", "tags": ["Owner"] }
+            },
+            "/api/v1/owner/sauces": {
+                "get": { "summary": "List sauce options (Owner)", "tags": ["Owner"] },
+                "post": { "summary": "Create sauce option (Owner)", "tags": ["Owner"] }
+            },
+            "/api/v1/owner/sauces/{id}": {
+                "patch": { "summary": "Update sauce option (Owner)", "tags": ["Owner"] }
+            },
             "/api/v1/owner/products/{id}/images/presign": {
                 "post": { "summary": "Generate S3/MinIO presigned PUT URL for product image upload (Owner)", "tags": ["Images"] }
             },
@@ -109,10 +129,13 @@ pub fn build_openapi_document(server_url: &str) -> Value {
             },
             "/api/v1/cart": {
                 "get": { "summary": "Fetch authenticated customer relational cart with live catalog validation", "tags": ["Cart"] },
-                "put": { "summary": "Replace authenticated customer cart items and toppings", "tags": ["Cart"] }
+                "put": { "summary": "Replace authenticated customer cart items, builder selections, and toppings", "tags": ["Cart"] }
             },
             "/api/v1/cart/validate": {
                 "post": { "summary": "Validate local offline cart items against server catalog and prices", "tags": ["Cart"] }
+            },
+            "/api/v1/pizza-builder/quote": {
+                "post": { "summary": "Validate and compute live authoritative custom pizza builder quote & price breakdown", "tags": ["PizzaBuilder"] }
             },
             "/api/v1/coupons/available": {
                 "get": { "summary": "List active non-expired coupons with customer usage limits and eligibility", "tags": ["Coupons"] }
@@ -135,8 +158,8 @@ pub fn build_openapi_document(server_url: &str) -> Value {
                 "get": { "summary": "List immutable append-only inventory ledger movements (Owner)", "tags": ["Inventory"] }
             },
             "/api/v1/owner/recipes": {
-                "get": { "summary": "List relational ingredient recipes for variants, crusts, and toppings (Owner)", "tags": ["Recipes"] },
-                "put": { "summary": "Replace relational ingredient recipe for a variant, crust, or topping (Owner)", "tags": ["Recipes"] }
+                "get": { "summary": "List relational ingredient recipes for variants, crusts, cheeses, sauces, and toppings (Owner)", "tags": ["Recipes"] },
+                "put": { "summary": "Replace relational ingredient recipe for a variant, crust, cheese, sauce, or topping (Owner)", "tags": ["Recipes"] }
             },
             "/api/v1/checkout": {
                 "post": { "summary": "Create transactional order, reservations, payment attempt, and outbox event (requires Idempotency-Key)", "tags": ["Checkout"] }

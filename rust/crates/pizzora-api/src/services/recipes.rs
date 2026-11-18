@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
+use pizzora_core::ToppingPlacement;
 use pizzora_db::{new_uuid_v4, record_audit_log, AuditContext, IngredientUnit};
 use sqlx::{PgConnection, PgPool, Row as _};
 use uuid::Uuid;
@@ -14,8 +15,15 @@ use crate::extractors::parse_uuid_param;
 #[derive(Clone, Debug)]
 pub struct CheckoutRecipeLineDemandInput {
     pub variant_id: Uuid,
+    pub right_variant_id: Option<Uuid>,
+    pub size_multiplier_bps: i32,
     pub crust_id: Uuid,
-    pub topping_ids: Vec<Uuid>,
+    pub cheese_id: Option<Uuid>,
+    pub extra_cheese: bool,
+    pub sauce_id: Option<Uuid>,
+    pub right_sauce_id: Option<Uuid>,
+    pub extra_sauce: bool,
+    pub topping_demands: Vec<(Uuid, ToppingPlacement, i32)>,
     pub quantity: i32,
 }
 
@@ -56,14 +64,30 @@ impl RecipeService {
         .fetch_all(&mut *conn)
         .await?;
 
+        let cheese_rows = sqlx::query(
+            "SELECT id AS target_id, name AS target_label FROM cheese_options ORDER BY name ASC",
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        let sauce_rows = sqlx::query(
+            "SELECT id AS target_id, name AS target_label FROM sauce_options ORDER BY name ASC",
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
         let variant_lines = load_recipe_lines(&mut conn, RecipeTargetType::Variant).await?;
         let crust_lines = load_recipe_lines(&mut conn, RecipeTargetType::Crust).await?;
         let topping_lines = load_recipe_lines(&mut conn, RecipeTargetType::Topping).await?;
+        let cheese_lines = load_recipe_lines(&mut conn, RecipeTargetType::Cheese).await?;
+        let sauce_lines = load_recipe_lines(&mut conn, RecipeTargetType::Sauce).await?;
 
         Ok(RecipesOverviewResponse {
             variants: build_bindings(variant_rows, &variant_lines, RecipeTargetType::Variant)?,
             crusts: build_bindings(crust_rows, &crust_lines, RecipeTargetType::Crust)?,
             toppings: build_bindings(topping_rows, &topping_lines, RecipeTargetType::Topping)?,
+            cheeses: build_bindings(cheese_rows, &cheese_lines, RecipeTargetType::Cheese)?,
+            sauces: build_bindings(sauce_rows, &sauce_lines, RecipeTargetType::Sauce)?,
         })
     }
 
@@ -111,6 +135,20 @@ impl RecipeService {
             .fetch_optional(&mut *tx)
             .await?
             .ok_or_else(|| ApiError::not_found("TOPPING_NOT_FOUND", format!("Topping {target_id} not found.")))?,
+            RecipeTargetType::Cheese => sqlx::query_scalar::<_, String>(
+                "SELECT name FROM cheese_options WHERE id = $1",
+            )
+            .bind(target_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| ApiError::not_found("CHEESE_NOT_FOUND", format!("Cheese {target_id} not found.")))?,
+            RecipeTargetType::Sauce => sqlx::query_scalar::<_, String>(
+                "SELECT name FROM sauce_options WHERE id = $1",
+            )
+            .bind(target_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| ApiError::not_found("SAUCE_NOT_FOUND", format!("Sauce {target_id} not found.")))?,
         };
 
         for ingredient_id in merged_qty.keys() {
@@ -126,58 +164,24 @@ impl RecipeService {
             }
         }
 
-        match request.target_type {
-            RecipeTargetType::Variant => {
-                sqlx::query("DELETE FROM variant_recipes WHERE variant_id = $1")
-                    .bind(target_id)
-                    .execute(&mut *tx)
-                    .await?;
-                for (ingredient_id, qty) in &merged_qty {
-                    sqlx::query(
-                        "INSERT INTO variant_recipes (id, variant_id, ingredient_id, quantity) VALUES ($1, $2, $3, $4)",
-                    )
-                    .bind(new_uuid_v4())
-                    .bind(target_id)
-                    .bind(*ingredient_id)
-                    .bind(*qty)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            }
-            RecipeTargetType::Crust => {
-                sqlx::query("DELETE FROM crust_recipes WHERE crust_id = $1")
-                    .bind(target_id)
-                    .execute(&mut *tx)
-                    .await?;
-                for (ingredient_id, qty) in &merged_qty {
-                    sqlx::query(
-                        "INSERT INTO crust_recipes (id, crust_id, ingredient_id, quantity) VALUES ($1, $2, $3, $4)",
-                    )
-                    .bind(new_uuid_v4())
-                    .bind(target_id)
-                    .bind(*ingredient_id)
-                    .bind(*qty)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            }
-            RecipeTargetType::Topping => {
-                sqlx::query("DELETE FROM topping_recipes WHERE topping_id = $1")
-                    .bind(target_id)
-                    .execute(&mut *tx)
-                    .await?;
-                for (ingredient_id, qty) in &merged_qty {
-                    sqlx::query(
-                        "INSERT INTO topping_recipes (id, topping_id, ingredient_id, quantity) VALUES ($1, $2, $3, $4)",
-                    )
-                    .bind(new_uuid_v4())
-                    .bind(target_id)
-                    .bind(*ingredient_id)
-                    .bind(*qty)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            }
+        let (table, fk_col) = recipe_table_and_fk(request.target_type);
+        let delete_sql = format!("DELETE FROM {table} WHERE {fk_col} = $1");
+        sqlx::query(&delete_sql)
+            .bind(target_id)
+            .execute(&mut *tx)
+            .await?;
+
+        let insert_sql = format!(
+            "INSERT INTO {table} (id, {fk_col}, ingredient_id, quantity) VALUES ($1, $2, $3, $4)"
+        );
+        for (ingredient_id, qty) in &merged_qty {
+            sqlx::query(&insert_sql)
+                .bind(new_uuid_v4())
+                .bind(target_id)
+                .bind(*ingredient_id)
+                .bind(*qty)
+                .execute(&mut *tx)
+                .await?;
         }
 
         let lines_map =
@@ -215,45 +219,149 @@ impl RecipeService {
             return Ok(required);
         }
 
-        let variant_ids: Vec<Uuid> = items.iter().map(|i| i.variant_id).collect();
-        let crust_ids: Vec<Uuid> = items.iter().map(|i| i.crust_id).collect();
-        let topping_ids: Vec<Uuid> = items
-            .iter()
-            .flat_map(|i| i.topping_ids.iter().copied())
-            .collect();
+        let mut variant_ids: Vec<Uuid> = Vec::with_capacity(items.len() * 2);
+        let mut crust_ids: Vec<Uuid> = Vec::with_capacity(items.len());
+        let mut cheese_ids: Vec<Uuid> = Vec::new();
+        let mut sauce_ids: Vec<Uuid> = Vec::new();
+        let mut topping_ids: Vec<Uuid> = Vec::new();
+
+        for item in items {
+            variant_ids.push(item.variant_id);
+            if let Some(rv) = item.right_variant_id {
+                variant_ids.push(rv);
+            }
+            crust_ids.push(item.crust_id);
+            if let Some(cid) = item.cheese_id {
+                cheese_ids.push(cid);
+            }
+            if let Some(sid) = item.sauce_id {
+                sauce_ids.push(sid);
+            }
+            if let Some(rsid) = item.right_sauce_id {
+                sauce_ids.push(rsid);
+            }
+            for (tid, _, _) in &item.topping_demands {
+                topping_ids.push(*tid);
+            }
+        }
 
         let variant_map =
             load_demand_map(&mut *conn, "variant_recipes", "variant_id", &variant_ids).await?;
         let crust_map =
             load_demand_map(&mut *conn, "crust_recipes", "crust_id", &crust_ids).await?;
-        let topping_map = if topping_ids.is_empty() {
-            HashMap::new()
-        } else {
-            load_demand_map(&mut *conn, "topping_recipes", "topping_id", &topping_ids).await?
-        };
+        let cheese_map =
+            load_demand_map(&mut *conn, "cheese_recipes", "cheese_id", &cheese_ids).await?;
+        let sauce_map =
+            load_demand_map(&mut *conn, "sauce_recipes", "sauce_id", &sauce_ids).await?;
+        let topping_map =
+            load_demand_map(&mut *conn, "topping_recipes", "topping_id", &topping_ids).await?;
 
         for item in items {
             let qty = i64::from(item.quantity);
-            if let Some(lines) = variant_map.get(&item.variant_id) {
-                for (ing_id, per_unit) in lines {
-                    *required.entry(*ing_id).or_insert(0) += (*per_unit) * qty;
+            let size_bps = i64::from(item.size_multiplier_bps.max(1));
+
+            match item.right_variant_id {
+                Some(rv) if rv != item.variant_id => {
+                    if let Some(lines) = variant_map.get(&item.variant_id) {
+                        for (ing_id, per_unit) in lines {
+                            *required.entry(*ing_id).or_insert(0) +=
+                                scale_ceil(*per_unit, qty, 5_000);
+                        }
+                    }
+                    if let Some(lines) = variant_map.get(&rv) {
+                        for (ing_id, per_unit) in lines {
+                            *required.entry(*ing_id).or_insert(0) +=
+                                scale_ceil(*per_unit, qty, 5_000);
+                        }
+                    }
+                }
+                _ => {
+                    if let Some(lines) = variant_map.get(&item.variant_id) {
+                        for (ing_id, per_unit) in lines {
+                            *required.entry(*ing_id).or_insert(0) += (*per_unit) * qty;
+                        }
+                    }
                 }
             }
+
             if let Some(lines) = crust_map.get(&item.crust_id) {
                 for (ing_id, per_unit) in lines {
                     *required.entry(*ing_id).or_insert(0) += (*per_unit) * qty;
                 }
             }
-            for tid in &item.topping_ids {
-                if let Some(lines) = topping_map.get(tid) {
+
+            if let Some(cid) = item.cheese_id {
+                if let Some(lines) = cheese_map.get(&cid) {
+                    let cheese_bps = size_bps.saturating_mul(if item.extra_cheese { 3 } else { 2 }) / 2;
                     for (ing_id, per_unit) in lines {
-                        *required.entry(*ing_id).or_insert(0) += (*per_unit) * qty;
+                        *required.entry(*ing_id).or_insert(0) +=
+                            scale_ceil(*per_unit, qty, cheese_bps);
+                    }
+                }
+            }
+
+            let sauce_bps = size_bps.saturating_mul(if item.extra_sauce { 3 } else { 2 }) / 2;
+            match (item.sauce_id, item.right_sauce_id) {
+                (Some(lsid), Some(rsid)) if lsid != rsid => {
+                    let half_sauce_bps = (sauce_bps + 1) / 2;
+                    if let Some(lines) = sauce_map.get(&lsid) {
+                        for (ing_id, per_unit) in lines {
+                            *required.entry(*ing_id).or_insert(0) +=
+                                scale_ceil(*per_unit, qty, half_sauce_bps);
+                        }
+                    }
+                    if let Some(lines) = sauce_map.get(&rsid) {
+                        for (ing_id, per_unit) in lines {
+                            *required.entry(*ing_id).or_insert(0) +=
+                                scale_ceil(*per_unit, qty, half_sauce_bps);
+                        }
+                    }
+                }
+                (Some(sid), _) | (None, Some(sid)) => {
+                    if let Some(lines) = sauce_map.get(&sid) {
+                        for (ing_id, per_unit) in lines {
+                            *required.entry(*ing_id).or_insert(0) +=
+                                scale_ceil(*per_unit, qty, sauce_bps);
+                        }
+                    }
+                }
+                (None, None) => {}
+            }
+
+            for (tid, placement, t_qty) in &item.topping_demands {
+                if let Some(lines) = topping_map.get(tid) {
+                    let placement_bps = match placement {
+                        ToppingPlacement::Whole => size_bps,
+                        ToppingPlacement::Left | ToppingPlacement::Right => (size_bps + 1) / 2,
+                    };
+                    let total_units = qty.saturating_mul(i64::from((*t_qty).max(1)));
+                    for (ing_id, per_unit) in lines {
+                        *required.entry(*ing_id).or_insert(0) +=
+                            scale_ceil(*per_unit, total_units, placement_bps);
                     }
                 }
             }
         }
 
         Ok(required)
+    }
+}
+
+fn scale_ceil(per_unit: i64, qty: i64, bps: i64) -> i64 {
+    if per_unit <= 0 || qty <= 0 || bps <= 0 {
+        return 0;
+    }
+    let numerator = per_unit.saturating_mul(qty).saturating_mul(bps);
+    numerator.saturating_add(9_999) / 10_000
+}
+
+fn recipe_table_and_fk(target_type: RecipeTargetType) -> (&'static str, &'static str) {
+    match target_type {
+        RecipeTargetType::Variant => ("variant_recipes", "variant_id"),
+        RecipeTargetType::Crust => ("crust_recipes", "crust_id"),
+        RecipeTargetType::Topping => ("topping_recipes", "topping_id"),
+        RecipeTargetType::Cheese => ("cheese_recipes", "cheese_id"),
+        RecipeTargetType::Sauce => ("sauce_recipes", "sauce_id"),
     }
 }
 
@@ -286,11 +394,7 @@ async fn load_recipe_lines(
     conn: &mut PgConnection,
     target_type: RecipeTargetType,
 ) -> Result<HashMap<Uuid, Vec<RecipeIngredientLineDto>>, ApiError> {
-    let (table, fk_col) = match target_type {
-        RecipeTargetType::Variant => ("variant_recipes", "variant_id"),
-        RecipeTargetType::Crust => ("crust_recipes", "crust_id"),
-        RecipeTargetType::Topping => ("topping_recipes", "topping_id"),
-    };
+    let (table, fk_col) = recipe_table_and_fk(target_type);
     let sql = format!(
         r#"
         SELECT r.id, r.{fk_col} AS target_id, r.ingredient_id, r.quantity,
@@ -317,11 +421,7 @@ async fn load_recipe_lines_for_target(
     target_type: RecipeTargetType,
     target_id: Uuid,
 ) -> Result<Vec<RecipeIngredientLineDto>, ApiError> {
-    let (table, fk_col) = match target_type {
-        RecipeTargetType::Variant => ("variant_recipes", "variant_id"),
-        RecipeTargetType::Crust => ("crust_recipes", "crust_id"),
-        RecipeTargetType::Topping => ("topping_recipes", "topping_id"),
-    };
+    let (table, fk_col) = recipe_table_and_fk(target_type);
     let sql = format!(
         r#"
         SELECT r.id, r.ingredient_id, r.quantity, i.name AS ingredient_name, i.unit

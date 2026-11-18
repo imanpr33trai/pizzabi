@@ -17,10 +17,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::dto::{
-    AvailableSlotsResponse, CartResponseDto, CategoryDto, CheckoutResponse, CouponRoiDto,
-    DailySalesBucketDto, DependencyHealth, EventsReplayResponse, HealthReadinessResponse,
-    KdsTicketDto, KdsTicketItemDto, KdsTicketsResponse, OperationalStockMovementDto,
-    OperationsReportResponse, PriceBreakdownDto, PricingQuoteResponse, PublicMenuResponse,
+    AvailableSlotsResponse, CartItemInputDto, CartResponseDto, CartToppingInputDto, CategoryDto,
+    CheckoutResponse, CouponRoiDto, DailySalesBucketDto, DependencyHealth, EventsReplayResponse,
+    HealthReadinessResponse, KdsTicketDto, KdsTicketItemDto, KdsTicketsResponse,
+    OperationalStockMovementDto, OperationsReportResponse, PizzaBuilderQuoteRequest,
+    PizzaBuilderQuoteResponse, PriceBreakdownDto, PricingQuoteResponse, PublicMenuResponse,
     ReadinessState, RealtimeEventDto, SalesReportResponse, ScheduledSlotDto, TopSellingProductDto,
     WsEventsFrame,
 };
@@ -113,6 +114,9 @@ fn dto_round_trips_and_wire_field_names_match_ktor_and_android_contracts() {
         gst_bps: 500,
         store_name: "PIZZORA".to_owned(),
         is_accepting_orders: true,
+        size_rules: Vec::new(),
+        cheeses: Vec::new(),
+        sauces: Vec::new(),
     };
     let menu_rt: PublicMenuResponse =
         serde_json::from_slice(&serde_json::to_vec(&menu).unwrap()).unwrap();
@@ -186,6 +190,7 @@ fn dto_round_trips_and_wire_field_names_match_ktor_and_android_contracts() {
                 crust_name: "Classic Hand Tossed".to_owned(),
                 toppings: vec!["Extra Cheese".to_owned()],
                 quantity: 1,
+                customization_snapshot: None,
             }],
         }],
         server_now: "2026-01-01T00:00:00.000Z".to_owned(),
@@ -338,6 +343,27 @@ fn dto_round_trips_and_wire_field_names_match_ktor_and_android_contracts() {
     let ws_rt: WsEventsFrame = serde_json::from_value(ws_val).unwrap();
     assert_eq!(ws_rt, ws_frame);
 
+    let quote_req = PizzaBuilderQuoteRequest {
+        item: CartItemInputDto {
+            product_id: "prod_1".to_owned(),
+            variant_id: "var_1".to_owned(),
+            crust_id: "crust_1".to_owned(),
+            quantity: 2,
+            extra_cheese: true,
+            is_half_and_half: true,
+            topping_selections: vec![CartToppingInputDto {
+                topping_id: "top_1".to_owned(),
+                placement: pizzora_core::ToppingPlacement::Left,
+                quantity: 2,
+            }],
+            ..Default::default()
+        },
+    };
+    let quote_req_rt: PizzaBuilderQuoteRequest =
+        serde_json::from_slice(&serde_json::to_vec(&quote_req).unwrap()).unwrap();
+    assert_eq!(quote_req_rt, quote_req);
+    assert!(std::mem::size_of::<PizzaBuilderQuoteResponse>() > 0);
+
     // Ensure CheckoutResponse compiles cleanly in serde contract tests too
     let checkout_json_size = std::mem::size_of::<CheckoutResponse>();
     assert!(checkout_json_size > 0);
@@ -364,10 +390,14 @@ fn openapi_document_contains_version_bearer_security_and_contract_paths() {
         "/api/v1/auth/ws-ticket",
         "/api/v1/catalog/menu",
         "/api/v1/cart",
+        "/api/v1/pizza-builder/quote",
         "/api/v1/checkout",
         "/api/v1/webhooks/razorpay",
         "/api/v1/kds/tickets",
         "/api/v1/owner/settings",
+        "/api/v1/owner/size-rules",
+        "/api/v1/owner/cheeses",
+        "/api/v1/owner/sauces",
         "/api/v1/owner/reports/sales",
         "/ws/v1/events",
     ] {

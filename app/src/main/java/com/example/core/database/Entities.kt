@@ -27,11 +27,24 @@ data class CartItemEntity(
   @ColumnInfo(name = "is_available") val isAvailable: Boolean = true,
   @ColumnInfo(name = "unavailable_reason") val unavailableReason: String? = null,
   @ColumnInfo(name = "updated_at_ms") val updatedAtMs: Long = System.currentTimeMillis(),
+  @ColumnInfo(name = "cheese_id") val cheeseId: String? = null,
+  @ColumnInfo(name = "extra_cheese") val extraCheese: Boolean = false,
+  @ColumnInfo(name = "sauce_id") val sauceId: String? = null,
+  @ColumnInfo(name = "extra_sauce") val extraSauce: Boolean = false,
+  @ColumnInfo(name = "is_half_and_half") val isHalfAndHalf: Boolean = false,
+  @ColumnInfo(name = "right_product_id") val rightProductId: String? = null,
+  @ColumnInfo(name = "right_product_name") val rightProductName: String? = null,
+  @ColumnInfo(name = "right_variant_id") val rightVariantId: String? = null,
+  @ColumnInfo(name = "right_sauce_id") val rightSauceId: String? = null,
+  @ColumnInfo(name = "removed_included_topping_ids_json") val removedIncludedToppingIdsJson: String = "[]",
+  @ColumnInfo(name = "customization_json") val customizationJson: String? = null,
+  @ColumnInfo(name = "price_breakdown_json") val priceBreakdownJson: String? = null,
+  @ColumnInfo(name = "configuration_signature") val configurationSignature: String = "",
 )
 
 @Entity(
   tableName = "cart_item_toppings",
-  primaryKeys = ["cart_item_id", "topping_id"],
+  primaryKeys = ["cart_item_id", "topping_id", "placement"],
   foreignKeys = [
     ForeignKey(
       entity = CartItemEntity::class,
@@ -47,6 +60,8 @@ data class CartItemToppingEntity(
   @ColumnInfo(name = "topping_id") val toppingId: String,
   @ColumnInfo(name = "topping_name") val toppingName: String,
   @ColumnInfo(name = "extra_price_paise") val extraPricePaise: Long,
+  val placement: String = "WHOLE",
+  val quantity: Int = 1,
 )
 
 data class CartItemWithToppings(

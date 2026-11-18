@@ -63,6 +63,7 @@ import coil.compose.AsyncImage
 import com.example.R
 import com.example.ui.theme.LocalPizzoraSemanticColors
 import com.example.ui.theme.PizzoraMonoBody
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.ProductDto
@@ -81,6 +82,7 @@ fun CustomerMenuScreen(
   onDismissCustomizer: () -> Unit,
   onAddCustomizedToCart: (ProductDto, ProductVariantDto, CrustOptionDto, List<ToppingDto>, Int) -> Unit,
   modifier: Modifier = Modifier,
+  onAddConfiguredToCart: ((CartItemInputDto, String) -> Unit)? = null,
 ) {
   Box(modifier = modifier.fillMaxSize().testTag("customer_menu_screen")) {
     Column(
@@ -250,10 +252,19 @@ fun CustomerMenuScreen(
           product = activeProduct,
           crusts = uiState.crusts,
           toppings = uiState.toppings,
+          menu = uiState.publicMenuSnapshot,
           onDismiss = onDismissCustomizer,
           onConfirmAdd = { variant, crust, selectedToppings, qty ->
             onAddCustomizedToCart(activeProduct, variant, crust, selectedToppings, qty)
             onDismissCustomizer()
+          },
+          onConfirmConfiguredPizza = if (onAddConfiguredToCart != null) {
+            { input, displayName ->
+              onAddConfiguredToCart(input, displayName)
+              onDismissCustomizer()
+            }
+          } else {
+            null
           },
         )
       }

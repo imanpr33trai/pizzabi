@@ -3,8 +3,12 @@ package com.example.catalog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pizzora.contracts.CategoryDto
+import com.pizzora.contracts.CheeseOptionDto
 import com.pizzora.contracts.CrustOptionDto
+import com.pizzora.contracts.PizzaSizeRuleDto
 import com.pizzora.contracts.ProductDto
+import com.pizzora.contracts.PublicMenuResponse
+import com.pizzora.contracts.SauceOptionDto
 import com.pizzora.contracts.ToppingDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,12 +28,29 @@ data class CustomerMenuUiState(
   val allProducts: List<ProductDto> = emptyList(),
   val crusts: List<CrustOptionDto> = emptyList(),
   val toppings: List<ToppingDto> = emptyList(),
+  val sizeRules: List<PizzaSizeRuleDto> = emptyList(),
+  val cheeses: List<CheeseOptionDto> = emptyList(),
+  val sauces: List<SauceOptionDto> = emptyList(),
   val selectedCategoryId: String? = null,
   val searchQuery: String = "",
   val vegOnly: Boolean = false,
   val errorMessage: String? = null,
   val customizingProduct: ProductDto? = null,
 ) {
+  val publicMenuSnapshot: PublicMenuResponse
+    get() = PublicMenuResponse(
+      categories = categories,
+      products = allProducts,
+      crusts = crusts,
+      toppings = toppings,
+      gstBps = gstBps,
+      storeName = storeName,
+      isAcceptingOrders = isAcceptingOrders,
+      sizeRules = sizeRules,
+      cheeses = cheeses,
+      sauces = sauces,
+    )
+
   val filteredProducts: List<ProductDto>
     get() {
       val query = searchQuery.trim().lowercase()
@@ -86,6 +107,9 @@ class CustomerCatalogViewModel(
             allProducts = menu?.products ?: snapshot.cachedProducts,
             crusts = menu?.crusts ?: it.crusts,
             toppings = menu?.toppings ?: it.toppings,
+            sizeRules = menu?.sizeRules ?: it.sizeRules,
+            cheeses = menu?.cheeses ?: it.cheeses,
+            sauces = menu?.sauces ?: it.sauces,
             errorMessage = null,
           )
         }

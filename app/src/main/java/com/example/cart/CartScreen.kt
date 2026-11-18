@@ -525,6 +525,8 @@ private fun CartItemCard(
 ) {
   val item = entry.item
   val isAvailable = item.isAvailable
+  val customization = entry.customizationSummaryOrNull()
+  val breakdown = entry.priceBreakdownOrNull()
   Card(
     colors = CardDefaults.cardColors(
       containerColor = if (isAvailable) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
@@ -541,19 +543,82 @@ private fun CartItemCard(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top,
       ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
           Text(item.productName, style = MaterialTheme.typography.titleMedium)
           Text(
             text = "${item.sizeCode.lowercase().replaceFirstChar { it.uppercase() }} • ${item.crustName}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
-          if (entry.toppings.isNotEmpty()) {
+          if (item.isHalfAndHalf && !customization?.rightProductName.isNullOrBlank() && !item.productName.contains("Half & Half")) {
             Text(
-              text = "Toppings: ${entry.toppings.joinToString(", ") { it.toppingName }}",
+              text = "Half & Half • Right: ${customization?.rightProductName}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.secondary,
+            )
+          }
+          customization?.cheeseName?.takeIf { it.isNotBlank() }?.let { cheeseName ->
+            Text(
+              text = "Cheese: $cheeseName${if (customization.extraCheese) " (+ Extra Cheese)" else ""}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          customization?.sauceName?.takeIf { it.isNotBlank() }?.let { sauceName ->
+            val sauceText = if (
+              item.isHalfAndHalf &&
+              !customization.rightSauceName.isNullOrBlank() &&
+              customization.rightSauceName != sauceName
+            ) {
+              "Sauces: L: $sauceName / R: ${customization.rightSauceName}${if (customization.extraSauce) " (+ Extra Sauce)" else ""}"
+            } else {
+              "Sauce: $sauceName${if (customization.extraSauce) " (+ Extra Sauce)" else ""}"
+            }
+            Text(
+              text = sauceText,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          if (customization?.removedIncludedToppings?.isNotEmpty() == true) {
+            Text(
+              text = "Removed: ${customization.removedIncludedToppings.joinToString(", ")}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.error,
+            )
+          }
+          if (entry.toppings.isNotEmpty()) {
+            val formattedToppings = entry.toppings.joinToString(", ") { top ->
+              val sideTag = when (top.placement) {
+                "LEFT" -> " (Left)"
+                "RIGHT" -> " (Right)"
+                else -> ""
+              }
+              val qtyTag = if (top.quantity > 1) " x${top.quantity}" else ""
+              "${top.toppingName}$sideTag$qtyTag"
+            }
+            Text(
+              text = "Toppings: $formattedToppings",
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+          }
+          if (breakdown != null && (
+              breakdown.halfAndHalfSurchargePaise > 0L ||
+                breakdown.extraCheesePricePaise > 0L ||
+                breakdown.extraSaucePricePaise > 0L ||
+                breakdown.cheesePricePaise > 0L ||
+                breakdown.saucePricePaise > 0L
+              )
+          ) {
+            val extras = breakdown.unitPricePaise - breakdown.basePricePaise
+            if (extras > 0L) {
+              Text(
+                text = "Base ${Money.formatInr(breakdown.basePricePaise)} + Customizations ${Money.formatInr(extras)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
           }
         }
         IconButton(

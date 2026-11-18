@@ -41,7 +41,16 @@
     <string name="menu_clear_filters">Show Full Menu</string>
     <string name="customizer_choose_size">Choose Size</string>
     <string name="customizer_choose_crust">Choose Crust</string>
+    <string name="customizer_half_and_half">Half &amp; Half Pizza</string>
+    <string name="customizer_choose_right_half">Second Half Pizza</string>
+    <string name="customizer_choose_cheese">Choose Cheese</string>
+    <string name="customizer_extra_cheese">Add Extra Cheese</string>
+    <string name="customizer_choose_sauce">Choose Sauce</string>
+    <string name="customizer_choose_right_sauce">Right-Half Sauce</string>
+    <string name="customizer_extra_sauce">Add Extra Sauce</string>
+    <string name="customizer_included_toppings">Included Toppings (Tap to Remove)</string>
     <string name="customizer_extra_toppings">Extra Toppings</string>
+    <string name="customizer_price_breakdown">Live Price Breakdown</string>
     <string name="cart_offline_banner">Offline cart active — prices &amp; availability will sync when online.</string>
     <string name="cart_unavailable_warning">One or more items in your cart are unavailable. Review before ordering.</string>
     <string name="cart_empty_title">Your oven tray is empty</string>
