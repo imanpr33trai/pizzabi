@@ -5,11 +5,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.auth.AuthViewModel
 import com.example.cart.CartViewModel
@@ -24,6 +27,8 @@ import com.example.notifications.OrderSyncScheduler
 import com.example.orders.OrdersViewModel
 import com.example.owner.OwnerViewModel
 import com.example.profile.ProfileViewModel
+import com.example.update.UpdateUiEvent
+import com.example.update.UpdateViewModel
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
 import kotlinx.coroutines.launch
@@ -31,14 +36,24 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
   private var openNotificationsFromIntent by mutableStateOf(false)
   private var notificationsViewModelRef: NotificationsViewModel? = null
+  private var updateViewModelRef: UpdateViewModel? = null
   internal lateinit var ordersViewModel: OrdersViewModel
     private set
+
+  private val updateIntentLauncher = registerForActivityResult(
+    ActivityResultContracts.StartActivityForResult(),
+  ) {
+    updateViewModelRef?.onHostResumed()
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     val container = (application as PizzoraApplication).appContainer
     ordersViewModel = ViewModelProvider(this, container.ordersViewModelFactory())[OrdersViewModel::class.java]
+    val updateViewModel = ViewModelProvider(this, container.updateViewModelFactory())[UpdateViewModel::class.java]
+    updateViewModelRef = updateViewModel
+
     if (savedInstanceState != null) {
       ordersViewModel.restorePendingRazorpayLaunch(
         orderId = savedInstanceState.getString(KEY_PENDING_RAZORPAY_ORDER_ID),
@@ -46,6 +61,24 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
       )
     }
     openNotificationsFromIntent = intent?.getBooleanExtra(NotificationHelper.EXTRA_OPEN_NOTIFICATIONS, false) == true
+
+    lifecycleScope.launch {
+      repeatOnLifecycle(Lifecycle.State.STARTED) {
+        updateViewModel.events.collect { event ->
+          when (event) {
+            is UpdateUiEvent.LaunchConfirmIntent -> {
+              runCatching { updateIntentLauncher.launch(event.intent) }
+                .onFailure { runCatching { startActivity(event.intent) } }
+            }
+            is UpdateUiEvent.OpenInstallSettings -> {
+              runCatching { updateIntentLauncher.launch(event.intent) }
+                .onFailure { runCatching { startActivity(event.intent) } }
+            }
+            is UpdateUiEvent.ShowMessage -> Unit
+          }
+        }
+      }
+    }
 
     setContent {
       val authViewModel: AuthViewModel = viewModel(factory = container.authViewModelFactory())
@@ -70,6 +103,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         ownerViewModel = ownerViewModel,
         profileViewModel = profileViewModel,
         notificationsViewModel = notificationsViewModel,
+        updateViewModel = updateViewModel,
         razorpayCheckoutLauncher = container.razorpayCheckoutLauncher,
         openNotificationsRequested = openNotificationsFromIntent,
         onNotificationsRequestHandled = { openNotificationsFromIntent = false },
@@ -111,6 +145,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     super.onResume()
     val container = (application as PizzoraApplication).appContainer
     notificationsViewModelRef?.refreshPermissionState()
+    updateViewModelRef?.onHostResumed()
     lifecycleScope.launch {
       if (container.tokenStorage.currentSession() != null) {
         OrderSyncScheduler.schedulePeriodicSync(this@MainActivity)

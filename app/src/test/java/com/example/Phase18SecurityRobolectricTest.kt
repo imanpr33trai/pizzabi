@@ -202,18 +202,19 @@ class Phase18SecurityRobolectricTest {
     val permissions = pkgInfo.requestedPermissions?.toSet().orEmpty()
     assertTrue(permissions.contains("android.permission.INTERNET"))
     assertTrue(permissions.contains("android.permission.ACCESS_NETWORK_STATE"))
+    // Direct GitHub Releases distribution requires REQUEST_INSTALL_PACKAGES for PackageInstaller self-updates.
+    assertTrue(permissions.contains("android.permission.REQUEST_INSTALL_PACKAGES"))
 
-    val prohibitedPlayPermissions = setOf(
+    val prohibitedPermissions = setOf(
       "android.permission.READ_EXTERNAL_STORAGE",
       "android.permission.READ_MEDIA_IMAGES",
       "android.permission.READ_MEDIA_VIDEO",
       "android.permission.WRITE_EXTERNAL_STORAGE",
       "android.permission.MANAGE_EXTERNAL_STORAGE",
-      "android.permission.REQUEST_INSTALL_PACKAGES",
       "android.permission.QUERY_ALL_PACKAGES",
     )
-    for (prohibited in prohibitedPlayPermissions) {
-      assertFalse("Prohibited Play permission $prohibited in manifest", permissions.contains(prohibited))
+    for (prohibited in prohibitedPermissions) {
+      assertFalse("Prohibited permission $prohibited in manifest", permissions.contains(prohibited))
     }
 
     // Verify cleartext flag is not globally enabled on ApplicationInfo in release/manifest configuration

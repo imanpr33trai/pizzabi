@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material3.Button
@@ -91,6 +92,8 @@ import com.example.ui.theme.LocalPizzoraSemanticColors
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
+import com.example.update.AppUpdatesSettingsCard
+import com.example.update.UpdateUiState
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.KdsTicketDto
 import com.pizzora.contracts.Money
@@ -114,7 +117,12 @@ fun KdsScreen(
   onSignOut: (() -> Unit)? = null,
   onBackClick: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
+  updateUiState: UpdateUiState? = null,
+  onCheckForUpdates: () -> Unit = {},
+  onOpenUpdateDialog: () -> Unit = {},
+  onRetryUpdate: () -> Unit = {},
 ) {
+  var showKdsUpdatesSheet by remember { mutableStateOf(false) }
   val context = LocalContext.current
   // Play-policy compliant active-screen KDS keep-awake (avoids background dataSync FGS limits on Android 14-16)
   DisposableEffect(context) {
@@ -227,6 +235,14 @@ fun KdsScreen(
               modifier = Modifier.minimumInteractiveComponentSize().testTag("kds_refresh_button"),
             ) {
               Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
+            }
+            if (updateUiState != null) {
+              IconButton(
+                onClick = { showKdsUpdatesSheet = true },
+                modifier = Modifier.minimumInteractiveComponentSize().testTag("kds_update_button"),
+              ) {
+                Icon(Icons.Filled.SystemUpdate, contentDescription = stringResource(R.string.update_kds_cd))
+              }
             }
             if (onSignOut != null) {
               IconButton(
@@ -420,6 +436,35 @@ fun KdsScreen(
                 }
               }
             }
+          }
+        }
+      }
+    }
+
+    if (showKdsUpdatesSheet && updateUiState != null) {
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f))
+          .padding(20.dp)
+          .testTag("kds_updates_dialog"),
+        contentAlignment = Alignment.Center,
+      ) {
+        Column(
+          verticalArrangement = Arrangement.spacedBy(10.dp),
+          horizontalAlignment = Alignment.End,
+        ) {
+          AppUpdatesSettingsCard(
+            uiState = updateUiState,
+            onCheckForUpdates = onCheckForUpdates,
+            onOpenUpdateDialog = {
+              showKdsUpdatesSheet = false
+              onOpenUpdateDialog()
+            },
+            onRetry = onRetryUpdate,
+          )
+          Button(onClick = { showKdsUpdatesSheet = false }) {
+            Text(stringResource(R.string.action_close))
           }
         }
       }

@@ -16,6 +16,13 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 -keep class com.example.navigation.** { *; }
+-keep,includedescriptorclasses class com.example.update.**$$serializer { *; }
+-keepclassmembers class com.example.update.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.example.update.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
 
 # Room Database
 -keep class * extends androidx.room.RoomDatabase

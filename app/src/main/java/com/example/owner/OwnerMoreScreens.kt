@@ -43,6 +43,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.PizzoraMonoBody
+import com.example.update.AppUpdatesSettingsCard
+import com.example.update.UpdateUiState
 import com.pizzora.contracts.StaffMemberDto
 import com.pizzora.contracts.UpdateRestaurantSettingsRequest
 import com.pizzora.contracts.UserRole
@@ -55,6 +57,10 @@ fun OwnerSettingsAndStaffScreen(
   onCreateStaff: (email: String, password: String, fullName: String, phone: String, role: UserRole, employeeCode: String) -> Unit,
   onToggleStaffActive: (StaffMemberDto) -> Unit,
   modifier: Modifier = Modifier,
+  updateUiState: UpdateUiState? = null,
+  onCheckForUpdates: () -> Unit = {},
+  onOpenUpdateDialog: () -> Unit = {},
+  onRetryUpdate: () -> Unit = {},
 ) {
   val settings = uiState.settings ?: uiState.dashboard?.settings
   var storeName by rememberSaveable { mutableStateOf(settings?.storeName ?: "PIZZORA Artisanal Kitchen") }
@@ -163,6 +169,17 @@ fun OwnerSettingsAndStaffScreen(
                 Text("Save Store Settings")
               }
             }
+          }
+        }
+
+        if (updateUiState != null) {
+          item(key = "owner_app_updates_card") {
+            AppUpdatesSettingsCard(
+              uiState = updateUiState,
+              onCheckForUpdates = onCheckForUpdates,
+              onOpenUpdateDialog = onOpenUpdateDialog,
+              onRetry = onRetryUpdate,
+            )
           }
         }
 

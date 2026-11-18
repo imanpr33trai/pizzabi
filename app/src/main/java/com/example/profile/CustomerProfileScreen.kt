@@ -60,6 +60,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.ui.theme.PizzoraMonoBody
+import com.example.update.AppUpdatesSettingsCard
+import com.example.update.UpdateUiState
 import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.UserProfileDto
@@ -89,6 +91,10 @@ fun CustomerProfileScreen(
   onCheckPincode: () -> Unit,
   onSignOut: () -> Unit,
   modifier: Modifier = Modifier,
+  updateUiState: UpdateUiState? = null,
+  onCheckForUpdates: () -> Unit = {},
+  onOpenUpdateDialog: () -> Unit = {},
+  onRetryUpdate: () -> Unit = {},
 ) {
   Box(modifier = modifier.fillMaxSize()) {
   Column(
@@ -207,6 +213,17 @@ fun CustomerProfileScreen(
             onSetDefault = { onSetDefaultAddress(address) },
             onEdit = { onOpenEditAddress(address) },
             onDelete = { onDeleteAddress(address.id) },
+          )
+        }
+      }
+
+      if (updateUiState != null) {
+        item(key = "profile_app_updates_card") {
+          AppUpdatesSettingsCard(
+            uiState = updateUiState,
+            onCheckForUpdates = onCheckForUpdates,
+            onOpenUpdateDialog = onOpenUpdateDialog,
+            onRetry = onRetryUpdate,
           )
         }
       }

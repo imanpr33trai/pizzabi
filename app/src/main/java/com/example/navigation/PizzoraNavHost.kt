@@ -1,6 +1,7 @@
 package com.example.navigation
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -103,6 +104,9 @@ import com.example.profile.CustomerProfileScreen
 import com.example.profile.ProfileViewModel
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
+import com.example.update.UpdateHostOverlay
+import com.example.update.UpdateUiState
+import com.example.update.UpdateViewModel
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.PaymentMethod
@@ -142,6 +146,7 @@ fun PizzoraApp(
   ownerViewModel: OwnerViewModel? = null,
   profileViewModel: ProfileViewModel? = null,
   notificationsViewModel: NotificationsViewModel? = null,
+  updateViewModel: UpdateViewModel? = null,
   razorpayCheckoutLauncher: RazorpayCheckoutLauncher = AndroidRazorpayCheckoutLauncher(),
   openNotificationsRequested: Boolean = false,
   onNotificationsRequestHandled: () -> Unit = {},
@@ -149,7 +154,12 @@ fun PizzoraApp(
   val session by authViewModel.sessionFlow.collectAsStateWithLifecycle()
   val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
   val kdsMuted by authViewModel.kdsSoundMuted.collectAsStateWithLifecycle()
+  val updateUiState = updateViewModel?.uiState?.collectAsStateWithLifecycle()?.value
   val isKdsSession = session?.user?.role == UserRole.KITCHEN_STAFF
+
+  LaunchedEffect(updateViewModel) {
+    updateViewModel?.checkForUpdatesIfDue()
+  }
 
   PizzoraTheme(kdsMode = isKdsSession) {
     val navController = rememberNavController()
@@ -213,10 +223,11 @@ fun PizzoraApp(
       }
     }
 
-    NavHost(
-      navController = navController,
-      startDestination = LoginRoute,
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+      NavHost(
+        navController = navController,
+        startDestination = LoginRoute,
+      ) {
       composable<LoginRoute> {
         LoginScreen(
           uiState = uiState,
@@ -280,6 +291,10 @@ fun PizzoraApp(
               openNotificationsRequested = openNotificationsRequested,
               onNotificationsRequestHandled = onNotificationsRequestHandled,
               onSignOut = authViewModel::logout,
+              updateUiState = updateUiState,
+              onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
+              onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
+              onRetryUpdate = { updateViewModel?.retryFailedAction() },
             )
           }
         }
@@ -294,6 +309,10 @@ fun PizzoraApp(
               isMuted = kdsMuted,
               onToggleMute = { authViewModel.setKdsSoundMuted(!kdsMuted) },
               onSignOut = authViewModel::logout,
+              updateUiState = updateUiState,
+              onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
+              onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
+              onRetryUpdate = { updateViewModel?.retryFailedAction() },
             )
           }
         }
@@ -310,9 +329,25 @@ fun PizzoraApp(
               openNotificationsRequested = openNotificationsRequested,
               onNotificationsRequestHandled = onNotificationsRequestHandled,
               onSignOut = authViewModel::logout,
+              updateUiState = updateUiState,
+              onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
+              onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
+              onRetryUpdate = { updateViewModel?.retryFailedAction() },
             )
           }
         }
+      }
+    }
+
+      if (updateViewModel != null && updateUiState != null) {
+        UpdateHostOverlay(
+          uiState = updateUiState,
+          onStartDownloadOrInstall = updateViewModel::startUpdateDownloadAndInstall,
+          onCancelDownload = updateViewModel::cancelDownload,
+          onDismissOptional = updateViewModel::dismissOptionalUpdateDialog,
+          onRequestInstallPermission = updateViewModel::requestInstallPermission,
+          onRetry = updateViewModel::retryFailedAction,
+        )
       }
     }
   }
@@ -333,6 +368,10 @@ fun CustomerRoleShell(
   openNotificationsRequested: Boolean = false,
   onNotificationsRequestHandled: () -> Unit = {},
   onSignOut: () -> Unit,
+  updateUiState: UpdateUiState? = null,
+  onCheckForUpdates: () -> Unit = {},
+  onOpenUpdateDialog: () -> Unit = {},
+  onRetryUpdate: () -> Unit = {},
 ) {
   val context = LocalContext.current
   val tabs = listOf(
@@ -660,6 +699,10 @@ fun CustomerRoleShell(
               onCheckPincode = { profileViewModel.checkPincodeServiceability() },
               onSignOut = onSignOut,
               modifier = Modifier.weight(1f),
+              updateUiState = updateUiState,
+              onCheckForUpdates = onCheckForUpdates,
+              onOpenUpdateDialog = onOpenUpdateDialog,
+              onRetryUpdate = onRetryUpdate,
             )
           }
           else -> {
@@ -708,6 +751,10 @@ fun KdsRoleShell(
   isMuted: Boolean,
   onToggleMute: () -> Unit,
   onSignOut: () -> Unit,
+  updateUiState: UpdateUiState? = null,
+  onCheckForUpdates: () -> Unit = {},
+  onOpenUpdateDialog: () -> Unit = {},
+  onRetryUpdate: () -> Unit = {},
 ) {
   if (kdsViewModel != null) {
     val kdsState by kdsViewModel.uiState.collectAsStateWithLifecycle()
@@ -728,6 +775,10 @@ fun KdsRoleShell(
       onTogglePriority = kdsViewModel::togglePriority,
       onSignOut = onSignOut,
       modifier = Modifier.testTag("kds_shell_root"),
+      updateUiState = updateUiState,
+      onCheckForUpdates = onCheckForUpdates,
+      onOpenUpdateDialog = onOpenUpdateDialog,
+      onRetryUpdate = onRetryUpdate,
     )
     return
   }
@@ -790,6 +841,10 @@ fun OwnerRoleShell(
   openNotificationsRequested: Boolean = false,
   onNotificationsRequestHandled: () -> Unit = {},
   onSignOut: () -> Unit,
+  updateUiState: UpdateUiState? = null,
+  onCheckForUpdates: () -> Unit = {},
+  onOpenUpdateDialog: () -> Unit = {},
+  onRetryUpdate: () -> Unit = {},
 ) {
   val context = LocalContext.current
   val tabs = listOf(
@@ -1029,6 +1084,10 @@ fun OwnerRoleShell(
               onCreateStaff = ownerViewModel::createStaff,
               onToggleStaffActive = ownerViewModel::toggleStaffActive,
               modifier = Modifier.weight(1f),
+              updateUiState = updateUiState,
+              onCheckForUpdates = onCheckForUpdates,
+              onOpenUpdateDialog = onOpenUpdateDialog,
+              onRetryUpdate = onRetryUpdate,
             )
           }
         }
