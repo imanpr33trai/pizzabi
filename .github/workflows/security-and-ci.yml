@@ -114,6 +114,12 @@ jobs:
               sys.exit(1)
           PYEOF
 
+      - name: Validate release-policy.json and release metadata script
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/generate-release-metadata.py --validate-policy-only --policy-file release-policy.json
+
       - name: Preflight summary
         shell: bash
         run: |
@@ -791,13 +797,19 @@ jobs:
       version_code: ${{ steps.version.outputs.version_code }}
       is_prerelease: ${{ steps.version.outputs.is_prerelease }}
       apk_filename: ${{ steps.package.outputs.apk_filename }}
+      apk_sha256: ${{ steps.package.outputs.apk_sha256 }}
+      apk_size_bytes: ${{ steps.package.outputs.apk_size_bytes }}
     steps:
-      - name: Check out source
+      - name: Check out source (with full tag history for monotonic version checks and notes)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Validate semantic version tag and derive Android version metadata
+      - name: Validate semantic version tag, derive Android version metadata, and enforce monotonic versionCode
         id: version
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           TAG="${{ github.ref_name }}"
@@ -822,15 +834,53 @@ jobs:
             exit 1
           fi
 
+          if [ -n "$PRERELEASE" ]; then
+            IS_PRERELEASE="true"
+          else
+            IS_PRERELEASE="false"
+          fi
+
+          # Enforce monotonically increasing versionCode against all prior stable v* tags.
+          MAX_PREV_CODE=0
+          PREV_STABLE_TAG=""
+          while IFS= read -r existing_tag; do
+            [ -z "$existing_tag" ] && continue
+            [ "$existing_tag" = "$TAG" ] && continue
+            if [[ "$existing_tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              e_maj="${BASH_REMATCH[1]}"
+              e_min="${BASH_REMATCH[2]}"
+              e_pat="${BASH_REMATCH[3]}"
+              if [ "$e_min" -lt 1000 ] && [ "$e_pat" -lt 1000 ]; then
+                e_code=$(( e_maj * 1000000 + e_min * 1000 + e_pat ))
+                if [ "$e_code" -gt "$MAX_PREV_CODE" ]; then
+                  MAX_PREV_CODE="$e_code"
+                  PREV_STABLE_TAG="$existing_tag"
+                fi
+              fi
+            fi
+          done < <(git tag -l 'v*')
+
+          if [ "$IS_PRERELEASE" = "false" ] && [ "$MAX_PREV_CODE" -gt 0 ] && [ "$VERSION_CODE" -le "$MAX_PREV_CODE" ]; then
+            echo "ERROR: Stable tag '$TAG' versionCode=$VERSION_CODE must be strictly greater than existing stable tag '$PREV_STABLE_TAG' versionCode=$MAX_PREV_CODE." >&2
+            exit 1
+          fi
+
+          # Cross-check against latest published GitHub Release if one already exists.
+          LATEST_GH_TAG="$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+          if [ -n "$LATEST_GH_TAG" ] && [ "$LATEST_GH_TAG" != "$TAG" ] && [[ "$LATEST_GH_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            l_code=$(( BASH_REMATCH[1] * 1000000 + BASH_REMATCH[2] * 1000 + BASH_REMATCH[3] ))
+            if [ "$IS_PRERELEASE" = "false" ] && [ "$VERSION_CODE" -le "$l_code" ]; then
+              echo "ERROR: Stable tag '$TAG' versionCode=$VERSION_CODE must be strictly greater than latest GitHub release '$LATEST_GH_TAG' versionCode=$l_code." >&2
+              exit 1
+            fi
+          fi
+
           echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
-          if [ -n "$PRERELEASE" ]; then
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Resolved release versionName=$VERSION_NAME versionCode=$VERSION_CODE"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "prev_stable_tag=$PREV_STABLE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved release versionName=$VERSION_NAME versionCode=$VERSION_CODE prerelease=$IS_PRERELEASE prevStableTag=${PREV_STABLE_TAG:-none}"
 
       - name: Validate required production signing secrets and decode upload keystore
         id: signing
@@ -931,20 +981,96 @@ jobs:
             exit 1
           fi
 
+          # Verify APK package identity, versionCode, versionName, and minSdk via aapt2 when present.
+          AAPT2="$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name aapt2 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "$AAPT2" ] && [ -x "$AAPT2" ]; then
+            BADGING="$("$AAPT2" dump badging "$APK_SRC")"
+            echo "$BADGING" | head -n 5
+            if ! echo "$BADGING" | grep -q "name='com.aistudio.pizzora.xkqzmw'"; then
+              echo "ERROR: Release APK package name does not match com.aistudio.pizzora.xkqzmw." >&2
+              exit 1
+            fi
+            if ! echo "$BADGING" | grep -q "versionCode='${{ steps.version.outputs.version_code }}'"; then
+              echo "ERROR: Release APK versionCode does not match ${{ steps.version.outputs.version_code }}." >&2
+              exit 1
+            fi
+            if ! echo "$BADGING" | grep -q "versionName='${{ steps.version.outputs.version_name }}'"; then
+              echo "ERROR: Release APK versionName does not match ${{ steps.version.outputs.version_name }}." >&2
+              exit 1
+            fi
+          fi
+
           mkdir -p release-apks
           APK_FILENAME="pizzora-${{ steps.version.outputs.tag_name }}.apk"
           cp "$APK_SRC" "release-apks/${APK_FILENAME}"
+
+          # Build release notes from annotated tag message or commit history since previous stable tag.
+          TAG_NAME="${{ steps.version.outputs.tag_name }}"
+          PREV_TAG="${{ steps.version.outputs.prev_stable_tag }}"
+          TAG_BODY="$(git for-each-ref "refs/tags/${TAG_NAME}" --format='%(contents)' | sed '/^-----BEGIN PGP SIGNATURE-----/,$d' | sed -e 's/[[:space:]]*$//')"
+          if [ -n "$TAG_BODY" ] && [ "$TAG_BODY" != "$(git log -1 --format=%B "$TAG_NAME" | sed -e 's/[[:space:]]*$//')" ]; then
+            printf '%s\n' "$TAG_BODY" > release-apks/release-notes.md
+          elif [ -n "$PREV_TAG" ]; then
+            {
+              echo "Changes since ${PREV_TAG}:"
+              echo ""
+              git log --no-merges --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD" | head -n 40
+            } > release-apks/release-notes.md
+          else
+            {
+              echo "PIZZORA ${TAG_NAME} release:"
+              echo ""
+              git log --no-merges --pretty=format:"- %s (%h)" -n 20 HEAD
+            } > release-apks/release-notes.md
+          fi
+
+          RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG_NAME}"
+          python3 .github/scripts/generate-release-metadata.py \
+            --tag "$TAG_NAME" \
+            --version-name "${{ steps.version.outputs.version_name }}" \
+            --version-code "${{ steps.version.outputs.version_code }}" \
+            --application-id "com.aistudio.pizzora.xkqzmw" \
+            --min-sdk 24 \
+            --abis "arm64-v8a,x86_64" \
+            --apk-path "release-apks/${APK_FILENAME}" \
+            --apk-filename "$APK_FILENAME" \
+            --release-url "$RELEASE_URL" \
+            --policy-file "release-policy.json" \
+            --prerelease "${{ steps.version.outputs.is_prerelease }}" \
+            --release-notes-file "release-apks/release-notes.md" \
+            --out-dir "release-apks"
+
+          (cd release-apks && sha256sum -c SHA256SUMS.txt)
+          python3 .github/scripts/generate-release-metadata.py \
+            --verify \
+            --version-name "${{ steps.version.outputs.version_name }}" \
+            --version-code "${{ steps.version.outputs.version_code }}" \
+            --application-id "com.aistudio.pizzora.xkqzmw" \
+            --apk-path "release-apks/${APK_FILENAME}" \
+            --apk-filename "$APK_FILENAME" \
+            --prerelease "${{ steps.version.outputs.is_prerelease }}" \
+            --out-dir "release-apks"
+
+          APK_SHA256="$(sha256sum "release-apks/${APK_FILENAME}" | awk '{print $1}')"
+          APK_SIZE_BYTES="$(wc -c < "release-apks/${APK_FILENAME}" | tr -d ' ')"
+
           echo "apk_filename=${APK_FILENAME}" >> "$GITHUB_OUTPUT"
+          echo "apk_sha256=${APK_SHA256}" >> "$GITHUB_OUTPUT"
+          echo "apk_size_bytes=${APK_SIZE_BYTES}" >> "$GITHUB_OUTPUT"
 
       - name: Clean up temporary upload keystore
         if: always()
         run: rm -f "${RUNNER_TEMP}/pizzora-upload-key.jks"
 
-      - name: Upload Signed Release APK Artifact
+      - name: Upload Signed Release APK & Update Metadata Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pizzora-release-${{ steps.version.outputs.tag_name }}
-          path: release-apks/${{ steps.package.outputs.apk_filename }}
+          path: |
+            release-apks/${{ steps.package.outputs.apk_filename }}
+            release-apks/update.json
+            release-apks/SHA256SUMS.txt
+            release-apks/release-notes.md
           retention-days: 30
 
   publish-github-release:
@@ -956,24 +1082,64 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download Signed Release APK
+      - name: Download Signed Release APK and Update Metadata
         uses: actions/download-artifact@v4
         with:
           name: pizzora-release-${{ needs.build-release-apk.outputs.tag_name }}
           path: release-assets
 
-      - name: Publish GitHub Release for ${{ needs.build-release-apk.outputs.tag_name }}
+      - name: Verify release assets, finalize timestamp, and publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.build-release-apk.outputs.tag_name }}
-          APK_FILE: release-assets/${{ needs.build-release-apk.outputs.apk_filename }}
+          VERSION_NAME: ${{ needs.build-release-apk.outputs.version_name }}
+          VERSION_CODE: ${{ needs.build-release-apk.outputs.version_code }}
+          APK_FILENAME: ${{ needs.build-release-apk.outputs.apk_filename }}
+          EXPECTED_SHA256: ${{ needs.build-release-apk.outputs.apk_sha256 }}
           IS_PRERELEASE: ${{ needs.build-release-apk.outputs.is_prerelease }}
         run: |
           set -euo pipefail
-          if [ ! -f "$APK_FILE" ]; then
-            echo "ERROR: Signed release APK '$APK_FILE' not found." >&2
+          APK_FILE="release-assets/${APK_FILENAME}"
+          UPDATE_JSON="release-assets/update.json"
+          CHECKSUMS_FILE="release-assets/SHA256SUMS.txt"
+          NOTES_FILE="release-assets/release-notes.md"
+
+          for required in "$APK_FILE" "$UPDATE_JSON" "$CHECKSUMS_FILE"; do
+            if [ ! -f "$required" ]; then
+              echo "ERROR: Required release asset '$required' not found." >&2
+              exit 1
+            fi
+          done
+
+          (cd release-assets && sha256sum -c SHA256SUMS.txt)
+          ACTUAL_SHA256="$(sha256sum "$APK_FILE" | awk '{print $1}')"
+          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "ERROR: APK SHA-256 mismatch ($ACTUAL_SHA256 != $EXPECTED_SHA256)." >&2
             exit 1
           fi
+
+          # Refresh publishedAt to exact release publication UTC timestamp and verify update.json consistency.
+          PUBLISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - "$UPDATE_JSON" "$VERSION_NAME" "$VERSION_CODE" "$APK_FILENAME" "$ACTUAL_SHA256" "$IS_PRERELEASE" "$PUBLISHED_AT" <<'PYEOF'
+          import json, sys
+          path, v_name, v_code_s, apk_name, sha256, is_pre_s, pub_at = sys.argv[1:8]
+          v_code = int(v_code_s)
+          is_pre = (is_pre_s == "true")
+          with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+          assert data["schemaVersion"] == 1, f"bad schemaVersion: {data.get('schemaVersion')}"
+          assert data["applicationId"] == "com.aistudio.pizzora.xkqzmw"
+          assert data["versionName"] == v_name
+          assert data["versionCode"] == v_code
+          assert data["apkAssetName"] == apk_name
+          assert data["apkSha256"] == sha256
+          assert data["prerelease"] == is_pre
+          data["publishedAt"] = pub_at
+          with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+            fh.write("\n")
+          print("Verified and timestamped update.json:", json.dumps(data))
+          PYEOF
 
           PRERELEASE_FLAG=""
           if [ "$IS_PRERELEASE" = "true" ]; then
@@ -982,12 +1148,37 @@ jobs:
             PRERELEASE_FLAG="--latest"
           fi
 
-          gh release create "$TAG_NAME" "$APK_FILE" \
+          NOTES_ARGS=(--generate-notes)
+          if [ -s "$NOTES_FILE" ]; then
+            NOTES_ARGS=(--notes-file "$NOTES_FILE")
+          fi
+
+          gh release create "$TAG_NAME" "$APK_FILE" "$UPDATE_JSON" "$CHECKSUMS_FILE" \
             --repo "${{ github.repository }}" \
             --title "PIZZORA $TAG_NAME" \
-            --generate-notes \
+            "${NOTES_ARGS[@]}" \
             --verify-tag \
             $PRERELEASE_FLAG
+
+          # Post-publish verification: confirm all 3 assets exist and draft/prerelease flags match.
+          RELEASE_JSON="$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json assets,isDraft,isPrerelease,url)"
+          echo "$RELEASE_JSON"
+          python3 - "$RELEASE_JSON" "$APK_FILENAME" "$IS_PRERELEASE" <<'PYEOF'
+          import json, sys
+          rel = json.loads(sys.argv[1])
+          apk_name = sys.argv[2]
+          expected_pre = (sys.argv[3] == "true")
+          if rel.get("isDraft"):
+            raise SystemExit("ERROR: Published release must not be a draft.")
+          if rel.get("isPrerelease") != expected_pre:
+            raise SystemExit(f"ERROR: isPrerelease mismatch: {rel.get('isPrerelease')} != {expected_pre}")
+          asset_names = {a["name"] for a in rel.get("assets", [])}
+          expected = {apk_name, "update.json", "SHA256SUMS.txt"}
+          missing = expected - asset_names
+          if missing:
+            raise SystemExit(f"ERROR: Published GitHub Release missing assets: {sorted(missing)}")
+          print(f"Verified published GitHub Release ({rel.get('url')}) contains all 3 assets: {sorted(expected)}")
+          PYEOF
 
   # ---------------------------------------------------------------------------
   # Final observability: one CI summary across all stages. Never fails the run;

@@ -49,6 +49,20 @@ import com.example.owner.OwnerViewModel
 import com.example.profile.NetworkProfileRepository
 import com.example.profile.ProfileRepository
 import com.example.profile.ProfileViewModel
+import com.example.update.AndroidInstalledAppInfoProvider
+import com.example.update.AndroidPackageApkInstaller
+import com.example.update.ApkDownloader
+import com.example.update.ApkInstallController
+import com.example.update.ApkIntegrityVerifier
+import com.example.update.ApkVerifier
+import com.example.update.DataStoreUpdatePreferencesStorage
+import com.example.update.GitHubUpdateRepository
+import com.example.update.InstalledAppInfoProvider
+import com.example.update.OkHttpApkDownloadManager
+import com.example.update.UpdatePreferencesStorage
+import com.example.update.UpdateRepository
+import com.example.update.UpdateUrlPolicy
+import com.example.update.UpdateViewModel
 import io.ktor.client.engine.HttpClientEngine
 
 class AppContainer(
@@ -202,6 +216,40 @@ class AppContainer(
     )
   }
 
+  val installedAppInfoProvider: InstalledAppInfoProvider by lazy {
+    AndroidInstalledAppInfoProvider(appContext)
+  }
+
+  val updatePreferencesStorage: UpdatePreferencesStorage by lazy {
+    DataStoreUpdatePreferencesStorage(appContext)
+  }
+
+  val updateUrlPolicy: UpdateUrlPolicy by lazy {
+    UpdateUrlPolicy()
+  }
+
+  val updateRepository: UpdateRepository by lazy {
+    GitHubUpdateRepository(
+      preferencesStorage = updatePreferencesStorage,
+      urlPolicy = updateUrlPolicy,
+    )
+  }
+
+  val apkDownloader: ApkDownloader by lazy {
+    OkHttpApkDownloadManager(
+      context = appContext,
+      urlPolicy = updateUrlPolicy,
+    )
+  }
+
+  val apkVerifier: ApkVerifier by lazy {
+    ApkIntegrityVerifier(appContext)
+  }
+
+  val apkInstaller: ApkInstallController by lazy {
+    AndroidPackageApkInstaller(appContext)
+  }
+
   fun authViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -313,6 +361,23 @@ class AppContainer(
         tokenStorage = tokenStorage,
         realtimeEventStream = webSocketEventClient,
         notificationPoster = notificationHelper,
+      ) as T
+    }
+  }
+
+  fun updateViewModelFactory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+      require(modelClass.isAssignableFrom(UpdateViewModel::class.java)) {
+        "Unknown ViewModel class: ${modelClass.name}"
+      }
+      return UpdateViewModel(
+        updateRepository = updateRepository,
+        apkDownloader = apkDownloader,
+        apkVerifier = apkVerifier,
+        apkInstaller = apkInstaller,
+        preferencesStorage = updatePreferencesStorage,
+        installedAppInfoProvider = installedAppInfoProvider,
       ) as T
     }
   }

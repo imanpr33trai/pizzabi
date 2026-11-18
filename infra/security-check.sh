@@ -15,10 +15,15 @@ if grep -rnEi 'firebase' app/build.gradle.kts backend/build.gradle.kts gradle/li
   exit 1
 fi
 
-echo "[2/8] Checking AndroidManifest.xml for prohibited Play permissions and exported components..."
-if grep -rnE 'READ_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|REQUEST_INSTALL_PACKAGES|QUERY_ALL_PACKAGES' \
+echo "[2/8] Checking AndroidManifest.xml for prohibited permissions and exported components..."
+if grep -rnE 'READ_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|QUERY_ALL_PACKAGES' \
   app/src/main/AndroidManifest.xml; then
-  echo "ERROR: Prohibited storage/install permission found in AndroidManifest.xml."
+  echo "ERROR: Prohibited storage or package-query permission found in AndroidManifest.xml."
+  exit 1
+fi
+INSTALL_PERM_COUNT="$(grep -c 'android.permission.REQUEST_INSTALL_PACKAGES' app/src/main/AndroidManifest.xml || true)"
+if [ "$INSTALL_PERM_COUNT" -gt 1 ]; then
+  echo "ERROR: Duplicate REQUEST_INSTALL_PACKAGES declaration in AndroidManifest.xml."
   exit 1
 fi
 if grep -q 'android:usesCleartextTraffic="true"' app/src/main/AndroidManifest.xml; then

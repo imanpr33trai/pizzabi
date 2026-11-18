@@ -2,12 +2,14 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="datastore/pizzora_secure_prefs.preferences_pb" />
+        <exclude domain="file" path="datastore/pizzora_update_prefs.preferences_pb" />
         <exclude domain="database" path="pizzora.db" />
         <exclude domain="database" path="pizzora.db-wal" />
         <exclude domain="database" path="pizzora.db-shm" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="datastore/pizzora_secure_prefs.preferences_pb" />
+        <exclude domain="file" path="datastore/pizzora_update_prefs.preferences_pb" />
         <exclude domain="database" path="pizzora.db" />
         <exclude domain="database" path="pizzora.db-wal" />
         <exclude domain="database" path="pizzora.db-shm" />
