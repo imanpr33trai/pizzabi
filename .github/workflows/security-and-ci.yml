@@ -1007,6 +1007,15 @@ jobs:
           # Build release notes from annotated tag message or commit history since previous stable tag.
           TAG_NAME="${{ steps.version.outputs.tag_name }}"
           PREV_TAG="${{ steps.version.outputs.prev_stable_tag }}"
+          # actions/checkout resolves tag workflows to the tagged commit, which can leave a
+          # lightweight local tag ref. Re-fetch the annotated tag object so %(contents) exposes
+          # the changelog instead of silently falling back to the commit log.
+          git fetch --force origin "+refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}"
+          if [ "$(git cat-file -t "refs/tags/${TAG_NAME}")" = "tag" ]; then
+            echo "Using annotated tag message for ${TAG_NAME} release notes."
+          else
+            echo "::warning::Tag ${TAG_NAME} is lightweight; release notes will fall back to commit history."
+          fi
           TAG_BODY="$(git for-each-ref "refs/tags/${TAG_NAME}" --format='%(contents)' | sed '/^-----BEGIN PGP SIGNATURE-----/,$d' | sed -e 's/[[:space:]]*$//')"
           if [ -n "$TAG_BODY" ] && [ "$TAG_BODY" != "$(git log -1 --format=%B "$TAG_NAME" | sed -e 's/[[:space:]]*$//')" ]; then
             printf '%s\n' "$TAG_BODY" > release-apks/release-notes.md
