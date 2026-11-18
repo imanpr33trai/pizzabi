@@ -18,12 +18,14 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.ui.theme.PizzoraTheme
 import java.io.File
 import java.security.MessageDigest
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -71,12 +73,27 @@ class Phase20UpdateRobolectricTest {
   private fun sha256Hex(bytes: ByteArray): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
+  /**
+   * Idles the main looper until [condition] becomes true. Coroutines launched on
+   * Dispatchers.Main can resume only after their DataStore/IO work completes and
+   * posts back to the looper, so a single idle() is racy.
+   */
+  private fun idleUntil(timeoutMs: Long = 5_000, condition: () -> Boolean) {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (System.currentTimeMillis() < deadline) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      if (condition()) return
+      Thread.sleep(10)
+    }
+    throw AssertionError("Condition not met within ${timeoutMs}ms")
+  }
+
   @Test
   fun `broadcast receiver maps PackageInstaller status codes and emits status bus events`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val receiver = UpdateInstallStatusReceiver()
 
-    val confirmEventDef = async { UpdateInstallStatusBus.events.first() }
+    val confirmEventDef = async(start = CoroutineStart.UNDISPATCHED) { UpdateInstallStatusBus.events.first() }
     val confirmPayload = Intent("com.example.CONFIRM_INSTALL")
     receiver.onReceive(
       context,
@@ -86,11 +103,11 @@ class Phase20UpdateRobolectricTest {
         putExtra(Intent.EXTRA_INTENT, confirmPayload)
       },
     )
-    val pending = confirmEventDef.await()
+    val pending = withTimeout(5_000) { confirmEventDef.await() }
     assertTrue(pending is InstallStatusEvent.PendingUserAction)
     assertEquals(7, (pending as InstallStatusEvent.PendingUserAction).sessionId)
 
-    val cancelEventDef = async { UpdateInstallStatusBus.events.first() }
+    val cancelEventDef = async(start = CoroutineStart.UNDISPATCHED) { UpdateInstallStatusBus.events.first() }
     receiver.onReceive(
       context,
       Intent().apply {
@@ -98,9 +115,9 @@ class Phase20UpdateRobolectricTest {
         putExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE_ABORTED)
       },
     )
-    assertTrue(cancelEventDef.await() is InstallStatusEvent.Cancelled)
+    assertTrue(withTimeout(5_000) { cancelEventDef.await() } is InstallStatusEvent.Cancelled)
 
-    val conflictEventDef = async { UpdateInstallStatusBus.events.first() }
+    val conflictEventDef = async(start = CoroutineStart.UNDISPATCHED) { UpdateInstallStatusBus.events.first() }
     receiver.onReceive(
       context,
       Intent().apply {
@@ -108,10 +125,10 @@ class Phase20UpdateRobolectricTest {
         putExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE_CONFLICT)
       },
     )
-    val conflict = conflictEventDef.await() as InstallStatusEvent.Failed
+    val conflict = withTimeout(5_000) { conflictEventDef.await() } as InstallStatusEvent.Failed
     assertEquals(UpdateFailureReason.SIGNATURE_MISMATCH, conflict.reason)
 
-    val successEventDef = async { UpdateInstallStatusBus.events.first() }
+    val successEventDef = async(start = CoroutineStart.UNDISPATCHED) { UpdateInstallStatusBus.events.first() }
     receiver.onReceive(
       context,
       Intent().apply {
@@ -119,7 +136,7 @@ class Phase20UpdateRobolectricTest {
         putExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_SUCCESS)
       },
     )
-    assertTrue(successEventDef.await() is InstallStatusEvent.Succeeded)
+    assertTrue(withTimeout(5_000) { successEventDef.await() } is InstallStatusEvent.Succeeded)
   }
 
   @Test
@@ -261,14 +278,12 @@ class Phase20UpdateRobolectricTest {
     // User grants unknown sources permission in Settings and returns -> onHostResumed auto-launches install
     fakeInstaller.installPermissionGranted = true
     recreatedVm.onHostResumed()
-    Shadows.shadowOf(Looper.getMainLooper()).idle()
-    assertTrue(recreatedVm.uiState.value.state is UpdateState.Installing)
+    idleUntil { recreatedVm.uiState.value.state is UpdateState.Installing }
     assertEquals(1, fakeInstaller.startInstallCallCount)
 
     // Installation cancelled by user transitions cleanly and allows retry
     fakeInstaller.emitStatus(InstallStatusEvent.Cancelled(99, "Installation cancelled by user."))
-    Shadows.shadowOf(Looper.getMainLooper()).idle()
-    assertTrue(recreatedVm.uiState.value.state is UpdateState.Cancelled)
+    idleUntil { recreatedVm.uiState.value.state is UpdateState.Cancelled }
 
     storage.clearAll()
   }
