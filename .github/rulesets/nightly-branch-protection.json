@@ -1,0 +1,77 @@
+{
+  "name": "nightly-branch-protection",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "refs/heads/nightly"
+      ],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [],
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "Stage 0 — Security & Repository Preflight"
+          },
+          {
+            "context": "Stage 1 — Rust Formatting, Clippy & Workspace Check"
+          },
+          {
+            "context": "Stage 1 — Kotlin Shared Contracts & Backend Tests"
+          },
+          {
+            "context": "Stage 1 — Android Build Preparation (JDK, Rust, UniFFI Bindgen)"
+          },
+          {
+            "context": "Stage 2 — Rust/Kotlin Parity Gate (Golden Vectors & Wire Contracts)"
+          },
+          {
+            "context": "Stage 3 — Rust Workspace Unit Tests"
+          },
+          {
+            "context": "Stage 4 — PostgreSQL 18.6 & Redis Integration"
+          },
+          {
+            "context": "Stage 5 — Android Unit & Robolectric Tests"
+          },
+          {
+            "context": "Stage 5 — Android Instrumentation Tests (API 36 Emulator)"
+          },
+          {
+            "context": "Stage 6 — Kotlin Backend Docker (Validate Only) / Build, Validate & Publish Backend Docker Image"
+          },
+          {
+            "context": "Stage 6 — Rust Backend Docker (Validate Only) / Build, Validate & Publish Rust Backend Docker Image"
+          },
+          {
+            "context": "Stage 7 — Build Android Debug Preview APK"
+          }
+        ]
+      }
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "deletion"
+    }
+  ]
+}
