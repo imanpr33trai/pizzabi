@@ -918,4 +918,3 @@ fn custom_pizza_builder_pricing_validation_and_half_and_half_rules() {
     // Prevent unused mutation warning while keeping lookup mutable cleanly if extended later
     let _ = &mut lookup;
 }
-

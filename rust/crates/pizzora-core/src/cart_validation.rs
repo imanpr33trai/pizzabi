@@ -628,22 +628,26 @@ impl CartValidation {
                 }
             }
             if item.is_half_and_half {
-                let rpid = item.right_product_id.ok_or_else(|| DomainError::Validation {
-                    code: "RIGHT_HALF_INVALID",
-                    message: "right_product_id is required when is_half_and_half is true."
-                        .to_owned(),
-                })?;
+                let rpid = item
+                    .right_product_id
+                    .ok_or_else(|| DomainError::Validation {
+                        code: "RIGHT_HALF_INVALID",
+                        message: "right_product_id is required when is_half_and_half is true."
+                            .to_owned(),
+                    })?;
                 if !lookup.products.contains_key(&rpid) {
                     return Err(DomainError::Validation {
                         code: "INVALID_PRODUCT_ID",
                         message: format!("Right product {rpid} does not exist."),
                     });
                 }
-                let rvid = item.right_variant_id.ok_or_else(|| DomainError::Validation {
-                    code: "RIGHT_HALF_INVALID",
-                    message: "right_variant_id is required when is_half_and_half is true."
-                        .to_owned(),
-                })?;
+                let rvid = item
+                    .right_variant_id
+                    .ok_or_else(|| DomainError::Validation {
+                        code: "RIGHT_HALF_INVALID",
+                        message: "right_variant_id is required when is_half_and_half is true."
+                            .to_owned(),
+                    })?;
                 let right_variant_matches = lookup
                     .variants
                     .get(&rvid)
@@ -732,4 +736,3 @@ pub(crate) const fn size_code_str(size: SizeCode) -> &'static str {
         SizeCode::ExtraLarge => "EXTRA_LARGE",
     }
 }
-

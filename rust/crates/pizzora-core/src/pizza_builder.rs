@@ -4,8 +4,8 @@ use crate::cart_validation::{
     parse_uuid, size_code_str, CartItemCustomizationSummary, CartValidationIssue,
     CartValidationIssueCode, CatalogCheeseRef, CatalogProductRef, CatalogRefLookup,
     CatalogSauceRef, CatalogSizeRuleRef, CatalogVariantRef, EvaluatedCartItem,
-    EvaluatedToppingView, OrderItemCustomizationSnapshot, OrderItemToppingSnapshot,
-    ParsedCartItem, PizzaPriceBreakdown, SizeCode, ToppingPlacement,
+    EvaluatedToppingView, OrderItemCustomizationSnapshot, OrderItemToppingSnapshot, ParsedCartItem,
+    PizzaPriceBreakdown, SizeCode, ToppingPlacement,
 };
 use crate::error::DomainError;
 use crate::money::Money;
@@ -186,7 +186,10 @@ pub fn evaluate_single_item(
                     if !rule.is_active {
                         issues.push(CartValidationIssue {
                             code: CartValidationIssueCode::SizeUnavailable,
-                            message: format!("Size {} is currently unavailable.", rule.display_name),
+                            message: format!(
+                                "Size {} is currently unavailable.",
+                                rule.display_name
+                            ),
                         });
                     }
                     rule.clone()
@@ -227,10 +230,12 @@ pub fn evaluate_single_item(
                 code: CartValidationIssueCode::CheeseUnavailable,
                 message: format!("{} is currently unavailable.", c.name),
             }),
-            Some(c) if input.extra_cheese && !c.supports_extra => issues.push(CartValidationIssue {
-                code: CartValidationIssueCode::ExtraCheeseUnavailable,
-                message: format!("Extra cheese is not supported for {}.", c.name),
-            }),
+            Some(c) if input.extra_cheese && !c.supports_extra => {
+                issues.push(CartValidationIssue {
+                    code: CartValidationIssueCode::ExtraCheeseUnavailable,
+                    message: format!("Extra cheese is not supported for {}.", c.name),
+                })
+            }
             Some(_) => {}
         }
     } else if input.extra_cheese {
@@ -328,7 +333,8 @@ pub fn evaluate_single_item(
                             if rv.size_code != lv.size_code {
                                 issues.push(CartValidationIssue {
                                     code: CartValidationIssueCode::RightHalfInvalid,
-                                    message: "Both halves must share the same pizza size.".to_owned(),
+                                    message: "Both halves must share the same pizza size."
+                                        .to_owned(),
                                 });
                             }
                         }
@@ -413,7 +419,10 @@ pub fn evaluate_single_item(
         if !seen_topping_pairs.insert((sel.topping_id, sel.placement)) {
             issues.push(CartValidationIssue {
                 code: CartValidationIssueCode::DuplicateSelection,
-                message: format!("Duplicate topping selection for {}.", sel.placement.as_str()),
+                message: format!(
+                    "Duplicate topping selection for {}.",
+                    sel.placement.as_str()
+                ),
             });
             continue;
         }
@@ -457,7 +466,8 @@ pub fn evaluate_single_item(
             });
         }
 
-        let included_on_left = prod.is_some_and(|p| p.included_topping_ids.contains(&sel.topping_id));
+        let included_on_left =
+            prod.is_some_and(|p| p.included_topping_ids.contains(&sel.topping_id));
         let included_on_right = if input.is_half_and_half {
             right_product.is_some_and(|p| p.included_topping_ids.contains(&sel.topping_id))
         } else {
@@ -856,8 +866,10 @@ impl RawCatalogLookupInput {
         let mut lookup = CatalogRefLookup::default();
         for p in self.products {
             let id = parse_uuid(&p.id, "product_id")?;
-            let default_cheese_id = parse_optional_uuid(p.default_cheese_id.as_deref(), "default_cheese_id")?;
-            let default_sauce_id = parse_optional_uuid(p.default_sauce_id.as_deref(), "default_sauce_id")?;
+            let default_cheese_id =
+                parse_optional_uuid(p.default_cheese_id.as_deref(), "default_cheese_id")?;
+            let default_sauce_id =
+                parse_optional_uuid(p.default_sauce_id.as_deref(), "default_sauce_id")?;
             let mut included_topping_ids = Vec::with_capacity(p.included_topping_ids.len());
             for tid in p.included_topping_ids {
                 included_topping_ids.push(parse_uuid(&tid, "included_topping_id")?);
@@ -964,7 +976,9 @@ pub fn compute_item_signature_from_input(
     raw_lookup: Option<RawCatalogLookupInput>,
 ) -> Result<String, DomainError> {
     let parsed = crate::cart_validation::CartValidation::validate_and_parse_inputs(&[input])?;
-    let lookup = raw_lookup.map(RawCatalogLookupInput::into_lookup).transpose()?;
+    let lookup = raw_lookup
+        .map(RawCatalogLookupInput::into_lookup)
+        .transpose()?;
     Ok(compute_configuration_signature(&parsed[0], lookup.as_ref()))
 }
 

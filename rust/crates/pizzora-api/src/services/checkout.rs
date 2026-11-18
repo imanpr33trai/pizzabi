@@ -359,7 +359,9 @@ impl CheckoutService {
                             .size_rules
                             .get(&sc)
                             .map(|r| r.ingredient_multiplier_bps)
-                            .unwrap_or_else(|| pizzora_core::default_size_rule(sc).ingredient_multiplier_bps)
+                            .unwrap_or_else(|| {
+                                pizzora_core::default_size_rule(sc).ingredient_multiplier_bps
+                            })
                     })
                     .unwrap_or(10_000);
                 CheckoutRecipeLineDemandInput {

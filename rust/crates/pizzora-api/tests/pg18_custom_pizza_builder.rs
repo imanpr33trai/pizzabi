@@ -1,8 +1,8 @@
 mod common;
 
 use pizzora_api::dto::{
-    CartItemInputDto, CartResponseDto, CartToppingInputDto, CategoryDto, CheeseOptionDto,
-    CheckoutRequest, CheckoutResponse, CreateCategoryRequest, CreateCheeseRequest,
+    CartItemInputDto, CartResponseDto, CartToppingInputDto, CategoryDto, CheckoutRequest,
+    CheckoutResponse, CheeseOptionDto, CreateCategoryRequest, CreateCheeseRequest,
     CreateCrustRequest, CreateDeliveryZoneRequest, CreateProductRequest, CreateSauceRequest,
     CreateToppingRequest, CreateVariantRequest, CrustOptionDto, DeliveryZoneDto,
     KdsTicketsResponse, PizzaBuilderQuoteRequest, PizzaBuilderQuoteResponse, PizzaSizeRuleDto,
@@ -14,9 +14,7 @@ use pizzora_core::{
     CartValidationIssueCode, FulfillmentType, OrderStatus, PaymentMethod, ScheduleType, SizeCode,
     ToppingPlacement,
 };
-use pizzora_db::{
-    new_uuid_v4, AddressDto, InventoryItemDto, OrderDetailDto, UpsertAddressRequest,
-};
+use pizzora_db::{new_uuid_v4, AddressDto, InventoryItemDto, OrderDetailDto, UpsertAddressRequest};
 use reqwest::StatusCode;
 use serde_json::json;
 
@@ -41,12 +39,8 @@ async fn pg18_custom_pizza_builder_menu_quote_cart_merge_and_order_snapshot() {
     let (_, kds_tokens) = srv
         .create_and_login_kitchen_staff(&owner_tokens.access_token, tag)
         .await;
-    let (_, _, cust_a_tokens) = srv
-        .register_and_verify_customer(&format!("ba-{tag}"))
-        .await;
-    let (_, _, cust_b_tokens) = srv
-        .register_and_verify_customer(&format!("bb-{tag}"))
-        .await;
+    let (_, _, cust_a_tokens) = srv.register_and_verify_customer(&format!("ba-{tag}")).await;
+    let (_, _, cust_b_tokens) = srv.register_and_verify_customer(&format!("bb-{tag}")).await;
 
     // 1. Owner seeds categories, toppings, cheeses, sauces, crusts, size rules, and two products
     let cat: CategoryDto = srv
@@ -601,7 +595,11 @@ async fn pg18_custom_pizza_builder_menu_quote_cart_merge_and_order_snapshot() {
         .json()
         .await
         .unwrap();
-    assert!(quote.is_valid, "expected valid quote, issues: {:?}", quote.issues);
+    assert!(
+        quote.is_valid,
+        "expected valid quote, issues: {:?}",
+        quote.issues
+    );
     assert_eq!(quote.unit_price_paise, 67_650);
     assert_eq!(quote.price_breakdown.base_price_paise, 49_900);
     assert_eq!(quote.price_breakdown.half_and_half_surcharge_paise, 5_000);

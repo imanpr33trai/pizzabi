@@ -292,7 +292,8 @@ impl RecipeService {
 
             if let Some(cid) = item.cheese_id {
                 if let Some(lines) = cheese_map.get(&cid) {
-                    let cheese_bps = size_bps.saturating_mul(if item.extra_cheese { 3 } else { 2 }) / 2;
+                    let cheese_bps =
+                        size_bps.saturating_mul(if item.extra_cheese { 3 } else { 2 }) / 2;
                     for (ing_id, per_unit) in lines {
                         *required.entry(*ing_id).or_insert(0) +=
                             scale_ceil(*per_unit, qty, cheese_bps);

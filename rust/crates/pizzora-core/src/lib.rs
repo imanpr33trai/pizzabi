@@ -21,12 +21,6 @@ pub use cart_validation::{
     ParsedCartToppingSelection, PizzaPriceBreakdown, SizeCode, ToppingPlacement,
     MAX_CART_LINE_ITEMS, MAX_ITEM_QUANTITY,
 };
-pub use pizza_builder::{
-    compute_configuration_signature, compute_item_signature_from_input, default_size_rule,
-    evaluate_item_from_input, evaluate_single_item, RawCatalogCheeseRef, RawCatalogCrustRef,
-    RawCatalogLookupInput, RawCatalogProductRef, RawCatalogSauceRef, RawCatalogToppingRef,
-    RawCatalogVariantRef,
-};
 pub use causal_tracker::{CausalDecision, OrderCausalTracker, RealtimeEventInput};
 pub use error::DomainError;
 pub use money::Money;
@@ -34,6 +28,12 @@ pub use order_state::{
     FulfillmentType, OrderStateMachine, OrderStatus, PaymentMethod, ScheduleType, UserRole,
 };
 pub use payment_state::{PaymentAttemptStatus, PaymentStateMachine, PaymentStatus, RefundStatus};
+pub use pizza_builder::{
+    compute_configuration_signature, compute_item_signature_from_input, default_size_rule,
+    evaluate_item_from_input, evaluate_single_item, RawCatalogCheeseRef, RawCatalogCrustRef,
+    RawCatalogLookupInput, RawCatalogProductRef, RawCatalogSauceRef, RawCatalogToppingRef,
+    RawCatalogVariantRef,
+};
 pub use pricing::{
     CouponCalculationSpec, CouponEvaluator, CouponListingEvaluation, CouponRuleInput, DiscountType,
     PriceBreakdown, PricedLineInput, PricingEngine,

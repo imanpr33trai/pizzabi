@@ -538,7 +538,11 @@ impl From<FfiCartItemInput> for CartItemInput {
             right_variant_id: value.right_variant_id,
             right_sauce_id: value.right_sauce_id,
             removed_included_topping_ids: value.removed_included_topping_ids,
-            topping_selections: value.topping_selections.into_iter().map(Into::into).collect(),
+            topping_selections: value
+                .topping_selections
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         }
     }
 }

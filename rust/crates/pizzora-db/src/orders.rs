@@ -661,7 +661,8 @@ impl OrderService {
             let custom_json: Option<serde_json::Value> = r.try_get("customization_snapshot")?;
             let customization_snapshot = custom_json
                 .and_then(|v| serde_json::from_value::<OrderItemCustomizationSnapshot>(v).ok());
-            let breakdown_json: Option<serde_json::Value> = r.try_get("price_breakdown_snapshot")?;
+            let breakdown_json: Option<serde_json::Value> =
+                r.try_get("price_breakdown_snapshot")?;
             let price_breakdown =
                 breakdown_json.and_then(|v| serde_json::from_value::<PizzaPriceBreakdown>(v).ok());
             items.push(OrderItemDto {
