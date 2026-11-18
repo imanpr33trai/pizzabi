@@ -757,9 +757,9 @@ async fn pg18_custom_pizza_builder_menu_quote_cart_merge_and_order_snapshot() {
         .expect("ticket on KDS");
     assert!(kds_ticket.items[0].customization_snapshot.is_some());
 
-    // Inventory reservation check:
-    // Olives: 40g * 1.5 (XL) * 0.5 (LEFT) = 30g reserved
-    // Mozzarella: 100g * 1.5 (XL) * 1.5 (extra cheese) = 225g reserved
+    // Inventory consumption check (COD orders commit stock immediately):
+    // Olives: 40g * 1.5 (XL) * 0.5 (LEFT) = 30g consumed
+    // Mozzarella: 100g * 1.5 (XL) * 1.5 (extra cheese) = 225g consumed
     let inventory: Vec<InventoryItemDto> = srv
         .client
         .get(srv.url("/api/v1/owner/inventory"))
@@ -774,12 +774,16 @@ async fn pg18_custom_pizza_builder_menu_quote_cart_merge_and_order_snapshot() {
         .iter()
         .find(|i| i.ingredient_id == mozz_inv.ingredient_id)
         .unwrap();
-    assert_eq!(mozz_stock.reserved_qty, 225);
+    assert_eq!(mozz_stock.on_hand_qty, 5_000 - 225);
+    assert_eq!(mozz_stock.reserved_qty, 0);
+    assert_eq!(mozz_stock.available_qty, 5_000 - 225);
     let olive_stock = inventory
         .iter()
         .find(|i| i.ingredient_id == olives_inv.ingredient_id)
         .unwrap();
-    assert_eq!(olive_stock.reserved_qty, 30);
+    assert_eq!(olive_stock.on_hand_qty, 2_000 - 30);
+    assert_eq!(olive_stock.reserved_qty, 0);
+    assert_eq!(olive_stock.available_qty, 2_000 - 30);
 
     // Non-owner rejected on owner cheese/sauce endpoints
     let cust_err_resp = srv
