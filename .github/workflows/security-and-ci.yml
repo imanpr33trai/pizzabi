@@ -1348,6 +1348,157 @@ jobs:
           exit "$failed"
 
   # ---------------------------------------------------------------------------
+  # Terminal validation gate for pull requests into main. Like the nightly
+  # gate, it runs with `always()` on every workflow run so its check is never
+  # `skipped` (GitHub treats a skipped required check as satisfied). It claims
+  # and enforces main-promotion validation only for a pull request whose base
+  # is `main`; on every other tier it reports "not applicable" and claims
+  # nothing. The reporting-only CI Summary never owns this decision.
+  # ---------------------------------------------------------------------------
+  main-pr-validation-complete:
+    name: Main PR Validation — Complete
+    if: always()
+    needs:
+      - preflight
+      - rust-quality
+      - kotlin-contracts-and-backend
+      - android-prep
+      - test-rust-parity
+      - test-rust-unit
+      - test-rust-integration
+      - test-android
+      - test-android-instrumented
+      - backend-docker
+      - rust-docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Verify every required main PR validation stage succeeded
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PREFLIGHT: ${{ needs.preflight.result }}
+          RUST_QUALITY: ${{ needs.rust-quality.result }}
+          KOTLIN_TESTS: ${{ needs.kotlin-contracts-and-backend.result }}
+          ANDROID_PREP: ${{ needs.android-prep.result }}
+          RUST_PARITY: ${{ needs.test-rust-parity.result }}
+          RUST_UNIT: ${{ needs.test-rust-unit.result }}
+          RUST_INTEGRATION: ${{ needs.test-rust-integration.result }}
+          ANDROID_TESTS: ${{ needs.test-android.result }}
+          ANDROID_INSTRUMENTED: ${{ needs.test-android-instrumented.result }}
+          BACKEND_DOCKER: ${{ needs.backend-docker.result }}
+          RUST_DOCKER: ${{ needs.rust-docker.result }}
+        run: |
+          set -euo pipefail
+
+          # This gate is meaningless without an exact commit identity.
+          if [ -z "${HEAD_SHA:-}" ]; then
+            echo "ERROR: github.sha is empty; refusing to claim main PR validation without an exact SHA." >&2
+            exit 1
+          fi
+
+          # Claim main-promotion validation only for PRs targeting main. On any
+          # other tier this job succeeds as "not applicable" and claims nothing;
+          # it must never be skipped, because GitHub treats a skipped required
+          # check as satisfied.
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$BASE_REF" = "main" ]; then
+            if [ -z "${PR_HEAD_SHA:-}" ]; then
+              echo "ERROR: pull_request to main has no head SHA; refusing to claim validation." >&2
+              exit 1
+            fi
+            CONTEXT="pull request -> main (pre-merge full validation for promotion)"
+          else
+            CONTEXT="not a main promotion validation context"
+            {
+              echo "### Main PR Validation — Complete"
+              echo ""
+              echo "| Field | Value |"
+              echo "|---|---|"
+              echo "| Result | ⏭️ not applicable |"
+              echo "| Context | $CONTEXT |"
+              echo "| Event | \`$EVENT_NAME\` |"
+              echo "| Ref | \`$REF\` |"
+              echo "| Commit SHA (\`github.sha\`) | \`$HEAD_SHA\` |"
+              echo ""
+              echo "No main promotion validation is claimed for this run. This check is always created so a skipped check can never satisfy the main ruleset."
+            } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+            exit 0
+          fi
+
+          badge() {
+            case "$1" in
+              success) echo "✅ success" ;;
+              failure) echo "❌ failure" ;;
+              cancelled) echo "🚫 cancelled" ;;
+              skipped) echo "⏭️ skipped" ;;
+              *) echo "❓ unexpected ($1)" ;;
+            esac
+          }
+
+          failed=0
+          rows=""
+          check() {
+            local name="$1" result="$2"
+            if [ "$result" != "success" ]; then
+              failed=1
+              echo "ERROR: required stage '$name' concluded '$result'; only 'success' is accepted." >&2
+            fi
+            rows="${rows}| ${name} | $(badge "$result") |\n"
+          }
+
+          check "Stage 0 — Security & Repository Preflight" "$PREFLIGHT"
+          check "Stage 1 — Rust Formatting, Clippy & Workspace Check" "$RUST_QUALITY"
+          check "Stage 1 — Kotlin Shared Contracts & Backend Tests" "$KOTLIN_TESTS"
+          check "Stage 1 — Android Build Preparation (JDK, Rust, UniFFI Bindgen)" "$ANDROID_PREP"
+          check "Stage 2 — Rust/Kotlin Parity Gate (Golden Vectors & Wire Contracts)" "$RUST_PARITY"
+          check "Stage 3 — Rust Workspace Unit Tests" "$RUST_UNIT"
+          check "Stage 4 — PostgreSQL 18.6 & Redis Integration" "$RUST_INTEGRATION"
+          check "Stage 5 — Android Unit & Robolectric Tests" "$ANDROID_TESTS"
+          check "Stage 5 — Android Instrumentation Tests (API 36 Emulator)" "$ANDROID_INSTRUMENTED"
+          check "Stage 6 — Kotlin Backend Docker (Validate Only)" "$BACKEND_DOCKER"
+          check "Stage 6 — Rust Backend Docker (Validate Only)" "$RUST_DOCKER"
+
+          if [ "$failed" -eq 0 ]; then
+            OUTCOME="✅ PASSED"
+            EXPLANATION="All 11 required validation stages concluded \`success\` for this run."
+          else
+            OUTCOME="❌ FAILED"
+            EXPLANATION="At least one required validation stage did not conclude \`success\`. A skipped, cancelled, failed or missing stage is never accepted as validation."
+          fi
+
+          {
+            echo "### Main PR Validation — Complete"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Result | $OUTCOME |"
+            echo "| Context | $CONTEXT |"
+            echo "| PR head SHA (promotion candidate) | \`$PR_HEAD_SHA\` |"
+            echo "| Merge-preview SHA (\`github.sha\`) | \`$HEAD_SHA\` |"
+            echo "| Ref | \`$REF\` |"
+            echo "| Event | \`$EVENT_NAME\` |"
+            echo "| Run | \`$RUN_ID\` (attempt \`$RUN_ATTEMPT\`) |"
+            echo ""
+            echo "> Promotion evidence must reference the PR head SHA. For a nightly-to-main PR that is the nightly tip; verify it still equals the current \`nightly\` ref before merging."
+            echo ""
+            echo "| Required stage | Result |"
+            echo "|---|---|"
+            printf "%b" "$rows"
+            echo ""
+            echo "$EXPLANATION"
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+
+          exit "$failed"
+
+  # ---------------------------------------------------------------------------
   # Final observability: one CI summary across all stages. Never fails the run;
   # purely reports stage results (skipped stages are reported as such).
   # ---------------------------------------------------------------------------
@@ -1367,6 +1518,7 @@ jobs:
       - backend-docker
       - rust-docker
       - nightly-validation-complete
+      - main-pr-validation-complete
       - build-preview-apk
       - build-release-apk
       - publish-github-release
@@ -1390,6 +1542,7 @@ jobs:
           BACKEND_DOCKER: ${{ needs.backend-docker.result }}
           RUST_DOCKER: ${{ needs.rust-docker.result }}
           NIGHTLY_GATE: ${{ needs.nightly-validation-complete.result }}
+          MAIN_GATE: ${{ needs.main-pr-validation-complete.result }}
           PREVIEW_APK: ${{ needs.build-preview-apk.result }}
           RELEASE_APK: ${{ needs.build-release-apk.result }}
           GH_RELEASE: ${{ needs.publish-github-release.result }}
@@ -1409,6 +1562,10 @@ jobs:
           if { [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/nightly" ]; } || { [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "nightly" ]; }; then
             NIGHTLY_CONTEXT="true"
           fi
+          MAIN_CONTEXT="false"
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "main" ]; then
+            MAIN_CONTEXT="true"
+          fi
           TIER="full validation"
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/nightly" ]; then
             TIER="nightly full regression (all stages required; no publishing)"
@@ -1416,6 +1573,8 @@ jobs:
             TIER="fast CI (feature branch push)"
           elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
             TIER="post-merge validation & preview publishing (main)"
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "main" ]; then
+            TIER="main promotion PR (all stages required; no publishing)"
           elif [ "$RELEASE_EVENT" = "true" ]; then
             TIER="production release (tag)"
           elif [ "${{ github.event_name }}" = "schedule" ]; then
@@ -1427,6 +1586,8 @@ jobs:
             TIER_NOTE="All validation stages are required on nightly. A ⏭️ here is a gate failure, not an intentional skip; **Nightly Validation — Complete** owns the pass/fail decision."
           elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "nightly" ]; then
             TIER_NOTE="All validation stages are required for nightly PRs. A ⏭️ here is a gate failure, not an intentional skip; **Nightly Validation — Complete** owns the pass/fail decision."
+          elif [ "$MAIN_CONTEXT" = "true" ]; then
+            TIER_NOTE="All validation stages are required for PRs into main. A ⏭️ here is a gate failure, not an intentional skip; **Main PR Validation — Complete** owns the pass/fail decision."
           else
             TIER_NOTE="⏭️ marks stages intentionally skipped for this tier (gating decisions in the workflow), not missing validation."
           fi
@@ -1463,5 +1624,14 @@ jobs:
             if [ "$NIGHTLY_CONTEXT" = "true" ] && [ "$NIGHTLY_GATE" != "success" ]; then
               echo ""
               echo "> ❌ **Nightly validation is NOT proven for this commit.** The terminal gate concluded \`$NIGHTLY_GATE\`."
+            fi
+            if [ "$MAIN_CONTEXT" = "true" ]; then
+              echo "| Gate | Main PR Validation — Complete | $(badge "$MAIN_GATE") |"
+            else
+              echo "| Gate | Main PR Validation — Complete | ⏭️ not applicable |"
+            fi
+            if [ "$MAIN_CONTEXT" = "true" ] && [ "$MAIN_GATE" != "success" ]; then
+              echo ""
+              echo "> ❌ **Main promotion validation is NOT proven for this PR head.** The terminal gate concluded \`$MAIN_GATE\`."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
