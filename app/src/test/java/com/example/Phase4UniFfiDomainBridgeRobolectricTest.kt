@@ -633,7 +633,7 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
 
     val addRes = repo.addCustomizedItem(
       product = ProductDto(
-        id = "p1",
+        id = "88888888-8888-4888-8888-888888888888",
         categoryId = "c1",
         categoryName = "Classics",
         name = "Margherita",
@@ -642,8 +642,8 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
         isActive = true,
         isTaxable = true,
       ),
-      variant = ProductVariantDto("v1", "p1", SizeCode.REGULAR, 19_900L, true),
-      crust = CrustOptionDto("cr1", "Hand Tossed", 0L, true),
+      variant = ProductVariantDto("99999999-9999-4999-8999-999999999991", "88888888-8888-4888-8888-888888888888", SizeCode.REGULAR, 19_900L, true),
+      crust = CrustOptionDto("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", "Hand Tossed", 0L, true),
       toppings = emptyList(),
       quantity = 1,
     )
@@ -782,7 +782,7 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
       categories = emptyList(),
       products = listOf(
         ProductDto(
-          id = "p-margh",
+          id = "11111111-1111-4111-8111-111111111111",
           categoryId = "cat-1",
           categoryName = "Classics",
           name = "Margherita",
@@ -791,16 +791,16 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
           isActive = true,
           isTaxable = true,
           variants = listOf(
-            ProductVariantDto("v-margh-r", "p-margh", SizeCode.REGULAR, 29_900L, true),
-            ProductVariantDto("v-margh-l", "p-margh", SizeCode.LARGE, 54_900L, true),
+            ProductVariantDto("33333333-3333-4333-8333-333333333331", "11111111-1111-4111-8111-111111111111", SizeCode.REGULAR, 29_900L, true),
+            ProductVariantDto("33333333-3333-4333-8333-333333333332", "11111111-1111-4111-8111-111111111111", SizeCode.LARGE, 54_900L, true),
           ),
           supportsHalfAndHalf = true,
-          defaultCheeseId = "ch-mozz",
-          defaultSauceId = "sa-san",
-          includedToppingIds = listOf("top-basil"),
+          defaultCheeseId = "44444444-4444-4444-8444-444444444441",
+          defaultSauceId = "55555555-5555-4555-8555-555555555551",
+          includedToppingIds = listOf("66666666-6666-4666-8666-666666666661"),
         ),
         ProductDto(
-          id = "p-farm",
+          id = "22222222-2222-4222-8222-222222222222",
           categoryId = "cat-1",
           categoryName = "Specials",
           name = "Farmhouse",
@@ -809,22 +809,22 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
           isActive = true,
           isTaxable = true,
           variants = listOf(
-            ProductVariantDto("v-farm-l", "p-farm", SizeCode.LARGE, 64_900L, true),
+            ProductVariantDto("33333333-3333-4333-8333-333333333333", "22222222-2222-4222-8222-222222222222", SizeCode.LARGE, 64_900L, true),
           ),
           supportsHalfAndHalf = true,
-          defaultCheeseId = "ch-mozz",
-          defaultSauceId = "sa-pesto",
-          includedToppingIds = listOf("top-olive"),
+          defaultCheeseId = "44444444-4444-4444-8444-444444444441",
+          defaultSauceId = "55555555-5555-4555-8555-555555555552",
+          includedToppingIds = listOf("66666666-6666-4666-8666-666666666662"),
         ),
       ),
       crusts = listOf(
-        CrustOptionDto("cr-hand", "Hand-Tossed", 0L, true, supportsHalfAndHalf = true),
-        CrustOptionDto("cr-burst", "Cheese Burst", 9_900L, true, supportsHalfAndHalf = false),
+        CrustOptionDto("77777777-7777-4777-8777-777777777771", "Hand-Tossed", 0L, true, supportsHalfAndHalf = true),
+        CrustOptionDto("77777777-7777-4777-8777-777777777772", "Cheese Burst", 9_900L, true, supportsHalfAndHalf = false),
       ),
       toppings = listOf(
-        ToppingDto("top-basil", "Fresh Basil", true, 2_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
-        ToppingDto("top-olive", "Black Olives", true, 4_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
-        ToppingDto("top-burrata", "Burrata", true, 9_500L, true, maxQuantity = 2, supportsHalfAndHalf = false),
+        ToppingDto("66666666-6666-4666-8666-666666666661", "Fresh Basil", true, 2_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
+        ToppingDto("66666666-6666-4666-8666-666666666662", "Black Olives", true, 4_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
+        ToppingDto("66666666-6666-4666-8666-666666666663", "Burrata", true, 9_500L, true, maxQuantity = 2, supportsHalfAndHalf = false),
       ),
       gstBps = 500,
       storeName = "PIZZORA",
@@ -834,40 +834,40 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
         PizzaSizeRuleDto(SizeCode.LARGE, "Large", maxToppings = 8, maxExtraToppings = 4, supportsHalfAndHalf = true),
       ),
       cheeses = listOf(
-        CheeseOptionDto("ch-mozz", "Fior di Latte", 0L, 6_000L, supportsExtra = true, isVegan = false, isActive = true),
-        CheeseOptionDto("ch-vegan", "Cashew Mozzarella", 4_000L, 5_000L, supportsExtra = true, isVegan = true, isActive = true),
+        CheeseOptionDto("44444444-4444-4444-8444-444444444441", "Fior di Latte", 0L, 6_000L, supportsExtra = true, isVegan = false, isActive = true),
+        CheeseOptionDto("44444444-4444-4444-8444-444444444442", "Cashew Mozzarella", 4_000L, 5_000L, supportsExtra = true, isVegan = true, isActive = true),
       ),
       sauces = listOf(
-        SauceOptionDto("sa-san", "San Marzano", 0L, 2_000L, supportsExtra = true, isVegan = true, isActive = true),
-        SauceOptionDto("sa-pesto", "Basil Pesto", 4_001L, 3_001L, supportsExtra = true, isVegan = true, isActive = true),
+        SauceOptionDto("55555555-5555-4555-8555-555555555551", "San Marzano", 0L, 2_000L, supportsExtra = true, isVegan = true, isActive = true),
+        SauceOptionDto("55555555-5555-4555-8555-555555555552", "Basil Pesto", 4_001L, 3_001L, supportsExtra = true, isVegan = true, isActive = true),
       ),
     )
 
     val validHalfInput = CartItemInputDto(
-      productId = "p-margh",
-      variantId = "v-margh-l",
-      crustId = "cr-hand",
+      productId = "11111111-1111-4111-8111-111111111111",
+      variantId = "33333333-3333-4333-8333-333333333332",
+      crustId = "77777777-7777-4777-8777-777777777771",
       quantity = 2,
-      cheeseId = "ch-vegan",
+      cheeseId = "44444444-4444-4444-8444-444444444442",
       extraCheese = true,
-      sauceId = "sa-san",
+      sauceId = "55555555-5555-4555-8555-555555555551",
       extraSauce = true,
       isHalfAndHalf = true,
-      rightProductId = "p-farm",
-      rightVariantId = "v-farm-l",
-      rightSauceId = "sa-pesto",
-      removedIncludedToppingIds = listOf("top-basil"),
+      rightProductId = "22222222-2222-4222-8222-222222222222",
+      rightVariantId = "33333333-3333-4333-8333-333333333333",
+      rightSauceId = "55555555-5555-4555-8555-555555555552",
+      removedIncludedToppingIds = listOf("66666666-6666-4666-8666-666666666661"),
       toppingSelections = listOf(
-        CartToppingInputDto("top-olive", ToppingPlacement.LEFT, quantity = 1),
-        CartToppingInputDto("top-olive", ToppingPlacement.RIGHT, quantity = 2),
+        CartToppingInputDto("66666666-6666-4666-8666-666666666662", ToppingPlacement.LEFT, quantity = 1),
+        CartToppingInputDto("66666666-6666-4666-8666-666666666662", ToppingPlacement.RIGHT, quantity = 2),
       ),
     )
 
     val invalidRegularHalf = validHalfInput.copy(
-      variantId = "v-margh-r",
-      crustId = "cr-burst",
+      variantId = "33333333-3333-4333-8333-333333333331",
+      crustId = "77777777-7777-4777-8777-777777777772",
       toppingSelections = listOf(
-        CartToppingInputDto("top-burrata", ToppingPlacement.LEFT, quantity = 3),
+        CartToppingInputDto("66666666-6666-4666-8666-666666666663", ToppingPlacement.LEFT, quantity = 3),
       ),
     )
 

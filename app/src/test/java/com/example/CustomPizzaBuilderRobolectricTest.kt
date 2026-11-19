@@ -120,7 +120,7 @@ class CustomPizzaBuilderRobolectricTest {
     ),
     products = listOf(
       ProductDto(
-        id = "prod-margherita",
+        id = "11111111-1111-4111-8111-111111111111",
         categoryId = "cat-1",
         categoryName = "Artisanal Pies",
         name = "Margherita Verace",
@@ -129,16 +129,16 @@ class CustomPizzaBuilderRobolectricTest {
         isActive = true,
         isTaxable = true,
         variants = listOf(
-          ProductVariantDto("var-margh-reg", "prod-margherita", SizeCode.REGULAR, 29_900L, true),
-          ProductVariantDto("var-margh-lrg", "prod-margherita", SizeCode.LARGE, 54_900L, true),
+          ProductVariantDto("33333333-3333-4333-8333-333333333331", "11111111-1111-4111-8111-111111111111", SizeCode.REGULAR, 29_900L, true),
+          ProductVariantDto("33333333-3333-4333-8333-333333333332", "11111111-1111-4111-8111-111111111111", SizeCode.LARGE, 54_900L, true),
         ),
         supportsHalfAndHalf = true,
-        defaultCheeseId = "cheese-mozz",
-        defaultSauceId = "sauce-red",
-        includedToppingIds = listOf("top-basil"),
+        defaultCheeseId = "44444444-4444-4444-8444-444444444441",
+        defaultSauceId = "55555555-5555-4555-8555-555555555551",
+        includedToppingIds = listOf("66666666-6666-4666-8666-666666666661"),
       ),
       ProductDto(
-        id = "prod-farmhouse",
+        id = "22222222-2222-4222-8222-222222222222",
         categoryId = "cat-1",
         categoryName = "Artisanal Pies",
         name = "Farmhouse Garden",
@@ -147,22 +147,22 @@ class CustomPizzaBuilderRobolectricTest {
         isActive = true,
         isTaxable = true,
         variants = listOf(
-          ProductVariantDto("var-farm-lrg", "prod-farmhouse", SizeCode.LARGE, 64_900L, true),
+          ProductVariantDto("33333333-3333-4333-8333-333333333333", "22222222-2222-4222-8222-222222222222", SizeCode.LARGE, 64_900L, true),
         ),
         supportsHalfAndHalf = true,
-        defaultCheeseId = "cheese-mozz",
-        defaultSauceId = "sauce-pesto",
-        includedToppingIds = listOf("top-olive"),
+        defaultCheeseId = "44444444-4444-4444-8444-444444444441",
+        defaultSauceId = "55555555-5555-4555-8555-555555555552",
+        includedToppingIds = listOf("66666666-6666-4666-8666-666666666662"),
       ),
     ),
     crusts = listOf(
-      CrustOptionDto("crust-hand", "Hand-Tossed", 0L, true, supportsHalfAndHalf = true),
-      CrustOptionDto("crust-burst", "Cheese Burst", 9_900L, true, supportsHalfAndHalf = false),
+      CrustOptionDto("77777777-7777-4777-8777-777777777771", "Hand-Tossed", 0L, true, supportsHalfAndHalf = true),
+      CrustOptionDto("77777777-7777-4777-8777-777777777772", "Cheese Burst", 9_900L, true, supportsHalfAndHalf = false),
     ),
     toppings = listOf(
-      ToppingDto("top-basil", "Fresh Basil", true, 2_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
-      ToppingDto("top-olive", "Black Olives", true, 4_000L, true, maxQuantity = 2, supportsHalfAndHalf = true),
-      ToppingDto("top-jalapeno", "Jalapenos", true, 3_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
+      ToppingDto("66666666-6666-4666-8666-666666666661", "Fresh Basil", true, 2_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
+      ToppingDto("66666666-6666-4666-8666-666666666662", "Black Olives", true, 4_000L, true, maxQuantity = 2, supportsHalfAndHalf = true),
+      ToppingDto("66666666-6666-4666-8666-666666666663", "Jalapenos", true, 3_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
     ),
     gstBps = 500,
     storeName = "PIZZORA Wood-Fired",
@@ -172,12 +172,12 @@ class CustomPizzaBuilderRobolectricTest {
       PizzaSizeRuleDto(SizeCode.LARGE, "Large", maxToppings = 8, maxExtraToppings = 2, supportsHalfAndHalf = true),
     ),
     cheeses = listOf(
-      CheeseOptionDto("cheese-mozz", "Fior di Latte", 0L, 5_000L, supportsExtra = true, isVegan = false, isActive = true),
-      CheeseOptionDto("cheese-vegan", "Vegan Mozzarella", 4_000L, 6_000L, supportsExtra = true, isVegan = true, isActive = true),
+      CheeseOptionDto("44444444-4444-4444-8444-444444444441", "Fior di Latte", 0L, 5_000L, supportsExtra = true, isVegan = false, isActive = true),
+      CheeseOptionDto("44444444-4444-4444-8444-444444444442", "Vegan Mozzarella", 4_000L, 6_000L, supportsExtra = true, isVegan = true, isActive = true),
     ),
     sauces = listOf(
-      SauceOptionDto("sauce-red", "San Marzano", 0L, 2_000L, supportsExtra = true, isVegan = true, isActive = true),
-      SauceOptionDto("sauce-pesto", "Basil Pesto", 3_000L, 3_000L, supportsExtra = true, isVegan = true, isActive = true),
+      SauceOptionDto("55555555-5555-4555-8555-555555555551", "San Marzano", 0L, 2_000L, supportsExtra = true, isVegan = true, isActive = true),
+      SauceOptionDto("55555555-5555-4555-8555-555555555552", "Basil Pesto", 3_000L, 3_000L, supportsExtra = true, isVegan = true, isActive = true),
     ),
   )
 
@@ -273,30 +273,30 @@ class CustomPizzaBuilderRobolectricTest {
     composeTestRule.mainClock.advanceTimeBy(1_000)
     composeTestRule.waitForIdle()
 
-    composeTestRule.onNodeWithTag("customize_product_button_prod-margherita").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("customize_product_button_11111111-1111-4111-8111-111111111111").performScrollTo().performClick()
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("pizza_customizer_sheet").assertIsDisplayed()
 
     // Select LARGE -> enables Half & Half
     composeTestRule.onNodeWithTag("size_option_LARGE").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("half_and_half_toggle").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("right_half_product_prod-farmhouse").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("right_half_product_22222222-2222-4222-8222-222222222222").performScrollTo().performClick()
 
     // Vegan cheese (+40.00) + Extra Cheese (+60.00)
-    composeTestRule.onNodeWithTag("cheese_option_cheese-vegan").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("cheese_option_44444444-4444-4444-8444-444444444442").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("extra_cheese_toggle").performScrollTo().performClick()
 
     // Right sauce = Basil Pesto (+15.00 half), Extra Sauce = on (+10.00 L + 15.00 R = 25.00)
-    composeTestRule.onNodeWithTag("right_sauce_option_sauce-pesto").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("right_sauce_option_55555555-5555-4555-8555-555555555552").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("extra_sauce_toggle").performScrollTo().performClick()
 
     // Remove included Fresh Basil
-    composeTestRule.onNodeWithTag("included_topping_toggle_top-basil").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("included_topping_toggle_66666666-6666-4666-8666-666666666661").performScrollTo().performClick()
 
     // Add Black Olives on RIGHT half x2 (included on Farmhouse right -> 1 free + 1 * 20.00 = +20.00)
-    composeTestRule.onNodeWithTag("topping_option_top-olive").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("topping_placement_top-olive_RIGHT").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("topping_qty_plus_top-olive").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("topping_option_66666666-6666-4666-8666-666666666662").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("topping_placement_66666666-6666-4666-8666-666666666662_RIGHT").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("topping_qty_plus_66666666-6666-4666-8666-666666666662").performScrollTo().performClick()
 
     // Expand live price breakdown
     composeTestRule.onNodeWithTag("customizer_price_breakdown").performScrollTo().performClick()
@@ -351,13 +351,13 @@ class CustomPizzaBuilderRobolectricTest {
     composeTestRule.mainClock.advanceTimeBy(1_000)
     composeTestRule.waitForIdle()
 
-    composeTestRule.onNodeWithTag("customize_product_button_prod-margherita").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("customize_product_button_11111111-1111-4111-8111-111111111111").performScrollTo().performClick()
     composeTestRule.waitForIdle()
 
     // Regular allows maxExtraToppings = 2. Selecting Black Olives x2 + Jalapenos x1 (WHOLE = 3 extra) triggers error.
-    composeTestRule.onNodeWithTag("topping_option_top-olive").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("topping_qty_plus_top-olive").performScrollTo().performClick()
-    composeTestRule.onNodeWithTag("topping_option_top-jalapeno").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("topping_option_66666666-6666-4666-8666-666666666662").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("topping_qty_plus_66666666-6666-4666-8666-666666666662").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("topping_option_66666666-6666-4666-8666-666666666663").performScrollTo().performClick()
     composeTestRule.waitForIdle()
 
     composeTestRule.onNodeWithTag("customizer_validation_issues").performScrollTo().assertIsDisplayed()
@@ -445,21 +445,21 @@ class CustomPizzaBuilderRobolectricTest {
     val cartRepo = NetworkCartRepository(apiClient, db.cartDao())
 
     val inputA = CartItemInputDto(
-      productId = "prod-margherita",
-      variantId = "var-margh-lrg",
-      crustId = "crust-hand",
+      productId = "11111111-1111-4111-8111-111111111111",
+      variantId = "33333333-3333-4333-8333-333333333332",
+      crustId = "77777777-7777-4777-8777-777777777771",
       quantity = 1,
-      cheeseId = "cheese-vegan",
+      cheeseId = "44444444-4444-4444-8444-444444444442",
       extraCheese = true,
-      sauceId = "sauce-red",
+      sauceId = "55555555-5555-4555-8555-555555555551",
       extraSauce = true,
       isHalfAndHalf = true,
-      rightProductId = "prod-farmhouse",
-      rightVariantId = "var-farm-lrg",
-      rightSauceId = "sauce-pesto",
-      removedIncludedToppingIds = listOf("top-basil"),
+      rightProductId = "22222222-2222-4222-8222-222222222222",
+      rightVariantId = "33333333-3333-4333-8333-333333333333",
+      rightSauceId = "55555555-5555-4555-8555-555555555552",
+      removedIncludedToppingIds = listOf("66666666-6666-4666-8666-666666666661"),
       toppingSelections = listOf(
-        CartToppingInputDto("top-olive", ToppingPlacement.RIGHT, quantity = 2),
+        CartToppingInputDto("66666666-6666-4666-8666-666666666662", ToppingPlacement.RIGHT, quantity = 2),
       ),
     )
 
@@ -472,7 +472,7 @@ class CustomPizzaBuilderRobolectricTest {
     cartRepo.addConfiguredPizza(inputA, builderMenu)
     // Different topping placement -> separate cart line
     val inputB = inputA.copy(
-      toppingSelections = listOf(CartToppingInputDto("top-olive", ToppingPlacement.LEFT, quantity = 2)),
+      toppingSelections = listOf(CartToppingInputDto("66666666-6666-4666-8666-666666666662", ToppingPlacement.LEFT, quantity = 2)),
     )
     cartRepo.addConfiguredPizza(inputB, builderMenu)
 
@@ -485,7 +485,7 @@ class CustomPizzaBuilderRobolectricTest {
     assertEquals(2, cartEntries.first { it.toppings.single().placement == "RIGHT" }.item.quantity)
 
     val dtoA = cartEntries.first { it.toppings.single().placement == "RIGHT" }.toCartItemInputDto()
-    assertEquals(listOf("top-basil"), dtoA.removedIncludedToppingIds)
+    assertEquals(listOf("66666666-6666-4666-8666-666666666661"), dtoA.removedIncludedToppingIds)
     assertEquals(ToppingPlacement.RIGHT, dtoA.toppingSelections.single().placement)
     assertEquals(2, dtoA.toppingSelections.single().quantity)
 
@@ -510,7 +510,7 @@ class CustomPizzaBuilderRobolectricTest {
     assertNotNull(req)
     assertEquals(2, req!!.items.size)
     assertTrue(req.items.all { it.isHalfAndHalf && it.extraCheese && it.extraSauce })
-    assertTrue(req.items.all { it.removedIncludedToppingIds == listOf("top-basil") })
+    assertTrue(req.items.all { it.removedIncludedToppingIds == listOf("66666666-6666-4666-8666-666666666661") })
   }
 
   @Test
@@ -555,7 +555,7 @@ class CustomPizzaBuilderRobolectricTest {
       items = listOf(
         KdsTicketItemDto(
           id = "oi-1",
-          productId = "prod-margherita",
+          productId = "11111111-1111-4111-8111-111111111111",
           productName = "Half & Half: Margherita Verace / Farmhouse Garden",
           variantSize = "LARGE",
           crustName = "Hand-Tossed",
@@ -592,7 +592,7 @@ class CustomPizzaBuilderRobolectricTest {
   private fun sampleSnapshot() = OrderItemCustomizationSnapshotDto(
     isHalfAndHalf = true,
     leftProductName = "Margherita Verace",
-    rightProductId = "prod-farmhouse",
+    rightProductId = "22222222-2222-4222-8222-222222222222",
     rightProductName = "Farmhouse Garden",
     cheeseName = "Vegan Mozzarella",
     extraCheese = true,
@@ -602,7 +602,7 @@ class CustomPizzaBuilderRobolectricTest {
     removedIncludedToppings = listOf("Fresh Basil"),
     toppingDetails = listOf(
       OrderItemToppingSnapshotDto(
-        toppingId = "top-olive",
+        toppingId = "66666666-6666-4666-8666-666666666662",
         name = "Black Olives",
         placement = ToppingPlacement.RIGHT,
         quantity = 2,
@@ -634,7 +634,7 @@ class CustomPizzaBuilderRobolectricTest {
     items = listOf(
       OrderItemDto(
         id = "oi-1",
-        productId = "prod-margherita",
+        productId = "11111111-1111-4111-8111-111111111111",
         productName = "Half & Half: Margherita Verace / Farmhouse Garden",
         variantSize = "LARGE",
         crustName = "Hand-Tossed",
@@ -645,20 +645,20 @@ class CustomPizzaBuilderRobolectricTest {
         customizationSnapshot = snapshot,
         priceBreakdown = PizzaBuilderEngine.evaluate(
           CartItemInputDto(
-            productId = "prod-margherita",
-            variantId = "var-margh-lrg",
-            crustId = "crust-hand",
+            productId = "11111111-1111-4111-8111-111111111111",
+            variantId = "33333333-3333-4333-8333-333333333332",
+            crustId = "77777777-7777-4777-8777-777777777771",
             quantity = 1,
-            cheeseId = "cheese-vegan",
+            cheeseId = "44444444-4444-4444-8444-444444444442",
             extraCheese = true,
-            sauceId = "sauce-red",
+            sauceId = "55555555-5555-4555-8555-555555555551",
             extraSauce = true,
             isHalfAndHalf = true,
-            rightProductId = "prod-farmhouse",
-            rightVariantId = "var-farm-lrg",
-            rightSauceId = "sauce-pesto",
-            removedIncludedToppingIds = listOf("top-basil"),
-            toppingSelections = listOf(CartToppingInputDto("top-olive", ToppingPlacement.RIGHT, 2)),
+            rightProductId = "22222222-2222-4222-8222-222222222222",
+            rightVariantId = "33333333-3333-4333-8333-333333333333",
+            rightSauceId = "55555555-5555-4555-8555-555555555552",
+            removedIncludedToppingIds = listOf("66666666-6666-4666-8666-666666666661"),
+            toppingSelections = listOf(CartToppingInputDto("66666666-6666-4666-8666-666666666662", ToppingPlacement.RIGHT, 2)),
           ),
           builderMenu,
         ).priceBreakdown,

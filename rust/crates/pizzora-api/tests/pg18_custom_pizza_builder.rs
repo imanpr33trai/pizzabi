@@ -803,5 +803,5 @@ async fn pg18_custom_pizza_builder_menu_quote_cart_merge_and_order_snapshot() {
         .unwrap();
     assert_eq!(cust_err_resp.status(), StatusCode::FORBIDDEN);
     let err_env: ApiErrorEnvelope = cust_err_resp.json().await.unwrap();
-    assert_eq!(err_env.error.code, "FORBIDDEN");
+    assert_eq!(err_env.error.code, "MISSING_PERMISSION");
 }

@@ -81,7 +81,7 @@ class Phase1SessionCartIsolationRobolectricTest {
   private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
   private val productA = ProductDto(
-    id = "prod-a",
+    id = "11111111-1111-4111-8111-111111111111",
     categoryId = "cat-1",
     categoryName = "Classics",
     name = "User A Pizza",
@@ -90,12 +90,12 @@ class Phase1SessionCartIsolationRobolectricTest {
     isActive = true,
     isTaxable = true,
     variants = listOf(
-      ProductVariantDto("var-a", "prod-a", SizeCode.REGULAR, 29_900L, true),
+      ProductVariantDto("33333333-3333-4333-8333-333333333331", "11111111-1111-4111-8111-111111111111", SizeCode.REGULAR, 29_900L, true),
     ),
   )
 
   private val productB = ProductDto(
-    id = "prod-b",
+    id = "22222222-2222-4222-8222-222222222222",
     categoryId = "cat-1",
     categoryName = "Classics",
     name = "User B Truffle",
@@ -104,12 +104,12 @@ class Phase1SessionCartIsolationRobolectricTest {
     isActive = true,
     isTaxable = true,
     variants = listOf(
-      ProductVariantDto("var-b", "prod-b", SizeCode.MEDIUM, 49_900L, true),
+      ProductVariantDto("33333333-3333-4333-8333-333333333332", "22222222-2222-4222-8222-222222222222", SizeCode.MEDIUM, 49_900L, true),
     ),
   )
 
-  private val classicCrust = CrustOptionDto("crust-1", "Hand-Tossed", 0L, true)
-  private val basilTopping = ToppingDto("top-1", "Extra Basil", true, 2_500L, true)
+  private val classicCrust = CrustOptionDto("77777777-7777-4777-8777-777777777771", "Hand-Tossed", 0L, true)
+  private val basilTopping = ToppingDto("66666666-6666-4666-8666-666666666661", "Extra Basil", true, 2_500L, true)
 
   private fun sessionFor(userId: String, email: String): AuthSession = AuthSession(
     accessToken = "access-$userId",
