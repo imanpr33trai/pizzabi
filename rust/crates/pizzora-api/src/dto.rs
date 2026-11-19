@@ -1,14 +1,23 @@
 use std::collections::BTreeMap;
 
 use pizzora_core::{
-    CartValidationIssueCode, FulfillmentType, OrderStatus, PaymentMethod, PaymentStatus,
-    ScheduleType, SizeCode,
+    CartItemCustomizationSummary, CartValidationIssueCode, FulfillmentType,
+    OrderItemCustomizationSnapshot, OrderStatus, PaymentMethod, PaymentStatus, PizzaPriceBreakdown,
+    ScheduleType, SizeCode, ToppingPlacement,
 };
 use pizzora_db::{AppliedCouponSummaryDto, InventoryItemDto, OrderDetailDto, OrderSummaryDto};
 use serde::{Deserialize, Serialize};
 
 fn default_true() -> bool {
     true
+}
+
+fn default_one() -> i32 {
+    1
+}
+
+fn default_two() -> i32 {
+    2
 }
 
 fn default_timezone_ist() -> String {
@@ -111,11 +120,116 @@ pub struct UpdateVariantRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PizzaSizeRuleDto {
+    pub size_code: SizeCode,
+    pub display_name: String,
+    pub max_toppings: i32,
+    pub max_extra_toppings: i32,
+    pub supports_half_and_half: bool,
+    pub ingredient_multiplier_bps: i32,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct UpdatePizzaSizeRuleRequest {
+    pub display_name: Option<String>,
+    pub max_toppings: Option<i32>,
+    pub max_extra_toppings: Option<i32>,
+    pub supports_half_and_half: Option<bool>,
+    pub ingredient_multiplier_bps: Option<i32>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheeseOptionDto {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub extra_price_paise: i64,
+    #[serde(default)]
+    pub extra_cheese_price_paise: i64,
+    #[serde(default = "default_true")]
+    pub supports_extra: bool,
+    #[serde(default)]
+    pub is_vegan: bool,
+    #[serde(default = "default_true")]
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateCheeseRequest {
+    pub name: String,
+    #[serde(default)]
+    pub extra_price_paise: i64,
+    #[serde(default)]
+    pub extra_cheese_price_paise: i64,
+    #[serde(default = "default_true")]
+    pub supports_extra: bool,
+    #[serde(default)]
+    pub is_vegan: bool,
+    #[serde(default = "default_true")]
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct UpdateCheeseRequest {
+    pub name: Option<String>,
+    pub extra_price_paise: Option<i64>,
+    pub extra_cheese_price_paise: Option<i64>,
+    pub supports_extra: Option<bool>,
+    pub is_vegan: Option<bool>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SauceOptionDto {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub extra_price_paise: i64,
+    #[serde(default)]
+    pub extra_sauce_price_paise: i64,
+    #[serde(default = "default_true")]
+    pub supports_extra: bool,
+    #[serde(default = "default_true")]
+    pub is_vegan: bool,
+    #[serde(default = "default_true")]
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateSauceRequest {
+    pub name: String,
+    #[serde(default)]
+    pub extra_price_paise: i64,
+    #[serde(default)]
+    pub extra_sauce_price_paise: i64,
+    #[serde(default = "default_true")]
+    pub supports_extra: bool,
+    #[serde(default = "default_true")]
+    pub is_vegan: bool,
+    #[serde(default = "default_true")]
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct UpdateSauceRequest {
+    pub name: Option<String>,
+    pub extra_price_paise: Option<i64>,
+    pub extra_sauce_price_paise: Option<i64>,
+    pub supports_extra: Option<bool>,
+    pub is_vegan: Option<bool>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrustOptionDto {
     pub id: String,
     pub name: String,
     pub extra_price_paise: i64,
     pub is_active: bool,
+    #[serde(default = "default_true")]
+    pub supports_half_and_half: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -124,6 +238,8 @@ pub struct CreateCrustRequest {
     pub extra_price_paise: i64,
     #[serde(default = "default_true")]
     pub is_active: bool,
+    #[serde(default = "default_true")]
+    pub supports_half_and_half: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -131,6 +247,7 @@ pub struct UpdateCrustRequest {
     pub name: Option<String>,
     pub extra_price_paise: Option<i64>,
     pub is_active: Option<bool>,
+    pub supports_half_and_half: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,6 +257,10 @@ pub struct ToppingDto {
     pub is_veg: bool,
     pub extra_price_paise: i64,
     pub is_active: bool,
+    #[serde(default = "default_two")]
+    pub max_quantity: i32,
+    #[serde(default = "default_true")]
+    pub supports_half_and_half: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,6 +271,10 @@ pub struct CreateToppingRequest {
     pub extra_price_paise: i64,
     #[serde(default = "default_true")]
     pub is_active: bool,
+    #[serde(default = "default_two")]
+    pub max_quantity: i32,
+    #[serde(default = "default_true")]
+    pub supports_half_and_half: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -158,6 +283,8 @@ pub struct UpdateToppingRequest {
     pub is_veg: Option<bool>,
     pub extra_price_paise: Option<i64>,
     pub is_active: Option<bool>,
+    pub max_quantity: Option<i32>,
+    pub supports_half_and_half: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,6 +314,18 @@ pub struct ProductDto {
     pub variants: Vec<ProductVariantDto>,
     #[serde(default)]
     pub images: Vec<ProductImageDto>,
+    #[serde(default = "default_true")]
+    pub is_customizable: bool,
+    #[serde(default = "default_true")]
+    pub supports_half_and_half: bool,
+    #[serde(default)]
+    pub default_cheese_id: Option<String>,
+    #[serde(default)]
+    pub default_sauce_id: Option<String>,
+    #[serde(default)]
+    pub included_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub max_toppings_override: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -202,6 +341,18 @@ pub struct CreateProductRequest {
     #[serde(default = "default_true")]
     pub is_taxable: bool,
     pub variants: Vec<CreateVariantRequest>,
+    #[serde(default = "default_true")]
+    pub is_customizable: bool,
+    #[serde(default = "default_true")]
+    pub supports_half_and_half: bool,
+    #[serde(default)]
+    pub default_cheese_id: Option<String>,
+    #[serde(default)]
+    pub default_sauce_id: Option<String>,
+    #[serde(default)]
+    pub included_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub max_toppings_override: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -212,6 +363,12 @@ pub struct UpdateProductRequest {
     pub is_veg: Option<bool>,
     pub is_active: Option<bool>,
     pub is_taxable: Option<bool>,
+    pub is_customizable: Option<bool>,
+    pub supports_half_and_half: Option<bool>,
+    pub default_cheese_id: Option<String>,
+    pub default_sauce_id: Option<String>,
+    pub included_topping_ids: Option<Vec<String>>,
+    pub max_toppings_override: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -223,6 +380,12 @@ pub struct PublicMenuResponse {
     pub gst_bps: i32,
     pub store_name: String,
     pub is_accepting_orders: bool,
+    #[serde(default)]
+    pub size_rules: Vec<PizzaSizeRuleDto>,
+    #[serde(default)]
+    pub cheeses: Vec<CheeseOptionDto>,
+    #[serde(default)]
+    pub sauces: Vec<SauceOptionDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -260,6 +423,15 @@ pub struct CartValidationIssueDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CartToppingInputDto {
+    pub topping_id: String,
+    #[serde(default)]
+    pub placement: ToppingPlacement,
+    #[serde(default = "default_one")]
+    pub quantity: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct CartItemInputDto {
     #[serde(default)]
     pub id: Option<String>,
@@ -271,6 +443,26 @@ pub struct CartItemInputDto {
     pub quantity: i32,
     #[serde(default)]
     pub client_unit_price_paise: Option<i64>,
+    #[serde(default)]
+    pub cheese_id: Option<String>,
+    #[serde(default)]
+    pub extra_cheese: bool,
+    #[serde(default)]
+    pub sauce_id: Option<String>,
+    #[serde(default)]
+    pub extra_sauce: bool,
+    #[serde(default)]
+    pub is_half_and_half: bool,
+    #[serde(default)]
+    pub right_product_id: Option<String>,
+    #[serde(default)]
+    pub right_variant_id: Option<String>,
+    #[serde(default)]
+    pub right_sauce_id: Option<String>,
+    #[serde(default)]
+    pub removed_included_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub topping_selections: Vec<CartToppingInputDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -292,6 +484,16 @@ pub struct CartToppingViewDto {
     pub is_veg: bool,
     pub extra_price_paise: i64,
     pub is_available: bool,
+    #[serde(default)]
+    pub placement: ToppingPlacement,
+    #[serde(default = "default_one")]
+    pub quantity: i32,
+    #[serde(default)]
+    pub is_included: bool,
+    #[serde(default)]
+    pub unit_price_paise: i64,
+    #[serde(default)]
+    pub total_price_paise: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -317,6 +519,10 @@ pub struct CartItemViewDto {
     pub is_available: bool,
     #[serde(default)]
     pub issues: Vec<CartValidationIssueDto>,
+    #[serde(default)]
+    pub customization: Option<CartItemCustomizationSummary>,
+    #[serde(default)]
+    pub price_breakdown: Option<PizzaPriceBreakdown>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -334,6 +540,25 @@ pub struct CartResponseDto {
     #[serde(default)]
     pub unavailable_count: i32,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PizzaBuilderQuoteRequest {
+    pub item: CartItemInputDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PizzaBuilderQuoteResponse {
+    pub is_valid: bool,
+    pub unit_price_paise: i64,
+    pub line_total_paise: i64,
+    pub price_breakdown: PizzaPriceBreakdown,
+    pub configuration_signature: String,
+    pub customization: CartItemCustomizationSummary,
+    #[serde(default)]
+    pub toppings: Vec<CartToppingViewDto>,
+    #[serde(default)]
+    pub issues: Vec<CartValidationIssueDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -439,6 +664,8 @@ pub enum RecipeTargetType {
     Variant,
     Crust,
     Topping,
+    Cheese,
+    Sauce,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -473,6 +700,10 @@ pub struct RecipesOverviewResponse {
     pub crusts: Vec<RecipeBindingDto>,
     #[serde(default)]
     pub toppings: Vec<RecipeBindingDto>,
+    #[serde(default)]
+    pub cheeses: Vec<RecipeBindingDto>,
+    #[serde(default)]
+    pub sauces: Vec<RecipeBindingDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -494,6 +725,8 @@ pub struct KdsTicketItemDto {
     #[serde(default)]
     pub toppings: Vec<String>,
     pub quantity: i32,
+    #[serde(default)]
+    pub customization_snapshot: Option<OrderItemCustomizationSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

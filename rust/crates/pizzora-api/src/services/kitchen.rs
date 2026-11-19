@@ -383,7 +383,7 @@ async fn load_ticket_items_map(
     let rows = sqlx::query(
         r#"
         SELECT id, order_id, product_id, product_name_snapshot, variant_size_snapshot,
-               crust_name_snapshot, toppings_snapshot, quantity
+               crust_name_snapshot, toppings_snapshot, customization_snapshot, quantity
         FROM order_items
         WHERE order_id = ANY($1)
         ORDER BY order_id ASC, id ASC
@@ -400,6 +400,10 @@ async fn load_ticket_items_map(
         let product_id: Uuid = row.try_get("product_id")?;
         let toppings_val: serde_json::Value = row.try_get("toppings_snapshot")?;
         let toppings = serde_json::from_value::<Vec<String>>(toppings_val).unwrap_or_default();
+        let customization_val: Option<serde_json::Value> = row.try_get("customization_snapshot")?;
+        let customization_snapshot = customization_val.and_then(|v| {
+            serde_json::from_value::<pizzora_core::OrderItemCustomizationSnapshot>(v).ok()
+        });
 
         map.entry(order_id).or_default().push(KdsTicketItemDto {
             id: id.to_string(),
@@ -409,6 +413,7 @@ async fn load_ticket_items_map(
             crust_name: row.try_get("crust_name_snapshot")?,
             toppings,
             quantity: row.try_get("quantity")?,
+            customization_snapshot,
         });
     }
 

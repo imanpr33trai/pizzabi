@@ -2,6 +2,7 @@ package com.example.checkout
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cart.toCartItemInputDto
 import com.example.core.database.CartItemWithToppings
 import com.example.core.network.PizzoraApiException
 import com.pizzora.contracts.CartItemInputDto
@@ -239,17 +240,7 @@ class CheckoutQuoteViewModel(
     val effectivePincode = if (state.fulfillmentType == FulfillmentType.DELIVERY) overridePincode else null
 
     val req = PricingQuoteRequest(
-      items = availableItems.map { entry ->
-        CartItemInputDto(
-          id = entry.item.id,
-          productId = entry.item.productId,
-          variantId = entry.item.variantId,
-          crustId = entry.item.crustId,
-          toppingIds = entry.toppings.map { it.toppingId },
-          quantity = entry.item.quantity,
-          clientUnitPricePaise = entry.item.unitPricePaise,
-        )
-      },
+      items = availableItems.map { entry -> entry.toCartItemInputDto() },
       fulfillmentType = state.fulfillmentType,
       pincode = effectivePincode,
       couponCode = effectiveCoupon,
@@ -319,7 +310,8 @@ class CheckoutQuoteViewModel(
 
   private fun List<CartItemWithToppings>.toSignature(): String =
     joinToString("|") { entry ->
-      val toppings = entry.toppings.map { it.toppingId }.sorted().joinToString(",")
-      "${entry.item.id}:${entry.item.variantId}:${entry.item.crustId}:$toppings:${entry.item.quantity}:${entry.item.isAvailable}"
+      val toppings = entry.toppings.sortedWith(compareBy({ it.toppingId }, { it.placement }))
+        .joinToString(",") { "${it.toppingId}:${it.placement}:${it.quantity}" }
+      "${entry.item.id}:${entry.item.configurationSignature}:${entry.item.variantId}:${entry.item.crustId}:$toppings:${entry.item.quantity}:${entry.item.isAvailable}"
     }
 }

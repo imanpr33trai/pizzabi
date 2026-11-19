@@ -568,6 +568,12 @@ pub async fn seed_full_storefront_via_owner_api(
                 price_paise: 30_000,
                 is_active: true,
             }],
+            is_customizable: true,
+            supports_half_and_half: true,
+            default_cheese_id: None,
+            default_sauce_id: None,
+            included_topping_ids: Vec::new(),
+            max_toppings_override: None,
         })
         .send()
         .await
@@ -584,6 +590,7 @@ pub async fn seed_full_storefront_via_owner_api(
             name: format!("Sourdough-{tag}"),
             extra_price_paise: 5_000,
             is_active: true,
+            supports_half_and_half: true,
         })
         .send()
         .await
@@ -600,6 +607,8 @@ pub async fn seed_full_storefront_via_owner_api(
             is_veg: true,
             extra_price_paise: 5_000,
             is_active: true,
+            max_quantity: 2,
+            supports_half_and_half: true,
         })
         .send()
         .await

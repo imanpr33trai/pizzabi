@@ -1,6 +1,6 @@
 use pizzora_db::EphemeralCacheStore;
 
-pub const MENU_CACHE_KEY: &str = "catalog:menu:v1";
+pub const MENU_CACHE_KEY: &str = "catalog:menu:v2";
 pub const CATEGORIES_CACHE_KEY: &str = "catalog:categories:v1";
 pub const SETTINGS_PUBLIC_CACHE_KEY: &str = "config:public:v1";
 pub const CATALOG_TTL_SECS: u64 = 30;

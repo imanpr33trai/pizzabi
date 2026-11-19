@@ -624,6 +624,7 @@ async fn pg18_cart_coupons_checkout_razorpay_webhooks_kds_and_reports() {
         topping_ids: vec![seeded.topping.id.clone()],
         quantity: 2, // 2 * (30_000 + 5_000 + 5_000) = 80_000 paise
         client_unit_price_paise: Some(1_000), // intentionally spoofed; server ignores
+        ..Default::default()
     };
     let put_cart: CartResponseDto = srv
         .client

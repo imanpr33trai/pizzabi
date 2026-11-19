@@ -3,17 +3,20 @@ use axum::http::StatusCode;
 use axum::Json;
 
 use crate::dto::{
-    CategoryDto, ConfirmProductImageRequest, CreateCategoryRequest, CreateCrustRequest,
-    CreateProductRequest, CreateToppingRequest, CreateVariantRequest, CrustOptionDto,
+    CategoryDto, CheeseOptionDto, ConfirmProductImageRequest, CreateCategoryRequest,
+    CreateCheeseRequest, CreateCrustRequest, CreateProductRequest, CreateSauceRequest,
+    CreateToppingRequest, CreateVariantRequest, CrustOptionDto, PizzaSizeRuleDto,
     PresignProductImageRequest, PresignProductImageResponse, ProductDto, ProductImageDto,
-    ProductVariantDto, PublicMenuResponse, ToppingDto, UpdateCategoryRequest, UpdateCrustRequest,
-    UpdateProductRequest, UpdateToppingRequest, UpdateVariantRequest,
+    ProductVariantDto, PublicMenuResponse, SauceOptionDto, ToppingDto, UpdateCategoryRequest,
+    UpdateCheeseRequest, UpdateCrustRequest, UpdatePizzaSizeRuleRequest, UpdateProductRequest,
+    UpdateSauceRequest, UpdateToppingRequest, UpdateVariantRequest,
 };
 use crate::error::ApiError;
 use crate::extractors::{
     build_audit_context, parse_uuid_param, require_permission, AuthPrincipal, RequestMeta,
     ValidatedJson,
 };
+use crate::services::catalog::parse_size_code;
 use crate::state::AppState;
 
 // ---------- Public Catalog ----------
@@ -255,6 +258,108 @@ pub async fn update_topping(
     let updated = state
         .catalog_service
         .update_topping(topping_id, &body, &audit)
+        .await?;
+    Ok(Json(updated))
+}
+
+pub async fn list_owner_size_rules(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+) -> Result<Json<Vec<PizzaSizeRuleDto>>, ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let rules = state.catalog_service.list_all_size_rules().await?;
+    Ok(Json(rules))
+}
+
+pub async fn update_size_rule(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+    meta: RequestMeta,
+    Path(size_code): Path<String>,
+    ValidatedJson(body): ValidatedJson<UpdatePizzaSizeRuleRequest>,
+) -> Result<Json<PizzaSizeRuleDto>, ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let parsed_size = parse_size_code(&size_code)?;
+    let audit = build_audit_context(Some(&principal), &meta);
+    let updated = state
+        .catalog_service
+        .update_size_rule(parsed_size, &body, &audit)
+        .await?;
+    Ok(Json(updated))
+}
+
+pub async fn list_owner_cheeses(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+) -> Result<Json<Vec<CheeseOptionDto>>, ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let cheeses = state.catalog_service.list_all_cheeses().await?;
+    Ok(Json(cheeses))
+}
+
+pub async fn create_cheese(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+    meta: RequestMeta,
+    ValidatedJson(body): ValidatedJson<CreateCheeseRequest>,
+) -> Result<(StatusCode, Json<CheeseOptionDto>), ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let audit = build_audit_context(Some(&principal), &meta);
+    let created = state.catalog_service.create_cheese(&body, &audit).await?;
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+pub async fn update_cheese(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+    meta: RequestMeta,
+    Path(id): Path<String>,
+    ValidatedJson(body): ValidatedJson<UpdateCheeseRequest>,
+) -> Result<Json<CheeseOptionDto>, ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let cheese_id = parse_uuid_param(&id, "cheese_id")?;
+    let audit = build_audit_context(Some(&principal), &meta);
+    let updated = state
+        .catalog_service
+        .update_cheese(cheese_id, &body, &audit)
+        .await?;
+    Ok(Json(updated))
+}
+
+pub async fn list_owner_sauces(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+) -> Result<Json<Vec<SauceOptionDto>>, ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let sauces = state.catalog_service.list_all_sauces().await?;
+    Ok(Json(sauces))
+}
+
+pub async fn create_sauce(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+    meta: RequestMeta,
+    ValidatedJson(body): ValidatedJson<CreateSauceRequest>,
+) -> Result<(StatusCode, Json<SauceOptionDto>), ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let audit = build_audit_context(Some(&principal), &meta);
+    let created = state.catalog_service.create_sauce(&body, &audit).await?;
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+pub async fn update_sauce(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+    meta: RequestMeta,
+    Path(id): Path<String>,
+    ValidatedJson(body): ValidatedJson<UpdateSauceRequest>,
+) -> Result<Json<SauceOptionDto>, ApiError> {
+    require_permission(&state, &principal, "owner:catalog_manage").await?;
+    let sauce_id = parse_uuid_param(&id, "sauce_id")?;
+    let audit = build_audit_context(Some(&principal), &meta);
+    let updated = state
+        .catalog_service
+        .update_sauce(sauce_id, &body, &audit)
         .await?;
     Ok(Json(updated))
 }

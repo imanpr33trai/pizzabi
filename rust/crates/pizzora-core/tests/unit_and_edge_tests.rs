@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
 use pizzora_core::{
-    CartItemInput, CartSyncAction, CartSyncPlanRequest, CartSyncPlanner, CartSyncTrigger,
-    CartValidation, CartValidationIssueCode, CatalogCrustRef, CatalogProductRef, CatalogRefLookup,
-    CatalogToppingRef, CatalogVariantRef, CausalDecision, CouponCalculationSpec, CouponEvaluator,
-    CouponRuleInput, DiscountType, DomainError, FulfillmentType, Money, OrderCausalTracker,
-    OrderStateMachine, OrderStatus, PaymentAttemptStatus, PaymentStateMachine, PaymentStatus,
-    PricedLineInput, PricingEngine, RealtimeEventInput, SessionIdentity, SizeCode,
-    StorageKeyValidator, UserRole, MAX_CART_LINE_ITEMS, MAX_ITEM_QUANTITY,
+    compute_configuration_signature, evaluate_single_item, CartItemInput, CartSyncAction,
+    CartSyncPlanRequest, CartSyncPlanner, CartSyncTrigger, CartToppingInput, CartValidation,
+    CartValidationIssueCode, CatalogCheeseRef, CatalogCrustRef, CatalogProductRef,
+    CatalogRefLookup, CatalogSauceRef, CatalogSizeRuleRef, CatalogToppingRef, CatalogVariantRef,
+    CausalDecision, CouponCalculationSpec, CouponEvaluator, CouponRuleInput, DiscountType,
+    DomainError, FulfillmentType, Money, OrderCausalTracker, OrderStateMachine, OrderStatus,
+    PaymentAttemptStatus, PaymentStateMachine, PaymentStatus, PricedLineInput, PricingEngine,
+    RealtimeEventInput, SessionIdentity, SizeCode, StorageKeyValidator, ToppingPlacement, UserRole,
+    MAX_CART_LINE_ITEMS, MAX_ITEM_QUANTITY,
 };
 use uuid::Uuid;
 
@@ -373,6 +375,7 @@ fn cart_validation_limits_merge_and_sync_planner() {
             crust_id: c_id.to_string(),
             topping_ids: vec![],
             quantity: 1,
+            ..Default::default()
         })
         .collect();
     assert!(matches!(
@@ -392,6 +395,7 @@ fn cart_validation_limits_merge_and_sync_planner() {
             crust_id: c_id.to_string(),
             topping_ids: vec![t1_id.to_string(), t2_id.to_string(), t1_id.to_string()],
             quantity: 20,
+            ..Default::default()
         },
         CartItemInput {
             id: Some("line-b".to_owned()),
@@ -400,6 +404,7 @@ fn cart_validation_limits_merge_and_sync_planner() {
             crust_id: c_id.to_string(),
             topping_ids: vec![t2_id.to_string(), t1_id.to_string()],
             quantity: 10,
+            ..Default::default()
         },
     ];
     let parsed = CartValidation::validate_and_parse_inputs(&dup_inputs).unwrap();
@@ -408,12 +413,7 @@ fn cart_validation_limits_merge_and_sync_planner() {
     assert_eq!(merged[0].quantity, MAX_ITEM_QUANTITY);
     assert_eq!(merged[0].topping_ids, vec![t2_id, t1_id]); // 0031 < 0032
 
-    let mut lookup = CatalogRefLookup {
-        products: HashMap::new(),
-        variants: HashMap::new(),
-        crusts: HashMap::new(),
-        toppings: HashMap::new(),
-    };
+    let mut lookup = CatalogRefLookup::default();
     lookup.products.insert(
         p_id,
         CatalogProductRef {
@@ -423,6 +423,12 @@ fn cart_validation_limits_merge_and_sync_planner() {
             is_taxable: true,
             is_effective_active: true,
             image_url: None,
+            is_customizable: true,
+            supports_half_and_half: true,
+            default_cheese_id: None,
+            default_sauce_id: None,
+            included_topping_ids: vec![],
+            max_toppings_override: None,
         },
     );
     lookup.variants.insert(
@@ -442,6 +448,7 @@ fn cart_validation_limits_merge_and_sync_planner() {
             name: "Classic".to_owned(),
             extra_price_paise: 0,
             is_active: true,
+            supports_half_and_half: true,
         },
     );
     lookup.toppings.insert(
@@ -452,6 +459,8 @@ fn cart_validation_limits_merge_and_sync_planner() {
             is_veg: true,
             extra_price_paise: 4_500,
             is_active: true,
+            max_quantity: 2,
+            supports_half_and_half: true,
         },
     );
     lookup.toppings.insert(
@@ -462,6 +471,8 @@ fn cart_validation_limits_merge_and_sync_planner() {
             is_veg: true,
             extra_price_paise: 3_500,
             is_active: false, // unavailable topping flags line unavailable
+            max_quantity: 2,
+            supports_half_and_half: true,
         },
     );
 
@@ -557,4 +568,353 @@ fn storage_key_validator_blocks_traversal_and_accepts_canonical_keys() {
             "expected key to be rejected: {bad:?}"
         );
     }
+}
+
+#[test]
+fn custom_pizza_builder_pricing_validation_and_half_and_half_rules() {
+    let uid = |n: u128| Uuid::from_u128(0x1000_0000_0000_0000_0000_0000_0000_0000 + n);
+    let left_prod = uid(1);
+    let right_prod = uid(2);
+    let left_reg_var = uid(11);
+    let left_xl_var = uid(12);
+    let right_xl_var = uid(13);
+    let classic_crust = uid(21);
+    let cheese_burst = uid(22);
+    let mozz_cheese = uid(31);
+    let burrata_cheese = uid(32);
+    let classic_sauce = uid(41);
+    let pesto_sauce = uid(42);
+    let onion_topping = uid(51);
+    let mushroom_topping = uid(52);
+    let truffle_topping = uid(53);
+
+    let mut lookup = CatalogRefLookup {
+        size_rules: HashMap::from([
+            (
+                SizeCode::Regular,
+                CatalogSizeRuleRef {
+                    size_code: SizeCode::Regular,
+                    display_name: "Regular".to_owned(),
+                    max_toppings: 3,
+                    max_extra_toppings: 2,
+                    supports_half_and_half: false,
+                    ingredient_multiplier_bps: 7_500,
+                    is_active: true,
+                },
+            ),
+            (
+                SizeCode::ExtraLarge,
+                CatalogSizeRuleRef {
+                    size_code: SizeCode::ExtraLarge,
+                    display_name: "Extra Large".to_owned(),
+                    max_toppings: 6,
+                    max_extra_toppings: 3,
+                    supports_half_and_half: true,
+                    ingredient_multiplier_bps: 17_000,
+                    is_active: true,
+                },
+            ),
+        ]),
+        cheeses: HashMap::from([
+            (
+                mozz_cheese,
+                CatalogCheeseRef {
+                    id: mozz_cheese,
+                    name: "Mozzarella".to_owned(),
+                    extra_price_paise: 0,
+                    extra_cheese_price_paise: 5_000,
+                    supports_extra: true,
+                    is_vegan: false,
+                    is_active: true,
+                },
+            ),
+            (
+                burrata_cheese,
+                CatalogCheeseRef {
+                    id: burrata_cheese,
+                    name: "Burrata Blend".to_owned(),
+                    extra_price_paise: 6_000,
+                    extra_cheese_price_paise: 7_500,
+                    supports_extra: true,
+                    is_vegan: false,
+                    is_active: true,
+                },
+            ),
+        ]),
+        sauces: HashMap::from([
+            (
+                classic_sauce,
+                CatalogSauceRef {
+                    id: classic_sauce,
+                    name: "San Marzano".to_owned(),
+                    extra_price_paise: 0,
+                    extra_sauce_price_paise: 2_500,
+                    supports_extra: true,
+                    is_vegan: true,
+                    is_active: true,
+                },
+            ),
+            (
+                pesto_sauce,
+                CatalogSauceRef {
+                    id: pesto_sauce,
+                    name: "Basil Pesto".to_owned(),
+                    extra_price_paise: 4_000,
+                    extra_sauce_price_paise: 3_000,
+                    supports_extra: true,
+                    is_vegan: false,
+                    is_active: true,
+                },
+            ),
+        ]),
+        crusts: HashMap::from([
+            (
+                classic_crust,
+                CatalogCrustRef {
+                    id: classic_crust,
+                    name: "Classic Hand Tossed".to_owned(),
+                    extra_price_paise: 0,
+                    is_active: true,
+                    supports_half_and_half: true,
+                },
+            ),
+            (
+                cheese_burst,
+                CatalogCrustRef {
+                    id: cheese_burst,
+                    name: "Cheese Burst".to_owned(),
+                    extra_price_paise: 9_900,
+                    is_active: true,
+                    supports_half_and_half: false,
+                },
+            ),
+        ]),
+        products: HashMap::from([
+            (
+                left_prod,
+                CatalogProductRef {
+                    id: left_prod,
+                    name: "Margherita".to_owned(),
+                    is_veg: true,
+                    is_taxable: true,
+                    is_effective_active: true,
+                    image_url: None,
+                    is_customizable: true,
+                    supports_half_and_half: true,
+                    default_cheese_id: Some(mozz_cheese),
+                    default_sauce_id: Some(classic_sauce),
+                    included_topping_ids: vec![onion_topping],
+                    max_toppings_override: None,
+                },
+            ),
+            (
+                right_prod,
+                CatalogProductRef {
+                    id: right_prod,
+                    name: "Farmhouse".to_owned(),
+                    is_veg: true,
+                    is_taxable: true,
+                    is_effective_active: true,
+                    image_url: None,
+                    is_customizable: true,
+                    supports_half_and_half: true,
+                    default_cheese_id: Some(mozz_cheese),
+                    default_sauce_id: Some(classic_sauce),
+                    included_topping_ids: vec![mushroom_topping],
+                    max_toppings_override: None,
+                },
+            ),
+        ]),
+        variants: HashMap::from([
+            (
+                left_reg_var,
+                CatalogVariantRef {
+                    id: left_reg_var,
+                    product_id: left_prod,
+                    size_code: SizeCode::Regular,
+                    price_paise: 24_900,
+                    is_active: true,
+                },
+            ),
+            (
+                left_xl_var,
+                CatalogVariantRef {
+                    id: left_xl_var,
+                    product_id: left_prod,
+                    size_code: SizeCode::ExtraLarge,
+                    price_paise: 49_900,
+                    is_active: true,
+                },
+            ),
+            (
+                right_xl_var,
+                CatalogVariantRef {
+                    id: right_xl_var,
+                    product_id: right_prod,
+                    size_code: SizeCode::ExtraLarge,
+                    price_paise: 57_900,
+                    is_active: true,
+                },
+            ),
+        ]),
+        toppings: HashMap::from([
+            (
+                onion_topping,
+                CatalogToppingRef {
+                    id: onion_topping,
+                    name: "Red Onion".to_owned(),
+                    is_veg: true,
+                    extra_price_paise: 3_500,
+                    is_active: true,
+                    max_quantity: 2,
+                    supports_half_and_half: true,
+                },
+            ),
+            (
+                mushroom_topping,
+                CatalogToppingRef {
+                    id: mushroom_topping,
+                    name: "Roasted Mushroom".to_owned(),
+                    is_veg: true,
+                    extra_price_paise: 5_000,
+                    is_active: true,
+                    max_quantity: 2,
+                    supports_half_and_half: true,
+                },
+            ),
+            (
+                truffle_topping,
+                CatalogToppingRef {
+                    id: truffle_topping,
+                    name: "Black Truffle".to_owned(),
+                    is_veg: true,
+                    extra_price_paise: 9_900,
+                    is_active: true,
+                    max_quantity: 1,
+                    supports_half_and_half: false,
+                },
+            ),
+        ]),
+    };
+
+    // Valid half-and-half Extra Large with different sauces, extra cheese, included + half toppings
+    let item_input = CartItemInput {
+        id: Some("hh-1".to_owned()),
+        product_id: left_prod.to_string(),
+        variant_id: left_xl_var.to_string(),
+        crust_id: classic_crust.to_string(),
+        quantity: 2,
+        cheese_id: Some(burrata_cheese.to_string()),
+        extra_cheese: true,
+        sauce_id: Some(classic_sauce.to_string()),
+        extra_sauce: true,
+        is_half_and_half: true,
+        right_product_id: Some(right_prod.to_string()),
+        right_variant_id: Some(right_xl_var.to_string()),
+        right_sauce_id: Some(pesto_sauce.to_string()),
+        removed_included_topping_ids: vec![onion_topping.to_string()],
+        topping_selections: vec![
+            CartToppingInput {
+                topping_id: mushroom_topping.to_string(),
+                placement: ToppingPlacement::Right,
+                quantity: 2, // 1st right-half portion free (included on right_prod), 2nd billed at 50% (2500)
+            },
+            CartToppingInput {
+                topping_id: truffle_topping.to_string(),
+                placement: ToppingPlacement::Whole,
+                quantity: 1, // 9900
+            },
+        ],
+        ..Default::default()
+    };
+
+    let parsed = CartValidation::validate_and_parse_inputs(&[item_input]).unwrap();
+    CartValidation::ensure_catalog_fk_references(&parsed, &lookup).unwrap();
+    let eval = evaluate_single_item(0, &parsed[0], &lookup).unwrap();
+    assert!(eval.is_available, "unexpected issues: {:?}", eval.issues);
+    assert_eq!(eval.price_breakdown.base_price_paise, 49_900);
+    assert_eq!(eval.price_breakdown.half_and_half_surcharge_paise, 8_000);
+    assert_eq!(eval.price_breakdown.cheese_price_paise, 6_000);
+    assert_eq!(eval.price_breakdown.extra_cheese_price_paise, 7_500);
+    // classic 0 * 0.5 + pesto 4000 * 0.5 = 2000
+    assert_eq!(eval.price_breakdown.sauce_price_paise, 2_000);
+    // extra sauce: 2500 * 0.5 + 3000 * 0.5 = 1250 + 1500 = 2750
+    assert_eq!(eval.price_breakdown.extra_sauce_price_paise, 2_750);
+    // toppings: mushroom right (qty 2, 1 included -> billable 1 * 2500 = 2500) + truffle whole (9900) = 12400
+    assert_eq!(eval.price_breakdown.toppings_price_paise, 12_400);
+    assert_eq!(eval.price_breakdown.unit_price_paise, 88_550);
+    assert_eq!(eval.price_breakdown.line_total_paise, 177_100);
+    assert_eq!(eval.product_name, "Half Margherita + Half Farmhouse");
+
+    // Merging: implicit default cheese/sauce matches explicit default cheese/sauce signature.
+    let implicit_item = CartItemInput {
+        product_id: left_prod.to_string(),
+        variant_id: left_xl_var.to_string(),
+        crust_id: classic_crust.to_string(),
+        quantity: 1,
+        ..Default::default()
+    };
+    let explicit_item = CartItemInput {
+        product_id: left_prod.to_string(),
+        variant_id: left_xl_var.to_string(),
+        crust_id: classic_crust.to_string(),
+        cheese_id: Some(mozz_cheese.to_string()),
+        sauce_id: Some(classic_sauce.to_string()),
+        quantity: 2,
+        ..Default::default()
+    };
+    let parsed_pair =
+        CartValidation::validate_and_parse_inputs(&[implicit_item, explicit_item]).unwrap();
+    assert_eq!(
+        compute_configuration_signature(&parsed_pair[0], Some(&lookup)),
+        compute_configuration_signature(&parsed_pair[1], Some(&lookup))
+    );
+    let merged_pair =
+        CartValidation::merge_duplicate_configurations_with_lookup(parsed_pair, Some(&lookup));
+    assert_eq!(merged_pair.len(), 1);
+    assert_eq!(merged_pair[0].quantity, 3);
+
+    // Invalid checks: Regular + Cheese Burst + half-only topping + non-included removal + extra topping limit
+    let invalid_item = CartItemInput {
+        product_id: left_prod.to_string(),
+        variant_id: left_reg_var.to_string(),
+        crust_id: cheese_burst.to_string(),
+        quantity: 1,
+        is_half_and_half: true,
+        right_product_id: Some(right_prod.to_string()),
+        right_variant_id: Some(right_xl_var.to_string()), // mismatched size too
+        removed_included_topping_ids: vec![truffle_topping.to_string()],
+        topping_selections: vec![CartToppingInput {
+            topping_id: truffle_topping.to_string(),
+            placement: ToppingPlacement::Left,
+            quantity: 2, // max_quantity is 1, supports_half_and_half is false
+        }],
+        ..Default::default()
+    };
+    let parsed_invalid = CartValidation::validate_and_parse_inputs(&[invalid_item]).unwrap();
+    let invalid_eval = evaluate_single_item(0, &parsed_invalid[0], &lookup).unwrap();
+    assert!(!invalid_eval.is_available);
+    assert!(invalid_eval
+        .issues
+        .iter()
+        .any(|i| i.code == CartValidationIssueCode::HalfAndHalfUnsupported));
+    assert!(invalid_eval
+        .issues
+        .iter()
+        .any(|i| i.code == CartValidationIssueCode::RightHalfInvalid));
+    assert!(invalid_eval
+        .issues
+        .iter()
+        .any(|i| i.code == CartValidationIssueCode::IncludedToppingInvalid));
+    assert!(invalid_eval
+        .issues
+        .iter()
+        .any(|i| i.code == CartValidationIssueCode::ToppingPlacementInvalid));
+    assert!(invalid_eval
+        .issues
+        .iter()
+        .any(|i| i.code == CartValidationIssueCode::InvalidQuantity));
+
+    // Prevent unused mutation warning while keeping lookup mutable cleanly if extended later
+    let _ = &mut lookup;
 }

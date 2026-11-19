@@ -734,7 +734,7 @@ private fun KdsTicketCard(
                   modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                 )
               }
-              Column(modifier = Modifier.weight(1f)) {
+              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                   text = item.productName,
                   style = MaterialTheme.typography.titleMedium,
@@ -745,7 +745,72 @@ private fun KdsTicketCard(
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (item.toppings.isNotEmpty()) {
+                val snap = item.customizationSnapshot
+                if (snap != null) {
+                  if (snap.isHalfAndHalf && !snap.rightProductName.isNullOrBlank()) {
+                    Text(
+                      text = "HALF & HALF • L: ${snap.leftProductName.ifBlank { item.productName }} | R: ${snap.rightProductName}",
+                      style = MaterialTheme.typography.bodySmall,
+                      fontWeight = FontWeight.SemiBold,
+                      color = MaterialTheme.colorScheme.secondary,
+                    )
+                  }
+                  snap.cheeseName?.takeIf { it.isNotBlank() }?.let { cheeseName ->
+                    Text(
+                      text = "Cheese: $cheeseName${if (snap.extraCheese) " [EXTRA]" else ""}",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+                  snap.sauceName?.takeIf { it.isNotBlank() }?.let { sauceName ->
+                    val saucePrep = if (
+                      snap.isHalfAndHalf &&
+                      !snap.rightSauceName.isNullOrBlank() &&
+                      snap.rightSauceName != sauceName
+                    ) {
+                      "Sauces: L: $sauceName | R: ${snap.rightSauceName}${if (snap.extraSauce) " [EXTRA]" else ""}"
+                    } else {
+                      "Sauce: $sauceName${if (snap.extraSauce) " [EXTRA]" else ""}"
+                    }
+                    Text(
+                      text = saucePrep,
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+                  if (snap.removedIncludedToppings.isNotEmpty()) {
+                    Text(
+                      text = "NO: ${snap.removedIncludedToppings.joinToString(", ")}",
+                      style = MaterialTheme.typography.bodySmall,
+                      fontWeight = FontWeight.SemiBold,
+                      color = MaterialTheme.colorScheme.error,
+                    )
+                  }
+                  if (snap.toppingDetails.isNotEmpty()) {
+                    val prepToppings = snap.toppingDetails.joinToString(", ") { detail ->
+                      val side = when (detail.placement.name) {
+                        "LEFT" -> " (LEFT)"
+                        "RIGHT" -> " (RIGHT)"
+                        else -> ""
+                      }
+                      val qty = if (detail.quantity > 1) " x${detail.quantity}" else ""
+                      "${detail.name}$side$qty"
+                    }
+                    Text(
+                      text = "+ $prepToppings",
+                      style = MaterialTheme.typography.bodySmall,
+                      fontWeight = FontWeight.Medium,
+                      color = MaterialTheme.colorScheme.primary,
+                    )
+                  } else if (item.toppings.isNotEmpty()) {
+                    Text(
+                      text = "+ ${item.toppings.joinToString(", ")}",
+                      style = MaterialTheme.typography.bodySmall,
+                      fontWeight = FontWeight.Medium,
+                      color = MaterialTheme.colorScheme.primary,
+                    )
+                  }
+                } else if (item.toppings.isNotEmpty()) {
                   Text(
                     text = "+ ${item.toppings.joinToString(", ")}",
                     style = MaterialTheme.typography.bodySmall,

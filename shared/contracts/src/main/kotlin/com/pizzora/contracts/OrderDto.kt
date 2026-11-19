@@ -27,6 +27,33 @@ data class DeliveryAddressSnapshotDto(
 )
 
 @Serializable
+data class OrderItemToppingSnapshotDto(
+  @SerialName("topping_id") val toppingId: String,
+  val name: String,
+  val placement: ToppingPlacement = ToppingPlacement.WHOLE,
+  val quantity: Int = 1,
+  @SerialName("is_included") val isIncluded: Boolean = false,
+  @SerialName("unit_price_paise") val unitPricePaise: Long = 0L,
+  @SerialName("total_price_paise") val totalPricePaise: Long = 0L,
+)
+
+@Serializable
+data class OrderItemCustomizationSnapshotDto(
+  @SerialName("is_half_and_half") val isHalfAndHalf: Boolean = false,
+  @SerialName("left_product_name") val leftProductName: String = "",
+  @SerialName("right_product_id") val rightProductId: String? = null,
+  @SerialName("right_product_name") val rightProductName: String? = null,
+  @SerialName("cheese_name") val cheeseName: String? = null,
+  @SerialName("extra_cheese") val extraCheese: Boolean = false,
+  @SerialName("sauce_name") val sauceName: String? = null,
+  @SerialName("right_sauce_name") val rightSauceName: String? = null,
+  @SerialName("extra_sauce") val extraSauce: Boolean = false,
+  @SerialName("removed_included_toppings") val removedIncludedToppings: List<String> = emptyList(),
+  @SerialName("topping_details") val toppingDetails: List<OrderItemToppingSnapshotDto> = emptyList(),
+  @SerialName("configuration_signature") val configurationSignature: String = "",
+)
+
+@Serializable
 data class OrderItemDto(
   val id: String,
   @SerialName("product_id") val productId: String,
@@ -37,6 +64,8 @@ data class OrderItemDto(
   @SerialName("unit_price_paise") val unitPricePaise: Long,
   val quantity: Int,
   @SerialName("line_total_paise") val lineTotalPaise: Long,
+  @SerialName("customization_snapshot") val customizationSnapshot: OrderItemCustomizationSnapshotDto? = null,
+  @SerialName("price_breakdown") val priceBreakdown: PizzaPriceBreakdownDto? = null,
 )
 
 @Serializable
