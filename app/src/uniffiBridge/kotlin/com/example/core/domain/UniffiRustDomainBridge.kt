@@ -1,5 +1,10 @@
 package com.example.core.domain
 
+import com.pizzora.contracts.CartItemCustomizationSummaryDto
+import com.pizzora.contracts.CartItemInputDto
+import com.pizzora.contracts.CartToppingViewDto
+import com.pizzora.contracts.CartValidationIssueCode
+import com.pizzora.contracts.CartValidationIssueDto
 import com.pizzora.contracts.CausalDecision
 import com.pizzora.contracts.CouponCalculationSpec
 import com.pizzora.contracts.DiscountType
@@ -7,13 +12,29 @@ import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.PaymentAttemptStatus
 import com.pizzora.contracts.PaymentStatus
+import com.pizzora.contracts.PizzaBuilderEvaluation
+import com.pizzora.contracts.PizzaPriceBreakdownDto
 import com.pizzora.contracts.PriceBreakdownDto
 import com.pizzora.contracts.PricedLineInput
+import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.RealtimeEventDto
+import com.pizzora.contracts.SizeCode
+import com.pizzora.contracts.ToppingPlacement
 import com.pizzora.contracts.UserRole
+import uniffi.pizzora_uniffi.FfiCartItemInput
 import uniffi.pizzora_uniffi.FfiCartSyncAction
 import uniffi.pizzora_uniffi.FfiCartSyncPlanRequest
 import uniffi.pizzora_uniffi.FfiCartSyncTrigger
+import uniffi.pizzora_uniffi.FfiCartToppingInput
+import uniffi.pizzora_uniffi.FfiCartValidationIssueCode
+import uniffi.pizzora_uniffi.FfiCatalogCheeseRef
+import uniffi.pizzora_uniffi.FfiCatalogCrustRef
+import uniffi.pizzora_uniffi.FfiCatalogLookupInput
+import uniffi.pizzora_uniffi.FfiCatalogProductRef
+import uniffi.pizzora_uniffi.FfiCatalogSauceRef
+import uniffi.pizzora_uniffi.FfiCatalogSizeRuleRef
+import uniffi.pizzora_uniffi.FfiCatalogToppingRef
+import uniffi.pizzora_uniffi.FfiCatalogVariantRef
 import uniffi.pizzora_uniffi.FfiCausalDecision
 import uniffi.pizzora_uniffi.FfiCouponCalculationSpec
 import uniffi.pizzora_uniffi.FfiDiscountType
@@ -25,6 +46,8 @@ import uniffi.pizzora_uniffi.FfiPaymentStatus
 import uniffi.pizzora_uniffi.FfiPricedLineInput
 import uniffi.pizzora_uniffi.FfiRealtimeEventInput
 import uniffi.pizzora_uniffi.FfiSessionIdentity
+import uniffi.pizzora_uniffi.FfiSizeCode
+import uniffi.pizzora_uniffi.FfiToppingPlacement
 import uniffi.pizzora_uniffi.FfiUserRole
 import uniffi.pizzora_uniffi.cartFallbackOnReplaceHttpError
 import uniffi.pizzora_uniffi.cartPlanSync
@@ -38,6 +61,8 @@ import uniffi.pizzora_uniffi.orderCanTransition
 import uniffi.pizzora_uniffi.orderNextKdsStatus
 import uniffi.pizzora_uniffi.paymentCanTransitionAttempt
 import uniffi.pizzora_uniffi.paymentCanTransitionPayment
+import uniffi.pizzora_uniffi.pizzaBuilderComputeSignature
+import uniffi.pizzora_uniffi.pizzaBuilderEvaluate
 import uniffi.pizzora_uniffi.pizzoraCoreVersion
 import uniffi.pizzora_uniffi.pricingCalculateDiscountPaise
 import uniffi.pizzora_uniffi.pricingCalculateLineTotalPaise
@@ -102,6 +127,80 @@ class UniffiRustDomainBridge : DomainBridge {
         cgstPaise = ffi.cgstPaise,
         sgstPaise = ffi.sgstPaise,
         totalPaise = ffi.totalPaise,
+      )
+    }
+
+  override fun computePizzaConfigurationSignature(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse?,
+  ): String =
+    mapDomainException {
+      pizzaBuilderComputeSignature(input.toFfi(), menu?.toFfiLookup())
+    }
+
+  override fun evaluatePizzaCustomization(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse,
+  ): PizzaBuilderEvaluation =
+    mapDomainException {
+      val ffi = pizzaBuilderEvaluate(input.toFfi(), menu.toFfiLookup())
+      PizzaBuilderEvaluation(
+        isValid = ffi.isValid,
+        issues = ffi.issues.map {
+          CartValidationIssueDto(
+            code = it.code.toContract(),
+            message = it.message,
+          )
+        },
+        priceBreakdown = PizzaPriceBreakdownDto(
+          basePricePaise = ffi.priceBreakdown.basePricePaise,
+          halfAndHalfSurchargePaise = ffi.priceBreakdown.halfAndHalfSurchargePaise,
+          crustPricePaise = ffi.priceBreakdown.crustPricePaise,
+          cheesePricePaise = ffi.priceBreakdown.cheesePricePaise,
+          extraCheesePricePaise = ffi.priceBreakdown.extraCheesePricePaise,
+          saucePricePaise = ffi.priceBreakdown.saucePricePaise,
+          extraSaucePricePaise = ffi.priceBreakdown.extraSaucePricePaise,
+          toppingsPricePaise = ffi.priceBreakdown.toppingsPricePaise,
+          unitPricePaise = ffi.priceBreakdown.unitPricePaise,
+          lineTotalPaise = ffi.priceBreakdown.lineTotalPaise,
+        ),
+        unitPricePaise = ffi.unitPricePaise,
+        lineTotalPaise = ffi.lineTotalPaise,
+        toppings = ffi.toppings.map {
+          CartToppingViewDto(
+            toppingId = it.toppingId,
+            name = it.name,
+            isVeg = it.isVeg,
+            extraPricePaise = it.extraPricePaise,
+            isAvailable = it.isAvailable,
+            placement = it.placement.toContract(),
+            quantity = it.quantity,
+            isIncluded = it.isIncluded,
+            unitPricePaise = it.unitPricePaise,
+            totalPricePaise = it.totalPricePaise,
+          )
+        },
+        customization = CartItemCustomizationSummaryDto(
+          isHalfAndHalf = ffi.customization.isHalfAndHalf,
+          rightProductId = ffi.customization.rightProductId,
+          rightProductName = ffi.customization.rightProductName,
+          rightVariantId = ffi.customization.rightVariantId,
+          cheeseId = ffi.customization.cheeseId,
+          cheeseName = ffi.customization.cheeseName,
+          extraCheese = ffi.customization.extraCheese,
+          sauceId = ffi.customization.sauceId,
+          sauceName = ffi.customization.sauceName,
+          rightSauceId = ffi.customization.rightSauceId,
+          rightSauceName = ffi.customization.rightSauceName,
+          extraSauce = ffi.customization.extraSauce,
+          removedIncludedToppings = ffi.customization.removedIncludedToppings,
+          configurationSignature = ffi.customization.configurationSignature,
+        ),
+        configurationSignature = ffi.configurationSignature,
+        effectiveSizeCode = ffi.effectiveSizeCode?.toContract(),
+        effectiveCheeseId = ffi.effectiveCheeseId,
+        effectiveSauceId = ffi.effectiveSauceId,
+        effectiveRightSauceId = ffi.effectiveRightSauceId,
       )
     }
 
@@ -306,4 +405,171 @@ private fun FfiCartSyncAction.toDomain(): CartSyncAction = when (this) {
     CartSyncAction.REPLACE_SERVER_CART_WITH_VALIDATE_FALLBACK
   FfiCartSyncAction.VALIDATE_CART_ONLY -> CartSyncAction.VALIDATE_CART_ONLY
   FfiCartSyncAction.NO_OP_EMPTY_LOCAL -> CartSyncAction.NO_OP_EMPTY_LOCAL
+}
+
+private fun SizeCode.toFfi(): FfiSizeCode = when (this) {
+  SizeCode.REGULAR -> FfiSizeCode.REGULAR
+  SizeCode.MEDIUM -> FfiSizeCode.MEDIUM
+  SizeCode.LARGE -> FfiSizeCode.LARGE
+  SizeCode.EXTRA_LARGE -> FfiSizeCode.EXTRA_LARGE
+}
+
+private fun FfiSizeCode.toContract(): SizeCode = when (this) {
+  FfiSizeCode.REGULAR -> SizeCode.REGULAR
+  FfiSizeCode.MEDIUM -> SizeCode.MEDIUM
+  FfiSizeCode.LARGE -> SizeCode.LARGE
+  FfiSizeCode.EXTRA_LARGE -> SizeCode.EXTRA_LARGE
+}
+
+private fun ToppingPlacement.toFfi(): FfiToppingPlacement = when (this) {
+  ToppingPlacement.WHOLE -> FfiToppingPlacement.WHOLE
+  ToppingPlacement.LEFT -> FfiToppingPlacement.LEFT
+  ToppingPlacement.RIGHT -> FfiToppingPlacement.RIGHT
+}
+
+private fun FfiToppingPlacement.toContract(): ToppingPlacement = when (this) {
+  FfiToppingPlacement.WHOLE -> ToppingPlacement.WHOLE
+  FfiToppingPlacement.LEFT -> ToppingPlacement.LEFT
+  FfiToppingPlacement.RIGHT -> ToppingPlacement.RIGHT
+}
+
+private fun FfiCartValidationIssueCode.toContract(): CartValidationIssueCode = when (this) {
+  FfiCartValidationIssueCode.PRODUCT_UNAVAILABLE -> CartValidationIssueCode.PRODUCT_UNAVAILABLE
+  FfiCartValidationIssueCode.VARIANT_UNAVAILABLE -> CartValidationIssueCode.VARIANT_UNAVAILABLE
+  FfiCartValidationIssueCode.CRUST_UNAVAILABLE -> CartValidationIssueCode.CRUST_UNAVAILABLE
+  FfiCartValidationIssueCode.TOPPING_UNAVAILABLE -> CartValidationIssueCode.TOPPING_UNAVAILABLE
+  FfiCartValidationIssueCode.INVALID_QUANTITY -> CartValidationIssueCode.INVALID_QUANTITY
+  FfiCartValidationIssueCode.VARIANT_PRODUCT_MISMATCH ->
+    CartValidationIssueCode.VARIANT_PRODUCT_MISMATCH
+  FfiCartValidationIssueCode.SIZE_UNAVAILABLE -> CartValidationIssueCode.SIZE_UNAVAILABLE
+  FfiCartValidationIssueCode.CHEESE_UNAVAILABLE -> CartValidationIssueCode.CHEESE_UNAVAILABLE
+  FfiCartValidationIssueCode.SAUCE_UNAVAILABLE -> CartValidationIssueCode.SAUCE_UNAVAILABLE
+  FfiCartValidationIssueCode.EXTRA_CHEESE_UNAVAILABLE ->
+    CartValidationIssueCode.EXTRA_CHEESE_UNAVAILABLE
+  FfiCartValidationIssueCode.EXTRA_SAUCE_UNAVAILABLE ->
+    CartValidationIssueCode.EXTRA_SAUCE_UNAVAILABLE
+  FfiCartValidationIssueCode.HALF_AND_HALF_UNSUPPORTED ->
+    CartValidationIssueCode.HALF_AND_HALF_UNSUPPORTED
+  FfiCartValidationIssueCode.RIGHT_HALF_INVALID -> CartValidationIssueCode.RIGHT_HALF_INVALID
+  FfiCartValidationIssueCode.TOPPING_PLACEMENT_INVALID ->
+    CartValidationIssueCode.TOPPING_PLACEMENT_INVALID
+  FfiCartValidationIssueCode.TOPPING_LIMIT_EXCEEDED ->
+    CartValidationIssueCode.TOPPING_LIMIT_EXCEEDED
+  FfiCartValidationIssueCode.EXTRA_TOPPING_LIMIT_EXCEEDED ->
+    CartValidationIssueCode.EXTRA_TOPPING_LIMIT_EXCEEDED
+  FfiCartValidationIssueCode.DUPLICATE_SELECTION -> CartValidationIssueCode.DUPLICATE_SELECTION
+  FfiCartValidationIssueCode.INCLUDED_TOPPING_INVALID ->
+    CartValidationIssueCode.INCLUDED_TOPPING_INVALID
+}
+
+private fun CartItemInputDto.toFfi(): FfiCartItemInput =
+  FfiCartItemInput(
+    id = id,
+    productId = productId,
+    variantId = variantId,
+    crustId = crustId,
+    toppingIds = toppingIds,
+    quantity = quantity,
+    cheeseId = cheeseId,
+    extraCheese = extraCheese,
+    sauceId = sauceId,
+    extraSauce = extraSauce,
+    isHalfAndHalf = isHalfAndHalf,
+    rightProductId = rightProductId,
+    rightVariantId = rightVariantId,
+    rightSauceId = rightSauceId,
+    removedIncludedToppingIds = removedIncludedToppingIds,
+    toppingSelections = toppingSelections.map {
+      FfiCartToppingInput(
+        toppingId = it.toppingId,
+        placement = it.placement.toFfi(),
+        quantity = it.quantity,
+      )
+    },
+  )
+
+private fun PublicMenuResponse.toFfiLookup(): FfiCatalogLookupInput {
+  val activeCategoryIds = categories.filter { it.isActive }.map { it.id }.toSet()
+  return FfiCatalogLookupInput(
+    products = products.map { p ->
+      FfiCatalogProductRef(
+        id = p.id,
+        name = p.name,
+        isVeg = p.isVeg,
+        isTaxable = p.isTaxable,
+        isEffectiveActive = p.isActive && (activeCategoryIds.isEmpty() || p.categoryId in activeCategoryIds),
+        imageUrl = p.images.firstOrNull()?.publicUrl,
+        isCustomizable = p.isCustomizable,
+        supportsHalfAndHalf = p.supportsHalfAndHalf,
+        defaultCheeseId = p.defaultCheeseId,
+        defaultSauceId = p.defaultSauceId,
+        includedToppingIds = p.includedToppingIds,
+        maxToppingsOverride = p.maxToppingsOverride,
+      )
+    },
+    variants = products.flatMap { p ->
+      p.variants.map { v ->
+        FfiCatalogVariantRef(
+          id = v.id,
+          productId = v.productId,
+          sizeCode = v.sizeCode.toFfi(),
+          pricePaise = v.pricePaise,
+          isActive = v.isActive,
+        )
+      }
+    },
+    crusts = crusts.map { c ->
+      FfiCatalogCrustRef(
+        id = c.id,
+        name = c.name,
+        extraPricePaise = c.extraPricePaise,
+        isActive = c.isActive,
+        supportsHalfAndHalf = c.supportsHalfAndHalf,
+      )
+    },
+    toppings = toppings.map { t ->
+      FfiCatalogToppingRef(
+        id = t.id,
+        name = t.name,
+        isVeg = t.isVeg,
+        extraPricePaise = t.extraPricePaise,
+        isActive = t.isActive,
+        maxQuantity = t.maxQuantity,
+        supportsHalfAndHalf = t.supportsHalfAndHalf,
+      )
+    },
+    sizeRules = sizeRules.map { sr ->
+      FfiCatalogSizeRuleRef(
+        sizeCode = sr.sizeCode.toFfi(),
+        displayName = sr.displayName,
+        maxToppings = sr.maxToppings,
+        maxExtraToppings = sr.maxExtraToppings,
+        supportsHalfAndHalf = sr.supportsHalfAndHalf,
+        ingredientMultiplierBps = sr.ingredientMultiplierBps,
+        isActive = sr.isActive,
+      )
+    },
+    cheeses = cheeses.map { ch ->
+      FfiCatalogCheeseRef(
+        id = ch.id,
+        name = ch.name,
+        extraPricePaise = ch.extraPricePaise,
+        extraCheesePricePaise = ch.extraCheesePricePaise,
+        supportsExtra = ch.supportsExtra,
+        isVegan = ch.isVegan,
+        isActive = ch.isActive,
+      )
+    },
+    sauces = sauces.map { sc ->
+      FfiCatalogSauceRef(
+        id = sc.id,
+        name = sc.name,
+        extraPricePaise = sc.extraPricePaise,
+        extraSaucePricePaise = sc.extraSaucePricePaise,
+        supportsExtra = sc.supportsExtra,
+        isVegan = sc.isVegan,
+        isActive = sc.isActive,
+      )
+    },
+  )
 }

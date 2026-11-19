@@ -28,9 +28,13 @@ import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.ApiErrorDetail
 import com.pizzora.contracts.ApiErrorEnvelope
 import com.pizzora.contracts.AvailableSlotsResponse
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CartItemViewDto
 import com.pizzora.contracts.CartResponseDto
+import com.pizzora.contracts.CartToppingInputDto
+import com.pizzora.contracts.CartValidationIssueCode
 import com.pizzora.contracts.CausalDecision
+import com.pizzora.contracts.CheeseOptionDto
 import com.pizzora.contracts.CheckoutRequest
 import com.pizzora.contracts.CheckoutResponse
 import com.pizzora.contracts.CouponCalculationSpec
@@ -51,13 +55,18 @@ import com.pizzora.contracts.PaymentAttemptStatus
 import com.pizzora.contracts.PaymentMethod
 import com.pizzora.contracts.PaymentStatus
 import com.pizzora.contracts.PaymentSummaryDto
+import com.pizzora.contracts.PizzaSizeRuleDto
 import com.pizzora.contracts.PriceBreakdownDto
 import com.pizzora.contracts.PricedLineInput
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductVariantDto
+import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.RealtimeEventDto
+import com.pizzora.contracts.SauceOptionDto
 import com.pizzora.contracts.ScheduleType
 import com.pizzora.contracts.SizeCode
+import com.pizzora.contracts.ToppingDto
+import com.pizzora.contracts.ToppingPlacement
 import com.pizzora.contracts.UpsertAddressRequest
 import com.pizzora.contracts.UserProfileDto
 import com.pizzora.contracts.UserRole
@@ -624,7 +633,7 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
 
     val addRes = repo.addCustomizedItem(
       product = ProductDto(
-        id = "p1",
+        id = "88888888-8888-4888-8888-888888888888",
         categoryId = "c1",
         categoryName = "Classics",
         name = "Margherita",
@@ -633,8 +642,8 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
         isActive = true,
         isTaxable = true,
       ),
-      variant = ProductVariantDto("v1", "p1", SizeCode.REGULAR, 19_900L, true),
-      crust = CrustOptionDto("cr1", "Hand Tossed", 0L, true),
+      variant = ProductVariantDto("99999999-9999-4999-8999-999999999991", "88888888-8888-4888-8888-888888888888", SizeCode.REGULAR, 19_900L, true),
+      crust = CrustOptionDto("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", "Hand Tossed", 0L, true),
       toppings = emptyList(),
       quantity = 1,
     )
@@ -765,5 +774,123 @@ class Phase4UniFfiDomainBridgeRobolectricTest {
       ),
     )
     assertEquals(OrderStatus.READY to OrderStatus.COMPLETED, spyBridge.recordedKdsNext.single())
+  }
+
+  @Test
+  fun pizzaBuilder_signature_and_evaluation_match_across_domain_bridges() {
+    val menu = PublicMenuResponse(
+      categories = emptyList(),
+      products = listOf(
+        ProductDto(
+          id = "11111111-1111-4111-8111-111111111111",
+          categoryId = "cat-1",
+          categoryName = "Classics",
+          name = "Margherita",
+          description = "Tomato & mozzarella",
+          isVeg = true,
+          isActive = true,
+          isTaxable = true,
+          variants = listOf(
+            ProductVariantDto("33333333-3333-4333-8333-333333333331", "11111111-1111-4111-8111-111111111111", SizeCode.REGULAR, 29_900L, true),
+            ProductVariantDto("33333333-3333-4333-8333-333333333332", "11111111-1111-4111-8111-111111111111", SizeCode.LARGE, 54_900L, true),
+          ),
+          supportsHalfAndHalf = true,
+          defaultCheeseId = "44444444-4444-4444-8444-444444444441",
+          defaultSauceId = "55555555-5555-4555-8555-555555555551",
+          includedToppingIds = listOf("66666666-6666-4666-8666-666666666661"),
+        ),
+        ProductDto(
+          id = "22222222-2222-4222-8222-222222222222",
+          categoryId = "cat-1",
+          categoryName = "Specials",
+          name = "Farmhouse",
+          description = "Peppers & olives",
+          isVeg = true,
+          isActive = true,
+          isTaxable = true,
+          variants = listOf(
+            ProductVariantDto("33333333-3333-4333-8333-333333333333", "22222222-2222-4222-8222-222222222222", SizeCode.LARGE, 64_900L, true),
+          ),
+          supportsHalfAndHalf = true,
+          defaultCheeseId = "44444444-4444-4444-8444-444444444441",
+          defaultSauceId = "55555555-5555-4555-8555-555555555552",
+          includedToppingIds = listOf("66666666-6666-4666-8666-666666666662"),
+        ),
+      ),
+      crusts = listOf(
+        CrustOptionDto("77777777-7777-4777-8777-777777777771", "Hand-Tossed", 0L, true, supportsHalfAndHalf = true),
+        CrustOptionDto("77777777-7777-4777-8777-777777777772", "Cheese Burst", 9_900L, true, supportsHalfAndHalf = false),
+      ),
+      toppings = listOf(
+        ToppingDto("66666666-6666-4666-8666-666666666661", "Fresh Basil", true, 2_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
+        ToppingDto("66666666-6666-4666-8666-666666666662", "Black Olives", true, 4_500L, true, maxQuantity = 2, supportsHalfAndHalf = true),
+        ToppingDto("66666666-6666-4666-8666-666666666663", "Burrata", true, 9_500L, true, maxQuantity = 2, supportsHalfAndHalf = false),
+      ),
+      gstBps = 500,
+      storeName = "PIZZORA",
+      isAcceptingOrders = true,
+      sizeRules = listOf(
+        PizzaSizeRuleDto(SizeCode.REGULAR, "Regular", maxToppings = 4, maxExtraToppings = 2, supportsHalfAndHalf = false),
+        PizzaSizeRuleDto(SizeCode.LARGE, "Large", maxToppings = 8, maxExtraToppings = 4, supportsHalfAndHalf = true),
+      ),
+      cheeses = listOf(
+        CheeseOptionDto("44444444-4444-4444-8444-444444444441", "Fior di Latte", 0L, 6_000L, supportsExtra = true, isVegan = false, isActive = true),
+        CheeseOptionDto("44444444-4444-4444-8444-444444444442", "Cashew Mozzarella", 4_000L, 5_000L, supportsExtra = true, isVegan = true, isActive = true),
+      ),
+      sauces = listOf(
+        SauceOptionDto("55555555-5555-4555-8555-555555555551", "San Marzano", 0L, 2_000L, supportsExtra = true, isVegan = true, isActive = true),
+        SauceOptionDto("55555555-5555-4555-8555-555555555552", "Basil Pesto", 4_001L, 3_001L, supportsExtra = true, isVegan = true, isActive = true),
+      ),
+    )
+
+    val validHalfInput = CartItemInputDto(
+      productId = "11111111-1111-4111-8111-111111111111",
+      variantId = "33333333-3333-4333-8333-333333333332",
+      crustId = "77777777-7777-4777-8777-777777777771",
+      quantity = 2,
+      cheeseId = "44444444-4444-4444-8444-444444444442",
+      extraCheese = true,
+      sauceId = "55555555-5555-4555-8555-555555555551",
+      extraSauce = true,
+      isHalfAndHalf = true,
+      rightProductId = "22222222-2222-4222-8222-222222222222",
+      rightVariantId = "33333333-3333-4333-8333-333333333333",
+      rightSauceId = "55555555-5555-4555-8555-555555555552",
+      removedIncludedToppingIds = listOf("66666666-6666-4666-8666-666666666661"),
+      toppingSelections = listOf(
+        CartToppingInputDto("66666666-6666-4666-8666-666666666662", ToppingPlacement.LEFT, quantity = 1),
+        CartToppingInputDto("66666666-6666-4666-8666-666666666662", ToppingPlacement.RIGHT, quantity = 2),
+      ),
+    )
+
+    val invalidRegularHalf = validHalfInput.copy(
+      variantId = "33333333-3333-4333-8333-333333333331",
+      crustId = "77777777-7777-4777-8777-777777777772",
+      toppingSelections = listOf(
+        CartToppingInputDto("66666666-6666-4666-8666-666666666663", ToppingPlacement.LEFT, quantity = 3),
+      ),
+    )
+
+    val bridges = listOf(RustDomainBridge, KotlinContractsDomainBridge())
+    for (bridge in bridges) {
+      val eval = bridge.evaluatePizzaCustomization(validHalfInput, menu)
+      assertTrue(eval.isValid)
+      // Base 54900 + Half surcharge (64900-54900=10000) + Cheese 4000 + ExtraCheese 5000
+      // + LeftSauce 0 + RightSauce 50% HALF_UP(4001)=2001
+      // + ExtraSauce (50% HALF_UP(2000)=1000 + 50% HALF_UP(3001)=1501 = 2501)
+      // + Olives Left 50%(4500)=2250 + Olives Right included(1 free) + 1*2250 = 4500
+      // Unit = 54900 + 10000 + 4000 + 5000 + 2001 + 2501 + 4500 = 82902 paise
+      assertEquals(82_902L, eval.unitPricePaise)
+      assertEquals(165_804L, eval.lineTotalPaise)
+      assertEquals(bridge.computePizzaConfigurationSignature(validHalfInput, menu), eval.configurationSignature)
+
+      val invalidEval = bridge.evaluatePizzaCustomization(invalidRegularHalf, menu)
+      assertFalse(invalidEval.isValid)
+      val codes = invalidEval.issues.map { it.code }.toSet()
+      assertTrue(CartValidationIssueCode.HALF_AND_HALF_UNSUPPORTED in codes)
+      assertTrue(CartValidationIssueCode.RIGHT_HALF_INVALID in codes)
+      assertTrue(CartValidationIssueCode.TOPPING_PLACEMENT_INVALID in codes)
+      assertTrue(CartValidationIssueCode.INVALID_QUANTITY in codes)
+    }
   }
 }

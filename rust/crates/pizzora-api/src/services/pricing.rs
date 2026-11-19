@@ -33,10 +33,11 @@ impl PricingService {
     ) -> Result<PricingQuoteResponse, ApiError> {
         let core_inputs = to_core_cart_inputs(&request.items);
         let parsed = CartValidation::validate_and_parse_inputs(&core_inputs)?;
-        let merged = CartValidation::merge_duplicate_configurations(parsed);
 
         let mut conn = self.pool.acquire().await?;
         let lookup = load_catalog_ref_lookup(&mut conn, &*self.storage).await?;
+        let merged =
+            CartValidation::merge_duplicate_configurations_with_lookup(parsed, Some(&lookup));
         CartValidation::ensure_catalog_fk_references(&merged, &lookup)?;
         let evaluated = CartValidation::evaluate_cart(&merged, &lookup)?;
         if !evaluated.all_available {

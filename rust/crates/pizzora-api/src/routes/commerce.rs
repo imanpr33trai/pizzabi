@@ -5,8 +5,9 @@ use pizzora_db::{AvailableCouponsResponse, CouponDto, CreateCouponRequest, Updat
 use serde::Deserialize;
 
 use crate::dto::{
-    CartResponseDto, CheckoutRequest, CheckoutResponse, PricingQuoteRequest, PricingQuoteResponse,
-    ReplaceCartRequest, ValidateCartRequest,
+    CartResponseDto, CheckoutRequest, CheckoutResponse, PizzaBuilderQuoteRequest,
+    PizzaBuilderQuoteResponse, PricingQuoteRequest, PricingQuoteResponse, ReplaceCartRequest,
+    ValidateCartRequest,
 };
 use crate::error::ApiError;
 use crate::extractors::{
@@ -75,6 +76,16 @@ pub async fn quote_pricing(
         .pricing_service
         .quote_price(principal.user_id, &body)
         .await?;
+    Ok(Json(quote))
+}
+
+pub async fn quote_custom_pizza(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+    ValidatedJson(body): ValidatedJson<PizzaBuilderQuoteRequest>,
+) -> Result<Json<PizzaBuilderQuoteResponse>, ApiError> {
+    require_permission(&state, &principal, "cart:manage").await?;
+    let quote = state.cart_service.quote_custom_pizza(&body).await?;
     Ok(Json(quote))
 }
 

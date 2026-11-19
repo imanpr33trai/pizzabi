@@ -12,6 +12,7 @@ data class KdsTicketItemDto(
   @SerialName("crust_name") val crustName: String,
   val toppings: List<String> = emptyList(),
   val quantity: Int,
+  @SerialName("customization_snapshot") val customizationSnapshot: OrderItemCustomizationSnapshotDto? = null,
 )
 
 @Serializable

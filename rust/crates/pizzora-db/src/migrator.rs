@@ -885,14 +885,17 @@ mod tests {
             .await
             .expect("fresh bootstrap succeeds");
         assert_eq!(fresh_outcome.mode, HandoffMode::FreshBootstrap);
-        assert_eq!(fresh_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(fresh_outcome.applied_or_verified_versions, vec![1, 2, 3, 4]);
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
 
         let resumed_outcome = run_locked_handoff(&fresh_pool)
             .await
             .expect("subsequent run resumes cleanly");
         assert_eq!(resumed_outcome.mode, HandoffMode::ResumedSqlx);
-        assert_eq!(resumed_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(
+            resumed_outcome.applied_or_verified_versions,
+            vec![1, 2, 3, 4]
+        );
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
         drop_isolated_test_db(&admin_pool, &fresh_db, fresh_pool).await;
 
@@ -974,13 +977,13 @@ mod tests {
             .await
             .expect("adopt Flyway V1..V3 without re-running DDL");
         assert_eq!(adopt_outcome.mode, HandoffMode::AdoptedExistingFlyway);
-        assert_eq!(adopt_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(adopt_outcome.applied_or_verified_versions, vec![1, 2, 3, 4]);
         let preflight_after = verify_migration_readiness_readonly(&adopt_pool)
             .await
             .expect("read-only preflight succeeds after SQLx adoption");
         assert!(preflight_after.sqlx_table_exists);
         assert!(preflight_after.sqlx_verified);
-        assert_eq!(preflight_after.sqlx_versions, vec![1, 2, 3]);
+        assert_eq!(preflight_after.sqlx_versions, vec![1, 2, 3, 4]);
         let zero_exec_rows: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM _sqlx_migrations WHERE version BETWEEN 1 AND 3 AND execution_time = 0",
         )
@@ -999,7 +1002,7 @@ mod tests {
             .await
             .expect("partial baseline recovers cleanly");
         assert_eq!(recovered.mode, HandoffMode::AdoptedExistingFlyway);
-        assert_eq!(recovered.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(recovered.applied_or_verified_versions, vec![1, 2, 3, 4]);
 
         // Tampered Flyway checksum -> MigrationChecksumMismatch & lock released
         let original_v2_crc = canonical_v1_v3_specs().unwrap()[1].2;

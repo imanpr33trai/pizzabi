@@ -1,5 +1,6 @@
 package com.example.core.domain
 
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CausalDecision
 import com.pizzora.contracts.CouponCalculationSpec
 import com.pizzora.contracts.FulfillmentType
@@ -10,9 +11,12 @@ import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.PaymentAttemptStatus
 import com.pizzora.contracts.PaymentStateMachine
 import com.pizzora.contracts.PaymentStatus
+import com.pizzora.contracts.PizzaBuilderEngine
+import com.pizzora.contracts.PizzaBuilderEvaluation
 import com.pizzora.contracts.PriceBreakdownDto
 import com.pizzora.contracts.PricedLineInput
 import com.pizzora.contracts.PricingEngine
+import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.RealtimeEventDto
 import com.pizzora.contracts.UserRole
 import java.util.Locale
@@ -42,6 +46,16 @@ class KotlinContractsDomainBridge : DomainBridge {
     deliveryFeePaise: Long,
     coupon: CouponCalculationSpec?,
   ): PriceBreakdownDto = PricingEngine.calculateQuote(lines, gstBps, deliveryFeePaise, coupon)
+
+  override fun computePizzaConfigurationSignature(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse?,
+  ): String = PizzaBuilderEngine.computeConfigurationSignature(input, menu)
+
+  override fun evaluatePizzaCustomization(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse,
+  ): PizzaBuilderEvaluation = PizzaBuilderEngine.evaluate(input, menu)
 
   override fun normalizeCouponCode(raw: String): String {
     val normalized = raw.trim().uppercase(Locale.US)

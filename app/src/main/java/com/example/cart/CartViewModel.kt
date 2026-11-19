@@ -3,9 +3,11 @@ package com.example.cart
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.core.database.CartItemWithToppings
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductVariantDto
+import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.ToppingDto
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +92,36 @@ class CartViewModel(
         )
       }
       _events.tryEmit("${product.name} added to cart")
+    }
+  }
+
+  fun addConfiguredPizza(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse,
+    displayName: String? = null,
+  ) {
+    viewModelScope.launch {
+      syncState.update { it.copy(isSyncing = true, statusMessage = null) }
+      val result = cartRepository.addConfiguredPizza(input, menu)
+      val productName = displayName
+        ?: menu.products.firstOrNull { it.id == input.productId }?.name
+        ?: "Custom pizza"
+      syncState.update {
+        it.copy(
+          isSyncing = false,
+          isOffline = result.isOffline,
+          statusMessage = when {
+            result.isOffline -> "Saved offline — will validate when back online."
+            !result.errorMessage.isNullOrBlank() -> result.errorMessage
+            else -> null
+          },
+        )
+      }
+      if (result.isOffline || result.errorMessage == null) {
+        _events.tryEmit("$productName added to cart")
+      } else {
+        _events.tryEmit(result.errorMessage)
+      }
     }
   }
 

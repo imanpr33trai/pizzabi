@@ -1,13 +1,16 @@
 package com.example.core.domain
 
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CausalDecision
 import com.pizzora.contracts.CouponCalculationSpec
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.PaymentAttemptStatus
 import com.pizzora.contracts.PaymentStatus
+import com.pizzora.contracts.PizzaBuilderEvaluation
 import com.pizzora.contracts.PriceBreakdownDto
 import com.pizzora.contracts.PricedLineInput
+import com.pizzora.contracts.PublicMenuResponse
 import com.pizzora.contracts.UserRole
 
 object RustDomainBridge : DomainBridge {
@@ -53,6 +56,16 @@ object RustDomainBridge : DomainBridge {
     deliveryFeePaise: Long,
     coupon: CouponCalculationSpec?,
   ): PriceBreakdownDto = delegate.calculateQuote(lines, gstBps, deliveryFeePaise, coupon)
+
+  override fun computePizzaConfigurationSignature(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse?,
+  ): String = delegate.computePizzaConfigurationSignature(input, menu)
+
+  override fun evaluatePizzaCustomization(
+    input: CartItemInputDto,
+    menu: PublicMenuResponse,
+  ): PizzaBuilderEvaluation = delegate.evaluatePizzaCustomization(input, menu)
 
   override fun normalizeCouponCode(raw: String): String = delegate.normalizeCouponCode(raw)
 

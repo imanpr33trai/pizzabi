@@ -61,15 +61,15 @@ impl CheckoutService {
 
         let core_inputs = to_core_cart_inputs(&request.items);
         let parsed_items = CartValidation::validate_and_parse_inputs(&core_inputs)?;
-        let merged_items = CartValidation::merge_duplicate_configurations(parsed_items);
-        if merged_items.is_empty() {
+        let pre_merged = CartValidation::merge_duplicate_configurations(parsed_items.clone());
+        if pre_merged.is_empty() {
             return Err(ApiError::validation(
                 "EMPTY_CART",
                 "At least one item is required for checkout.",
             ));
         }
 
-        let request_hash = compute_request_hash(request, &merged_items)?;
+        let request_hash = compute_request_hash(request, &pre_merged)?;
 
         let mut tx = self.pool.begin().await?;
         let cust_str = customer_id.to_string();
@@ -122,6 +122,8 @@ impl CheckoutService {
         }
 
         let lookup = load_catalog_ref_lookup(&mut tx, &*self.storage).await?;
+        let merged_items =
+            CartValidation::merge_duplicate_configurations_with_lookup(parsed_items, Some(&lookup));
         CartValidation::ensure_catalog_fk_references(&merged_items, &lookup)?;
         let evaluated = CartValidation::evaluate_cart(&merged_items, &lookup)?;
         if !evaluated.all_available {
@@ -348,11 +350,37 @@ impl CheckoutService {
         let order_id = new_uuid_v4();
         let demand_inputs: Vec<CheckoutRecipeLineDemandInput> = merged_items
             .iter()
-            .map(|m| CheckoutRecipeLineDemandInput {
-                variant_id: m.variant_id,
-                crust_id: m.crust_id,
-                topping_ids: m.topping_ids.clone(),
-                quantity: m.quantity,
+            .zip(evaluated.items.iter())
+            .map(|(m, eval_item)| {
+                let size_multiplier_bps = eval_item
+                    .size_code
+                    .map(|sc| {
+                        lookup
+                            .size_rules
+                            .get(&sc)
+                            .map(|r| r.ingredient_multiplier_bps)
+                            .unwrap_or_else(|| {
+                                pizzora_core::default_size_rule(sc).ingredient_multiplier_bps
+                            })
+                    })
+                    .unwrap_or(10_000);
+                CheckoutRecipeLineDemandInput {
+                    variant_id: m.variant_id,
+                    right_variant_id: eval_item.effective_right_variant_id,
+                    size_multiplier_bps,
+                    crust_id: m.crust_id,
+                    cheese_id: eval_item.effective_cheese_id,
+                    extra_cheese: m.extra_cheese,
+                    sauce_id: eval_item.effective_sauce_id,
+                    right_sauce_id: eval_item.effective_right_sauce_id,
+                    extra_sauce: m.extra_sauce,
+                    topping_demands: m
+                        .topping_selections
+                        .iter()
+                        .map(|s| (s.topping_id, s.placement, s.quantity))
+                        .collect(),
+                    quantity: m.quantity,
+                }
             })
             .collect();
         let required_ingredients =
@@ -465,17 +493,23 @@ impl CheckoutService {
                     pizzora_core::SizeCode::Regular => "REGULAR",
                     pizzora_core::SizeCode::Medium => "MEDIUM",
                     pizzora_core::SizeCode::Large => "LARGE",
+                    pizzora_core::SizeCode::ExtraLarge => "EXTRA_LARGE",
                 })
                 .unwrap_or("REGULAR");
             let topping_names: Vec<String> = item.toppings.iter().map(|t| t.name.clone()).collect();
             let toppings_json =
                 serde_json::to_value(&topping_names).map_err(|_| ApiError::internal())?;
+            let customization_snapshot_json =
+                serde_json::to_value(&item.order_snapshot).map_err(|_| ApiError::internal())?;
+            let price_breakdown_json =
+                serde_json::to_value(&item.price_breakdown).map_err(|_| ApiError::internal())?;
             sqlx::query(
                 r#"
                 INSERT INTO order_items (
                     id, order_id, product_id, product_name_snapshot, variant_size_snapshot,
-                    crust_name_snapshot, toppings_snapshot, unit_price_paise, quantity, line_total_paise
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    crust_name_snapshot, toppings_snapshot, customization_snapshot,
+                    price_breakdown_snapshot, unit_price_paise, quantity, line_total_paise
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 "#,
             )
             .bind(new_uuid_v4())
@@ -485,6 +519,8 @@ impl CheckoutService {
             .bind(size_label)
             .bind(&item.crust_name)
             .bind(toppings_json)
+            .bind(customization_snapshot_json)
+            .bind(price_breakdown_json)
             .bind(item.unit_price_paise)
             .bind(item.quantity)
             .bind(item.line_total_paise)
@@ -676,14 +712,9 @@ fn compute_request_hash(
     let mut item_parts: Vec<String> = merged
         .iter()
         .map(|i| {
-            let mut tids: Vec<String> = i.topping_ids.iter().map(ToString::to_string).collect();
-            tids.sort();
             format!(
-                "{}:{}:{}:{}:{}",
-                i.product_id,
-                i.variant_id,
-                i.crust_id,
-                tids.join(","),
+                "{}|qty={}",
+                pizzora_core::compute_configuration_signature(i, None),
                 i.quantity
             )
         })
