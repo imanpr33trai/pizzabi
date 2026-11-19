@@ -1245,6 +1245,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          # This gate is meaningless without an exact commit identity.
+          if [ -z "${HEAD_SHA:-}" ]; then
+            echo "ERROR: github.sha is empty; refusing to claim nightly validation without an exact SHA." >&2
+            exit 1
+          fi
+
           # Claim nightly validation only in its intended contexts. On any
           # other tier this job succeeds as "not applicable" and claims nothing;
           # it must never be skipped, because GitHub treats a skipped required
@@ -1252,6 +1258,10 @@ jobs:
           if [ "$EVENT_NAME" = "push" ] && [ "$REF" = "refs/heads/nightly" ]; then
             CONTEXT="push to refs/heads/nightly (post-merge nightly validation)"
           elif [ "$EVENT_NAME" = "pull_request" ] && [ "$BASE_REF" = "nightly" ]; then
+            if [ -z "${PR_HEAD_SHA:-}" ]; then
+              echo "ERROR: pull_request gate has no head SHA; refusing to claim validation." >&2
+              exit 1
+            fi
             CONTEXT="pull request -> nightly (pre-merge full validation)"
           else
             CONTEXT="not a nightly validation context"
@@ -1395,6 +1405,10 @@ jobs:
             esac
           }
           RELEASE_EVENT="${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}"
+          NIGHTLY_CONTEXT="false"
+          if { [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/nightly" ]; } || { [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "nightly" ]; }; then
+            NIGHTLY_CONTEXT="true"
+          fi
           TIER="full validation"
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/nightly" ]; then
             TIER="nightly full regression (all stages required; no publishing)"
@@ -1441,12 +1455,12 @@ jobs:
             else
               echo "| 7 | Release APK & GitHub release | ⏭️ not a release tag |"
             fi
-            if { [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/nightly" ]; } || { [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.base_ref }}" = "nightly" ]; }; then
+            if [ "$NIGHTLY_CONTEXT" = "true" ]; then
               echo "| Gate | Nightly Validation — Complete | $(badge "$NIGHTLY_GATE") |"
             else
               echo "| Gate | Nightly Validation — Complete | ⏭️ not applicable |"
             fi
-            if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/nightly" ] && [ "$NIGHTLY_GATE" != "success" ]; then
+            if [ "$NIGHTLY_CONTEXT" = "true" ] && [ "$NIGHTLY_GATE" != "success" ]; then
               echo ""
               echo "> ❌ **Nightly validation is NOT proven for this commit.** The terminal gate concluded \`$NIGHTLY_GATE\`."
             fi
