@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -195,6 +196,7 @@ fun CartScreen(
             .weight(1f)
             .fillMaxWidth()
             .widthIn(max = maxSingleColWidth)
+            .imePadding()
             .testTag("cart_lazy_column"),
           contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
           verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -240,6 +242,7 @@ fun CartScreen(
               modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .imePadding()
                 .testTag("cart_lazy_column"),
               contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
               verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -286,6 +289,7 @@ fun CartScreen(
               modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
               verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -351,9 +355,10 @@ fun CartScreen(
             modifier = Modifier
               .weight(1f)
               .fillMaxWidth()
+              .imePadding()
               .testTag("cart_lazy_column"),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
           ) {
             if (uiState.isOffline) {
               item(key = "cart_offline_banner") {
@@ -474,7 +479,7 @@ private fun CartItemsUtilityHeader(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 4.dp),
+          .padding(horizontal = 16.dp, vertical = 0.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -494,8 +499,8 @@ private fun CartItemsUtilityHeader(
             onClick = onValidateAndSync,
             enabled = !isSyncing,
             modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .testTag("validate_cart_button"),
+              .testTag("validate_cart_button")
+              .minimumInteractiveComponentSize(),
           ) {
             Icon(
               imageVector = Icons.Filled.Sync,
@@ -513,8 +518,8 @@ private fun CartItemsUtilityHeader(
             enabled = !isSyncing,
             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
             modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .testTag("clear_cart_button"),
+              .testTag("clear_cart_button")
+              .minimumInteractiveComponentSize(),
           ) {
             Text(
               text = stringResource(R.string.action_clear),
@@ -587,13 +592,14 @@ private fun CartStickyBottomDock(
   maxContentWidth: Dp = Dp.Unspecified,
 ) {
   val density = LocalDensity.current
-  val stackControls = compactWidth || density.fontScale >= 1.4f
+  val stackControls = (compactWidth && density.fontScale >= 1.2f) || density.fontScale >= 1.4f
   val quote = quoteState?.quote
   val isAcceptingOrders = quote?.isAcceptingOrders ?: true
   val checkoutEnabled = !uiState.hasUnavailableItems && !uiState.isSyncing && isAcceptingOrders
 
   PizzoraStickyActionDock(
     applyNavigationBarsPadding = applyNavigationBarsPadding,
+    verticalPadding = if (compactWidth && !stackControls) 6.dp else 10.dp,
     modifier = Modifier.testTag("cart_sticky_dock"),
   ) {
     Box(
@@ -607,7 +613,7 @@ private fun CartStickyBottomDock(
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         if (stackControls || onProceedToCheckout == null) {
-          CartDockPriceSummary(uiState = uiState, quoteState = quoteState)
+          CartDockPriceSummary(uiState = uiState, quoteState = quoteState, compactWidth = compactWidth)
           if (onProceedToCheckout != null) {
             Button(
               onClick = onProceedToCheckout,
@@ -636,10 +642,10 @@ private fun CartStickyBottomDock(
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compactWidth) 8.dp else 12.dp),
           ) {
             Box(modifier = Modifier.weight(1f)) {
-              CartDockPriceSummary(uiState = uiState, quoteState = quoteState)
+              CartDockPriceSummary(uiState = uiState, quoteState = quoteState, compactWidth = compactWidth)
             }
             Button(
               onClick = onProceedToCheckout,
@@ -648,14 +654,19 @@ private fun CartStickyBottomDock(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
               ),
-              contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+              contentPadding = if (compactWidth) {
+                PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+              } else {
+                PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+              },
               modifier = Modifier
+                .let { base -> if (compactWidth) base.widthIn(max = 136.dp) else base }
                 .heightIn(min = 48.dp)
                 .minimumInteractiveComponentSize()
                 .testTag("proceed_to_checkout_button"),
             ) {
-              Icon(Icons.Filled.ShoppingBag, contentDescription = null, modifier = Modifier.size(18.dp))
-              Spacer(modifier = Modifier.width(6.dp))
+              Icon(Icons.Filled.ShoppingBag, contentDescription = null, modifier = Modifier.size(if (compactWidth) 16.dp else 18.dp))
+              Spacer(modifier = Modifier.width(if (compactWidth) 4.dp else 6.dp))
               Text(
                 text = stringResource(R.string.action_proceed_checkout),
                 style = MaterialTheme.typography.labelLarge,
@@ -670,50 +681,80 @@ private fun CartStickyBottomDock(
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CartDockPriceSummary(
   uiState: CartUiState,
   quoteState: CheckoutQuoteUiState?,
+  compactWidth: Boolean = false,
 ) {
   val breakdown = quoteState?.quote?.breakdown
   Column(
     verticalArrangement = Arrangement.spacedBy(2.dp),
-    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    modifier = Modifier
+      .fillMaxWidth()
+      .semantics { liveRegion = LiveRegionMode.Polite },
   ) {
     if (breakdown != null) {
-      Text(
-        text = stringResource(R.string.label_payable_total),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-      Text(
-        text = Money.formatInr(breakdown.totalPaise),
-        style = PizzoraMonoTitle,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.testTag("cart_payable_total_text"),
-      )
+      FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.Center,
+      ) {
+        Text(
+          text = stringResource(R.string.label_payable_total),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.align(Alignment.CenterVertically),
+        )
+        Text(
+          text = Money.formatInr(breakdown.totalPaise),
+          style = PizzoraMonoTitle,
+          color = MaterialTheme.colorScheme.primary,
+          maxLines = 1,
+          modifier = Modifier
+            .align(Alignment.CenterVertically)
+            .testTag("cart_payable_total_text"),
+        )
+      }
       Text(
         text = "${stringResource(R.string.label_subtotal)} (${uiState.totalItemCount}): ${Money.formatInr(uiState.subtotalPaise)}",
-        style = MaterialTheme.typography.bodySmall,
+        style = if (compactWidth) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier.testTag("cart_subtotal_text"),
       )
     } else {
-      Text(
-        text = stringResource(R.string.cart_est_subtotal_fmt, uiState.totalItemCount),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-      Text(
-        text = Money.formatInr(uiState.subtotalPaise),
-        style = PizzoraMonoTitle,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.testTag("cart_subtotal_text"),
-      )
+      FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.Center,
+      ) {
+        Text(
+          text = stringResource(R.string.cart_est_subtotal_fmt, uiState.totalItemCount),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.align(Alignment.CenterVertically),
+        )
+        Text(
+          text = Money.formatInr(uiState.subtotalPaise),
+          style = PizzoraMonoTitle,
+          color = MaterialTheme.colorScheme.primary,
+          maxLines = 1,
+          modifier = Modifier
+            .align(Alignment.CenterVertically)
+            .testTag("cart_subtotal_text"),
+        )
+      }
       Text(
         text = stringResource(R.string.cart_tax_delivery_disclosure),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier.testTag("cart_tax_delivery_disclosure"),
       )
     }
@@ -921,7 +962,7 @@ private fun PromoCouponCard(
             }
             IconButton(
               onClick = onRemoveCoupon,
-              modifier = Modifier.minimumInteractiveComponentSize().testTag("remove_coupon_button"),
+              modifier = Modifier.testTag("remove_coupon_button").size(48.dp),
             ) {
               Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_remove))
             }
@@ -992,12 +1033,12 @@ private fun CartItemCard(
     Column(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(14.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
+        .padding(horizontal = 12.dp, vertical = 6.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top,
       ) {
         CartItemThumbnail(
@@ -1008,25 +1049,42 @@ private fun CartItemCard(
 
         Column(
           modifier = Modifier.weight(1f),
-          verticalArrangement = Arrangement.spacedBy(3.dp),
+          verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-          Text(
-            text = item.productName,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+          ) {
+            Text(
+              text = item.productName,
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f).padding(end = 6.dp),
+            )
+            Text(
+              text = Money.formatInr(item.unitPricePaise * item.quantity),
+              style = PizzoraMonoTitle,
+              color = MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+            )
+          }
           Text(
             text = "${item.sizeCode.lowercase().replaceFirstChar { it.uppercase() }} • ${item.crustName}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
           )
           if (entry.toppings.isNotEmpty()) {
             Text(
               text = "Toppings: ${entry.toppings.joinToString(", ") { it.toppingName }}",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis,
             )
           }
         }
@@ -1036,79 +1094,83 @@ private fun CartItemCard(
         PizzoraStatusBanner(
           message = item.unavailableReason ?: stringResource(R.string.cart_item_unavailable_fallback),
           tone = PizzoraBannerTone.ERROR,
+          verticalPadding = 6.dp,
           modifier = Modifier.testTag("cart_item_issue_${item.id}"),
         )
       }
 
       HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
-      // Action controls + Pricing row
+      // Action controls row (Stepper + Edit + Remove)
       FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
       ) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Surface(
+          shape = MaterialTheme.shapes.small,
+          color = MaterialTheme.colorScheme.surfaceVariant,
+          tonalElevation = 0.dp,
+          border = BorderStroke(1.dp, semantic.outlineInteractive),
+          modifier = Modifier.align(Alignment.CenterVertically),
         ) {
-          Surface(
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 0.dp,
-            border = BorderStroke(1.dp, semantic.outlineInteractive),
-          ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              val isRemoveAction = item.quantity <= 1
-              val decreaseCd = if (isRemoveAction) {
-                stringResource(R.string.cart_action_remove_item_cd)
-              } else {
-                stringResource(R.string.cart_qty_decrease_cd)
-              }
-              IconButton(
-                onClick = onDecrement,
-                modifier = Modifier
-                  .minimumInteractiveComponentSize()
-                  .semantics { contentDescription = decreaseCd }
-                  .testTag("cart_qty_minus_${item.id}"),
-              ) {
-                Icon(
-                  imageVector = if (isRemoveAction) Icons.Filled.DeleteOutline else Icons.Filled.Remove,
-                  contentDescription = decreaseCd,
-                  tint = if (isRemoveAction) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                )
-              }
-              Text(
-                text = item.quantity.toString(),
-                style = PizzoraMonoBody,
-                modifier = Modifier
-                  .padding(horizontal = 6.dp)
-                  .semantics { liveRegion = LiveRegionMode.Polite }
-                  .testTag("cart_qty_value_${item.id}"),
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            val isRemoveAction = item.quantity <= 1
+            val decreaseCd = if (isRemoveAction) {
+              stringResource(R.string.cart_action_remove_item_cd)
+            } else {
+              stringResource(R.string.cart_qty_decrease_cd)
+            }
+            IconButton(
+              onClick = onDecrement,
+              modifier = Modifier
+                .testTag("cart_qty_minus_${item.id}")
+                .size(48.dp)
+                .semantics { contentDescription = decreaseCd },
+            ) {
+              Icon(
+                imageVector = if (isRemoveAction) Icons.Filled.DeleteOutline else Icons.Filled.Remove,
+                contentDescription = decreaseCd,
+                tint = if (isRemoveAction) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
               )
-              IconButton(
-                onClick = onIncrement,
-                enabled = item.quantity < 25,
-                modifier = Modifier
-                  .minimumInteractiveComponentSize()
-                  .testTag("cart_qty_plus_${item.id}"),
-              ) {
-                Icon(
-                  imageVector = Icons.Filled.Add,
-                  contentDescription = stringResource(R.string.cart_qty_increase_cd),
-                )
-              }
+            }
+            Text(
+              text = item.quantity.toString(),
+              style = PizzoraMonoBody,
+              modifier = Modifier
+                .padding(horizontal = 4.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .testTag("cart_qty_value_${item.id}"),
+            )
+            IconButton(
+              onClick = onIncrement,
+              enabled = item.quantity < 25,
+              modifier = Modifier
+                .testTag("cart_qty_plus_${item.id}")
+                .size(48.dp),
+            ) {
+              Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.cart_qty_increase_cd),
+              )
             }
           }
+        }
 
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          modifier = Modifier.align(Alignment.CenterVertically),
+        ) {
           if (onEdit != null) {
             OutlinedButton(
               onClick = onEdit,
               border = BorderStroke(1.dp, semantic.outlineInteractive),
-              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
               modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .testTag("cart_edit_${item.id}"),
+                .testTag("cart_edit_${item.id}")
+                .heightIn(min = 48.dp)
+                .minimumInteractiveComponentSize(),
             ) {
               Icon(
                 imageVector = Icons.Filled.Edit,
@@ -1126,8 +1188,8 @@ private fun CartItemCard(
           IconButton(
             onClick = onRemove,
             modifier = Modifier
-              .minimumInteractiveComponentSize()
-              .testTag("cart_remove_${item.id}"),
+              .testTag("cart_remove_${item.id}")
+              .size(48.dp),
           ) {
             Icon(
               imageVector = Icons.Filled.DeleteOutline,
@@ -1135,19 +1197,6 @@ private fun CartItemCard(
               tint = MaterialTheme.colorScheme.error,
             )
           }
-        }
-
-        Column(horizontalAlignment = Alignment.End) {
-          Text(
-            text = "${Money.formatInr(item.unitPricePaise)} each",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-          Text(
-            text = Money.formatInr(item.unitPricePaise * item.quantity),
-            style = PizzoraMonoTitle,
-            color = MaterialTheme.colorScheme.primary,
-          )
         }
       }
 

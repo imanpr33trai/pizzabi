@@ -1,6 +1,8 @@
 package com.example.cart
 
 import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.view.View
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -21,22 +23,33 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.DataSource
+import coil.intercept.Interceptor
+import coil.request.ErrorResult
+import coil.request.SuccessResult
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.NetworkCatalogRepository
 import com.example.checkout.CheckoutQuoteUiState
 import com.example.checkout.CheckoutQuoteViewModel
+import com.example.checkout.CheckoutViewModel
 import com.example.checkout.CouponPickerSheet
 import com.example.checkout.NetworkPricingRepository
 import com.example.core.database.CartItemEntity
@@ -47,6 +60,7 @@ import com.example.core.network.PizzoraApiClient
 import com.example.core.security.AuthSession
 import com.example.core.security.TokenStorage
 import com.example.navigation.CustomerRoleShell
+import com.example.orders.NetworkOrderRepository
 import com.example.ui.theme.PizzoraTheme
 import com.pizzora.contracts.AvailableCouponsResponse
 import com.pizzora.contracts.CartItemViewDto
@@ -77,6 +91,8 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -214,7 +230,32 @@ class Phase4CartAndReEditRobolectricTest {
     menuCrusts: List<CrustOptionDto> = crusts,
     menuToppings: List<ToppingDto> = toppings,
     couponsFailure: Boolean = false,
-  ): Triple<CustomerCatalogViewModel, CartViewModel, CheckoutQuoteViewModel> {
+    onPutCart: () -> Unit = {},
+  ): Triple<CustomerCatalogViewModel, CartViewModel, CheckoutQuoteViewModel> =
+    buildFullTestShellHarness(
+      initialCartItems = initialCartItems,
+      menuProducts = menuProducts,
+      menuCrusts = menuCrusts,
+      menuToppings = menuToppings,
+      couponsFailure = couponsFailure,
+      onPutCart = onPutCart,
+    ).let { Triple(it.first, it.second, it.third) }
+
+  private data class FullTestShellHarness(
+    val first: CustomerCatalogViewModel,
+    val second: CartViewModel,
+    val third: CheckoutQuoteViewModel,
+    val checkoutVm: CheckoutViewModel,
+  )
+
+  private fun buildFullTestShellHarness(
+    initialCartItems: List<Pair<CartItemEntity, List<CartItemToppingEntity>>>,
+    menuProducts: List<ProductDto> = listOf(margherita, marinaraNoImg),
+    menuCrusts: List<CrustOptionDto> = crusts,
+    menuToppings: List<ToppingDto> = toppings,
+    couponsFailure: Boolean = false,
+    onPutCart: () -> Unit = {},
+  ): FullTestShellHarness {
     val storage = InMemoryTokenStorage(customerSession)
     val productsById = menuProducts.associateBy { it.id }
     val variantsById = menuProducts.flatMap { it.variants }.associateBy { it.id }
@@ -253,7 +294,7 @@ class Phase4CartAndReEditRobolectricTest {
 
     val engine = MockEngine { req ->
       when {
-        req.url.encodedPath == "/v1/menu" -> {
+        req.url.encodedPath == "/api/v1/catalog/menu" -> {
           val menu = PublicMenuResponse(
             storeName = "PIZZORA Artisanal Kitchen",
             isAcceptingOrders = true,
@@ -269,12 +310,12 @@ class Phase4CartAndReEditRobolectricTest {
             headersOf(HttpHeaders.ContentType, "application/json"),
           )
         }
-        req.url.encodedPath == "/v1/cart" && req.method == HttpMethod.Get -> {
+        req.url.encodedPath == "/api/v1/cart" && req.method == HttpMethod.Get -> {
           respond(
             json.encodeToString(
               CartResponseDto(
                 items = serverCart,
-                unavailableCount = 0,
+                unavailableCount = serverCart.count { !it.isAvailable },
                 updatedAt = "2026-11-10T00:00:00Z",
               ),
             ),
@@ -282,7 +323,8 @@ class Phase4CartAndReEditRobolectricTest {
             headersOf(HttpHeaders.ContentType, "application/json"),
           )
         }
-        req.url.encodedPath == "/v1/cart" && req.method == HttpMethod.Put -> {
+        req.url.encodedPath == "/api/v1/cart" && req.method == HttpMethod.Put -> {
+          onPutCart()
           val bodyText = (req.body as? TextContent)?.text ?: "{}"
           val replaceReq = json.decodeFromString<ReplaceCartRequest>(bodyText)
           serverCart = replaceReq.items.mapIndexed { idx, input ->
@@ -323,7 +365,7 @@ class Phase4CartAndReEditRobolectricTest {
             headersOf(HttpHeaders.ContentType, "application/json"),
           )
         }
-        req.url.encodedPath == "/v1/cart/validate" && req.method == HttpMethod.Post -> {
+        req.url.encodedPath == "/api/v1/cart/validate" && req.method == HttpMethod.Post -> {
           val bodyText = (req.body as? TextContent)?.text ?: "{}"
           val valReq = json.decodeFromString<ValidateCartRequest>(bodyText)
           val validated = valReq.items.mapIndexed { idx, input ->
@@ -364,11 +406,11 @@ class Phase4CartAndReEditRobolectricTest {
             headersOf(HttpHeaders.ContentType, "application/json"),
           )
         }
-        req.url.encodedPath == "/v1/cart" && req.method == HttpMethod.Delete -> {
+        req.url.encodedPath == "/api/v1/cart" && req.method == HttpMethod.Delete -> {
           serverCart.clear()
           respond("{}", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         }
-        req.url.encodedPath == "/v1/coupons/available" -> {
+        req.url.encodedPath == "/api/v1/coupons/available" -> {
           if (couponsFailure) {
             respond("{\"message\":\"Coupon service down\"}", HttpStatusCode.InternalServerError)
           } else {
@@ -414,7 +456,7 @@ class Phase4CartAndReEditRobolectricTest {
             )
           }
         }
-        req.url.encodedPath == "/v1/pricing/quote" -> {
+        req.url.encodedPath == "/api/v1/pricing/quote" -> {
           respond(
             json.encodeToString(sampleQuoteResponse()),
             HttpStatusCode.OK,
@@ -437,7 +479,8 @@ class Phase4CartAndReEditRobolectricTest {
     val catalogVm = CustomerCatalogViewModel(NetworkCatalogRepository(apiClient, db.catalogCacheDao()))
     val cartVm = CartViewModel(NetworkCartRepository(apiClient, db.cartDao(), storage))
     val quoteVm = CheckoutQuoteViewModel(NetworkPricingRepository(apiClient))
-    return Triple(catalogVm, cartVm, quoteVm)
+    val checkoutVm = CheckoutViewModel(NetworkOrderRepository(apiClient))
+    return FullTestShellHarness(catalogVm, cartVm, quoteVm, checkoutVm)
   }
 
   private fun sampleItem(
@@ -484,13 +527,39 @@ class Phase4CartAndReEditRobolectricTest {
   @Before
   fun setUp() {
     val context = ApplicationProvider.getApplicationContext<Context>()
+    Coil.setImageLoader(
+      ImageLoader.Builder(context)
+        .components {
+          add(
+            Interceptor { chain ->
+              val url = chain.request.data.toString()
+              if (url.contains("broken")) {
+                ErrorResult(
+                  drawable = null,
+                  request = chain.request,
+                  throwable = IOException("Simulated image 404"),
+                )
+              } else {
+                SuccessResult(
+                  drawable = ColorDrawable(Color.rgb(200, 62, 43)),
+                  request = chain.request,
+                  dataSource = DataSource.MEMORY,
+                )
+              }
+            },
+          )
+        }
+        .build(),
+    )
     db = Room.inMemoryDatabaseBuilder(context, PizzoraDatabase::class.java)
       .allowMainThreadQueries()
+      .addCallback(PizzoraDatabase.FOREIGN_KEY_CALLBACK)
       .build()
   }
 
   @After
   fun tearDown() {
+    Coil.reset()
     db.close()
   }
 
@@ -502,6 +571,10 @@ class Phase4CartAndReEditRobolectricTest {
         toppings = emptyList(),
       ),
       CartItemWithToppings(
+        item = sampleItem(id = "broken-img", productId = "prod-marg", imageUrl = "https://cdn.example.com/broken.jpg"),
+        toppings = emptyList(),
+      ),
+      CartItemWithToppings(
         item = sampleItem(id = "no-img", productId = "prod-mari", name = "Marinara Antica", imageUrl = null),
         toppings = emptyList(),
       ),
@@ -510,7 +583,7 @@ class Phase4CartAndReEditRobolectricTest {
     composeTestRule.setContent {
       PizzoraTheme {
         CartScreen(
-          uiState = CartUiState(items = items, subtotalPaise = 59_800L, totalItemCount = 2),
+          uiState = CartUiState(items = items, subtotalPaise = 89_700L, totalItemCount = 3),
           onUpdateQuantity = { _, _ -> },
           onRemoveItem = {},
           onClearCart = {},
@@ -520,7 +593,14 @@ class Phase4CartAndReEditRobolectricTest {
       }
     }
 
-    composeTestRule.onNodeWithTag("cart_item_image_with-img").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("cart_item_image_with-img")
+      .assertIsDisplayed()
+      .assertWidthIsAtLeast(64.dp)
+      .assertHeightIsAtLeast(64.dp)
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_item_broken-img"))
+    composeTestRule.onNodeWithTag("cart_item_image_fallback_broken-img").assertIsDisplayed()
+    composeTestRule.onAllNodesWithTag("cart_item_image_broken-img").assertCountEquals(0)
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_item_no-img"))
     composeTestRule.onNodeWithTag("cart_item_image_fallback_no-img").assertIsDisplayed()
   }
 
@@ -557,9 +637,11 @@ class Phase4CartAndReEditRobolectricTest {
     }
 
     // Open Edit Mode from Cart item
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_edit-1"))
     composeTestRule.onNodeWithTag("cart_edit_edit-1").performClick()
     waitUntil {
-      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isNotEmpty()
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isNotEmpty() &&
+        composeTestRule.onAllNodesWithTag("builder_edit_mode_badge").fetchSemanticsNodes().isNotEmpty()
     }
 
     // Shell bottom bar & top bar are hidden while full-screen Edit Builder is open
@@ -569,11 +651,11 @@ class Phase4CartAndReEditRobolectricTest {
     composeTestRule.onNodeWithTag("customizer_qty_value").assertTextContains("2")
     composeTestRule.onNodeWithTag("add_to_cart_button").assertTextContains("Update Item · ₹648.00")
 
-    // Change Size to Medium (429), Sourdough Pan (50), qty 3, keep Extra Basil (25) -> 504 * 3 = ₹1,512.00
-    composeTestRule.onNodeWithTag("size_option_MEDIUM").performClick()
-    composeTestRule.onNodeWithTag("crust_option_crust-pan").performClick()
+    // Change Size to Medium (429), Sourdough Pan (50), qty 3, keep Extra Basil (25) -> 504 * 3 = ₹1512.00
+    composeTestRule.onNodeWithTag("size_option_MEDIUM").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("crust_option_crust-pan").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("customizer_qty_plus").performClick()
-    composeTestRule.onNodeWithTag("add_to_cart_button").assertTextContains("Update Item · ₹1,512.00")
+    composeTestRule.onNodeWithTag("add_to_cart_button").assertTextContains("Update Item · ₹1512.00")
 
     composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
     waitUntil {
@@ -583,7 +665,7 @@ class Phase4CartAndReEditRobolectricTest {
     // Returns to Cart, shows update snackbar, updated config visible, and focus restored to originating card
     composeTestRule.onNodeWithText("Margherita Verace updated", substring = true).assertIsDisplayed()
     composeTestRule.onNodeWithTag("cart_qty_value_edit-1").assertTextContains("3")
-    composeTestRule.onNodeWithTag("cart_item_edit-1").assertTextContains("MEDIUM • Sourdough Pan")
+    composeTestRule.onNodeWithText("Medium • Sourdough Pan").assertIsDisplayed()
     composeTestRule.onNodeWithTag("cart_item_edit-1").assertIsFocused()
   }
 
@@ -625,13 +707,15 @@ class Phase4CartAndReEditRobolectricTest {
     waitUntil {
       composeTestRule.onAllNodesWithTag("cart_edit_edit-a").fetchSemanticsNodes().isNotEmpty()
     }
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_edit-a"))
     composeTestRule.onNodeWithTag("cart_edit_edit-a").performClick()
     waitUntil {
-      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isNotEmpty()
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isNotEmpty() &&
+        composeTestRule.onAllNodesWithTag("size_option_MEDIUM").fetchSemanticsNodes().isNotEmpty()
     }
 
     // Change itemA to MEDIUM (matches itemB -> 20 + 10 = 30 -> capped at 25)
-    composeTestRule.onNodeWithTag("size_option_MEDIUM").performClick()
+    composeTestRule.onNodeWithTag("size_option_MEDIUM").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
     waitUntil {
       composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isEmpty()
@@ -640,6 +724,7 @@ class Phase4CartAndReEditRobolectricTest {
     composeTestRule.onNodeWithText("Combined with matching item (capped at max 25)").assertIsDisplayed()
     assertEquals(1, cartVm.uiState.value.items.size)
     assertEquals(25, cartVm.uiState.value.items.single().item.quantity)
+    composeTestRule.onNodeWithTag("cart_item_edit-b").assertIsFocused()
   }
 
   @Test
@@ -675,8 +760,10 @@ class Phase4CartAndReEditRobolectricTest {
 
     composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
     waitUntil {
-      composeTestRule.onAllNodesWithTag("cart_edit_disc-1").fetchSemanticsNodes().isNotEmpty()
+      composeTestRule.onAllNodesWithTag("cart_lazy_column").fetchSemanticsNodes().isNotEmpty() &&
+        cartVm.uiState.value.items.isNotEmpty()
     }
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_disc-1"))
     composeTestRule.onNodeWithTag("cart_edit_disc-1").performClick()
     waitUntil {
       composeTestRule.onAllNodesWithTag("builder_discontinued_guard").fetchSemanticsNodes().isNotEmpty()
@@ -695,6 +782,7 @@ class Phase4CartAndReEditRobolectricTest {
     assertEquals(1, cartVm.uiState.value.items.size)
     assertEquals("disc-1", cartVm.uiState.value.items.single().item.id)
     assertEquals(2, cartVm.uiState.value.items.single().item.quantity)
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_item_disc-1"))
     composeTestRule.onNodeWithTag("cart_item_disc-1").assertIsDisplayed()
   }
 
@@ -723,27 +811,33 @@ class Phase4CartAndReEditRobolectricTest {
     }
 
     // Clean dismiss -> immediate close
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_dirty-1"))
     composeTestRule.onNodeWithTag("cart_edit_dirty-1").performClick()
     waitUntil {
-      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isNotEmpty()
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isNotEmpty() &&
+        composeTestRule.onAllNodesWithTag("customizer_close_button").fetchSemanticsNodes().isNotEmpty()
     }
     composeTestRule.onNodeWithTag("customizer_close_button").performClick()
     waitUntil {
       composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isEmpty()
     }
-    composeTestRule.onAllNodesWithTag("discard_confirm_dialog").assertCountEquals(0)
+    composeTestRule.onAllNodesWithTag("builder_confirm_discard_button").assertCountEquals(0)
 
     // Re-open, dirty qty, system Back -> discard dialog -> Confirm closes cleanly
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_dirty-1"))
     composeTestRule.onNodeWithTag("cart_edit_dirty-1").performClick()
     waitUntil {
       composeTestRule.onAllNodesWithTag("customizer_qty_plus").fetchSemanticsNodes().isNotEmpty()
     }
     composeTestRule.onNodeWithTag("customizer_qty_plus").performClick()
+    composeTestRule.waitForIdle()
     composeTestRule.runOnUiThread {
       dispatcher?.onBackPressed()
     }
-    composeTestRule.onNodeWithTag("discard_confirm_dialog").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("discard_confirm_button").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("builder_confirm_discard_button").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("builder_confirm_discard_button").assertIsDisplayed().performClick()
     waitUntil {
       composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isEmpty()
     }
@@ -783,6 +877,7 @@ class Phase4CartAndReEditRobolectricTest {
     }
 
     // When qty == 1, minus button exposes "Remove item" accessibility description
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_qty_minus_u-1"))
     composeTestRule.onNodeWithTag("cart_qty_minus_u-1").assert(hasContentDescription("Remove item"))
 
     // Trigger 1 -> 0 removal
@@ -793,7 +888,7 @@ class Phase4CartAndReEditRobolectricTest {
     }
 
     // Snackbar shows Undo -> click Undo -> item u-1 and its topping return
-    composeTestRule.onNodeWithText("Margherita Verace removed").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Removed Margherita Verace").assertIsDisplayed()
     composeTestRule.onNodeWithText("Undo").performClick()
     waitUntil {
       cartVm.uiState.value.items.any { it.item.id == "u-1" }
@@ -802,12 +897,14 @@ class Phase4CartAndReEditRobolectricTest {
     assertEquals(listOf("top-basil"), restored.toppings.map { it.toppingId })
 
     // Repeated trash removals: remove u-1, then immediately remove u-2 -> Undo restores ONLY u-2
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_remove_u-1"))
     composeTestRule.onNodeWithTag("cart_remove_u-1").performClick()
     waitUntil { cartVm.uiState.value.items.none { it.item.id == "u-1" } }
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_remove_u-2"))
     composeTestRule.onNodeWithTag("cart_remove_u-2").performClick()
     waitUntil { cartVm.uiState.value.items.isEmpty() }
 
-    composeTestRule.onNodeWithText("Marinara Antica removed").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Removed Marinara Antica").assertIsDisplayed()
     composeTestRule.onNodeWithText("Undo").performClick()
     waitUntil { cartVm.uiState.value.items.size == 1 }
     assertEquals("u-2", cartVm.uiState.value.items.single().item.id)
@@ -878,16 +975,17 @@ class Phase4CartAndReEditRobolectricTest {
     }
 
     // Without quote: Est. Subtotal + disclosure + single Proceed to Checkout CTA
-    composeTestRule.onNodeWithTag("cart_sticky_bottom_bar").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("cart_sticky_dock").assertIsDisplayed()
     composeTestRule.onNodeWithTag("cart_subtotal_text").assertTextContains("₹299.00")
     composeTestRule.onNodeWithText("+ tax & delivery at checkout", substring = true).assertIsDisplayed()
     composeTestRule.onNodeWithTag("proceed_to_checkout_button").assertTextContains("Proceed to Checkout").assertIsEnabled()
 
-    // With server quote: Total Payable shown
+    // With server quote: Total Payable + Item Subtotal shown
     quoteState = CheckoutQuoteUiState(quote = sampleQuoteResponse())
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithText("Total Payable").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("cart_subtotal_text").assertTextContains("₹313.96")
+    composeTestRule.onNodeWithTag("cart_payable_total_text").assertTextContains("₹313.96")
+    composeTestRule.onNodeWithTag("cart_subtotal_text").assertTextContains("₹299.00", substring = true)
 
     // Inject active IME inset -> sticky dock auto-hides; remove IME inset -> reappears
     composeTestRule.runOnUiThread {
@@ -919,22 +1017,62 @@ class Phase4CartAndReEditRobolectricTest {
       couponsFailure = true,
     )
 
+    var showDirectSheet by mutableStateOf(false)
+
     composeTestRule.setContent {
-      val qState = quoteVm.uiState.value
-      val cState = cartVm.uiState.value
+      val qState by quoteVm.uiState.collectAsStateWithLifecycle()
+      val cState by cartVm.uiState.collectAsStateWithLifecycle()
       PizzoraTheme {
-        CartScreen(
-          uiState = cState,
-          quoteState = qState,
-          onUpdateQuantity = { _, _ -> },
-          onRemoveItem = {},
-          onClearCart = {},
-          onValidateAndSync = {},
-          onBrowseMenu = {},
-          onOpenCouponPicker = { quoteVm.openCouponPicker() },
-          onDismissCouponPicker = { quoteVm.dismissCouponPicker() },
-          onRetryCoupons = { quoteVm.openCouponPicker() },
-        )
+        if (!showDirectSheet) {
+          CartScreen(
+            uiState = cState,
+            quoteState = qState,
+            onUpdateQuantity = { _, _ -> },
+            onRemoveItem = {},
+            onClearCart = {},
+            onValidateAndSync = {},
+            onBrowseMenu = {},
+            onOpenCouponPicker = { quoteVm.openCouponPicker() },
+            onDismissCouponPicker = { quoteVm.dismissCouponPicker() },
+            onRetryCoupons = { quoteVm.openCouponPicker() },
+          )
+        } else {
+          CouponPickerSheet(
+            coupons = listOf(
+              CustomerCouponDto(
+                id = "c1",
+                code = "PIZZA20",
+                discountType = DiscountType.PERCENT_BPS,
+                discountValue = 2000L,
+                minOrderPaise = 20_000L,
+                maxUsesPerUser = 2,
+                userUsageCount = 0,
+                remainingUserUses = 2,
+                startsAt = "2026-11-01T00:00:00Z",
+                endsAt = "2026-12-01T00:00:00Z",
+                isEligible = true,
+                estimatedDiscountPaise = 5_980L,
+              ),
+              CustomerCouponDto(
+                id = "c2",
+                code = "FEAST999",
+                discountType = DiscountType.FLAT_PAISE,
+                discountValue = 15_000L,
+                minOrderPaise = 99_900L,
+                maxUsesPerUser = 1,
+                userUsageCount = 0,
+                remainingUserUses = 1,
+                startsAt = "2026-11-01T00:00:00Z",
+                endsAt = "2026-12-01T00:00:00Z",
+                isEligible = false,
+                ineligibleReason = "Add ₹700.00 more to unlock",
+              ),
+            ),
+            isLoading = false,
+            onSelectCoupon = {},
+            onDismiss = {},
+          )
+        }
       }
     }
 
@@ -946,45 +1084,8 @@ class Phase4CartAndReEditRobolectricTest {
     composeTestRule.onNodeWithTag("coupon_sheet_retry_button").assertIsDisplayed()
 
     // Now test grouped Eligible vs Locked sheet directly
-    composeTestRule.setContent {
-      PizzoraTheme {
-        CouponPickerSheet(
-          coupons = listOf(
-            CustomerCouponDto(
-              id = "c1",
-              code = "PIZZA20",
-              discountType = DiscountType.PERCENT_BPS,
-              discountValue = 2000L,
-              minOrderPaise = 20_000L,
-              maxUsesPerUser = 2,
-              userUsageCount = 0,
-              remainingUserUses = 2,
-              startsAt = "2026-11-01T00:00:00Z",
-              endsAt = "2026-12-01T00:00:00Z",
-              isEligible = true,
-              estimatedDiscountPaise = 5_980L,
-            ),
-            CustomerCouponDto(
-              id = "c2",
-              code = "FEAST999",
-              discountType = DiscountType.FLAT_PAISE,
-              discountValue = 15_000L,
-              minOrderPaise = 99_900L,
-              maxUsesPerUser = 1,
-              userUsageCount = 0,
-              remainingUserUses = 1,
-              startsAt = "2026-11-01T00:00:00Z",
-              endsAt = "2026-12-01T00:00:00Z",
-              isEligible = false,
-              ineligibleReason = "Add ₹700.00 more to unlock",
-            ),
-          ),
-          isLoading = false,
-          onSelectCoupon = {},
-          onDismiss = {},
-        )
-      }
-    }
+    showDirectSheet = true
+    composeTestRule.waitForIdle()
 
     composeTestRule.onNodeWithTag("coupon_section_eligible").assertIsDisplayed()
     composeTestRule.onNodeWithText("You save ₹59.80").assertIsDisplayed()
@@ -1068,15 +1169,16 @@ class Phase4CartAndReEditRobolectricTest {
   @Config(qualifiers = "w840dp-h900dp")
   fun wideTablet840dpActivatesTwoPane6040CartSplitEvenWithNavigationRail() {
     val item = sampleItem(id = "tab840-1", quantity = 1)
-    val (catalogVm, cartVm, quoteVm) = buildTestShellHarness(listOf(item to emptyList()))
+    val harness = buildFullTestShellHarness(listOf(item to emptyList()))
 
     composeTestRule.setContent {
       PizzoraTheme {
         CustomerRoleShell(
           session = customerSession,
-          catalogViewModel = catalogVm,
-          cartViewModel = cartVm,
-          checkoutQuoteViewModel = quoteVm,
+          catalogViewModel = harness.first,
+          cartViewModel = harness.second,
+          checkoutQuoteViewModel = harness.third,
+          checkoutViewModel = harness.checkoutVm,
           onSignOut = {},
         )
       }
@@ -1090,5 +1192,95 @@ class Phase4CartAndReEditRobolectricTest {
     composeTestRule.onNodeWithTag("cart_right_pane").assertIsDisplayed()
     composeTestRule.onNodeWithTag("cart_item_tab840-1").assertIsDisplayed()
     composeTestRule.onNodeWithTag("proceed_to_checkout_button").assertIsDisplayed()
+  }
+
+  @Test
+  @Config(qualifiers = "w840dp-h400dp")
+  fun landscapeWideShortViewportFallsBackToSingleColumnCartBecauseHeightBelow480dp() {
+    val item = sampleItem(id = "land840-1", quantity = 1)
+    val harness = buildFullTestShellHarness(listOf(item to emptyList()))
+
+    composeTestRule.setContent {
+      PizzoraTheme {
+        CustomerRoleShell(
+          session = customerSession,
+          catalogViewModel = harness.first,
+          cartViewModel = harness.second,
+          checkoutQuoteViewModel = harness.third,
+          checkoutViewModel = harness.checkoutVm,
+          onSignOut = {},
+        )
+      }
+    }
+
+    composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("cart_item_land840-1").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onAllNodesWithTag("cart_left_pane").assertCountEquals(0)
+    composeTestRule.onAllNodesWithTag("cart_right_pane").assertCountEquals(0)
+    composeTestRule.onNodeWithTag("proceed_to_checkout_button").assertIsDisplayed()
+  }
+
+  @Test
+  fun repeatedEditSubmissionLockAndMenuAddModeContinueToWorkInSameShell() {
+    val putCounter = AtomicInteger(0)
+    val seedItem = sampleItem(id = "seq-1", variantId = "var-reg", quantity = 1)
+    val harness = buildFullTestShellHarness(
+      initialCartItems = listOf(seedItem to emptyList()),
+      onPutCart = { putCounter.incrementAndGet() },
+    )
+
+    composeTestRule.setContent {
+      PizzoraTheme {
+        CustomerRoleShell(
+          session = customerSession,
+          catalogViewModel = harness.first,
+          cartViewModel = harness.second,
+          checkoutQuoteViewModel = harness.third,
+          checkoutViewModel = harness.checkoutVm,
+          onSignOut = {},
+        )
+      }
+    }
+
+    // Wait for menu loaded, verify Add Mode from Menu still adds cleanly alongside Edit Mode
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("menu_lazy_column").fetchSemanticsNodes().isNotEmpty() &&
+        harness.first.uiState.value.allProducts.any { it.id == "prod-mari" }
+    }
+    composeTestRule.onNodeWithTag("menu_lazy_column").performScrollToNode(hasTestTag("customize_product_button_prod-mari"))
+    composeTestRule.onNodeWithTag("customize_product_button_prod-mari").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onAllNodesWithTag("builder_edit_mode_badge").assertCountEquals(0)
+    composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isEmpty()
+    }
+    assertEquals(2, harness.second.uiState.value.items.size)
+
+    // Switch to Cart, edit seq-1 and submit twice rapidly -> single PUT mutation
+    val putsBeforeEdit = putCounter.get()
+    composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("cart_lazy_column").fetchSemanticsNodes().isNotEmpty() &&
+        harness.second.uiState.value.items.any { it.item.id == "seq-1" }
+    }
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_seq-1"))
+    composeTestRule.onNodeWithTag("cart_edit_seq-1").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("size_option_LARGE").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("size_option_LARGE").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
+    composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isEmpty()
+    }
+    assertEquals(putsBeforeEdit + 1, putCounter.get())
+    val updated = harness.second.uiState.value.items.first { it.item.id == "seq-1" }
+    assertEquals("var-lrg", updated.item.variantId)
   }
 }

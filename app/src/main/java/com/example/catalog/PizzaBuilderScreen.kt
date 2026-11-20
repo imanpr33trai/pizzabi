@@ -277,7 +277,7 @@ fun PizzaBuilderScreen(
   val editCartEntry = (mode as? PizzaBuilderMode.Edit)?.cartItem
   val isEditMode = editCartEntry != null
 
-  if (isEditMode && editCartEntry != null) {
+  if (editCartEntry != null) {
     if (product == null && isCatalogLoading) {
       BuilderCatalogLoadingGuard(
         onDismiss = onDismiss,
@@ -344,7 +344,7 @@ fun PizzaBuilderScreen(
   var quantity by rememberSaveable(stateKey) { mutableIntStateOf(initialQuantity) }
   var vegToppingsOnly by rememberSaveable(stateKey) { mutableStateOf(false) }
   var isBreakdownExpanded by rememberSaveable(stateKey) { mutableStateOf(false) }
-  var isSubmitting by remember { mutableStateOf(false) }
+  var isSubmitting by remember(stateKey) { mutableStateOf(false) }
   var submissionError by remember(stateKey) { mutableStateOf<String?>(null) }
   var showDiscardConfirm by rememberSaveable(stateKey) { mutableStateOf(false) }
 
@@ -453,10 +453,10 @@ fun PizzaBuilderScreen(
     isSubmitting = true
     submissionError = null
     onConfirmAdd(chosenVariant, chosenCrust, safeToppings, safeQty) { success, err ->
-      isSubmitting = false
       if (success) {
         onDismiss()
       } else {
+        isSubmitting = false
         submissionError = err ?: "Unable to add this pizza to your cart. Please try again."
       }
     }

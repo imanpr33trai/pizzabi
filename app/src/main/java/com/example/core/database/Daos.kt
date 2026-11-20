@@ -94,7 +94,7 @@ interface CartDao {
         candidate.item.productId == updatedItem.productId &&
         candidate.item.variantId == updatedItem.variantId &&
         candidate.item.crustId == updatedItem.crustId &&
-        candidate.toppings.map { it.toppingId }.sorted() == targetToppingIds
+        candidate.toppings.map { it.toppingId }.distinct().sorted() == targetToppingIds
     }
 
     if (matchingOther != null) {
@@ -166,7 +166,7 @@ interface CartDao {
       candidate.item.productId == item.productId &&
         candidate.item.variantId == item.variantId &&
         candidate.item.crustId == item.crustId &&
-        candidate.toppings.map { it.toppingId }.sorted() == targetToppingIds
+        candidate.toppings.map { it.toppingId }.distinct().sorted() == targetToppingIds
     }
 
     if (matchingExisting != null) {

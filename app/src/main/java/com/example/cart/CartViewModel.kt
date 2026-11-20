@@ -55,6 +55,7 @@ class CartViewModel(
   private var sessionSyncJob: kotlinx.coroutines.Job? = null
   private var pendingUndoPrompt: CartUndoPrompt? = null
   private var isClearingCart: Boolean = false
+  private val editingItemIdsInFlight = mutableSetOf<String>()
 
   val uiState: StateFlow<CartUiState> = combine(
     cartRepository.observeCart(),
@@ -138,52 +139,61 @@ class CartViewModel(
     toppings: List<ToppingDto>,
     quantity: Int,
     onResult: (success: Boolean, errorMessage: String?) -> Unit = { _, _ -> },
+    onEditCommitted: (CartEditResult) -> Unit = {},
   ) {
+    if (!editingItemIdsInFlight.add(existingItemId)) {
+      return
+    }
     viewModelScope.launch {
-      syncState.update { it.copy(isSyncing = true, statusMessage = null) }
-      val result = try {
-        cartRepository.updateCustomizedItem(
-          existingItemId = existingItemId,
-          product = product,
-          variant = variant,
-          crust = crust,
-          toppings = toppings,
-          quantity = quantity,
-        )
-      } catch (ce: CancellationException) {
-        throw ce
-      } catch (t: Throwable) {
-        CartEditResult(
-          isOffline = false,
-          unavailableCount = 0,
-          errorMessage = t.message ?: "Unable to update cart item.",
-        )
-      }
-      val isFatalFailure = result.errorMessage != null && !result.isOffline
-      if (isFatalFailure) {
-        syncState.update {
-          it.copy(
-            isSyncing = false,
+      try {
+        syncState.update { it.copy(isSyncing = true, statusMessage = null) }
+        val result = try {
+          cartRepository.updateCustomizedItem(
+            existingItemId = existingItemId,
+            product = product,
+            variant = variant,
+            crust = crust,
+            toppings = toppings,
+            quantity = quantity,
+          )
+        } catch (ce: CancellationException) {
+          throw ce
+        } catch (t: Throwable) {
+          CartEditResult(
             isOffline = false,
-            statusMessage = result.errorMessage,
+            unavailableCount = 0,
+            errorMessage = t.message ?: "Unable to update cart item.",
           )
         }
-        onResult(false, result.errorMessage)
-      } else {
-        syncState.update {
-          it.copy(
-            isSyncing = false,
-            isOffline = result.isOffline,
-            statusMessage = if (result.isOffline) "Saved offline — will validate when back online." else null,
-          )
+        val isFatalFailure = result.errorMessage != null && !result.isOffline
+        if (isFatalFailure) {
+          syncState.update {
+            it.copy(
+              isSyncing = false,
+              isOffline = false,
+              statusMessage = result.errorMessage,
+            )
+          }
+          onResult(false, result.errorMessage)
+        } else {
+          syncState.update {
+            it.copy(
+              isSyncing = false,
+              isOffline = result.isOffline,
+              statusMessage = if (result.isOffline) "Saved offline — will validate when back online." else null,
+            )
+          }
+          onEditCommitted(result)
+          val eventMessage = when {
+            result.wasMerged && result.wasQuantityCapped -> "Combined with matching item (capped at max 25)"
+            result.wasMerged -> "Combined with matching item in your cart"
+            else -> "${product.name} updated"
+          }
+          onResult(true, null)
+          _events.tryEmit(eventMessage)
         }
-        val eventMessage = when {
-          result.wasMerged && result.wasQuantityCapped -> "Combined with matching item (capped at max 25)"
-          result.wasMerged -> "Combined with matching item in your cart"
-          else -> "${product.name} updated"
-        }
-        onResult(true, null)
-        _events.tryEmit(eventMessage)
+      } finally {
+        editingItemIdsInFlight.remove(existingItemId)
       }
     }
   }
@@ -312,6 +322,7 @@ class CartViewModel(
     sessionSyncJob = null
     pendingUndoPrompt = null
     isClearingCart = false
+    editingItemIdsInFlight.clear()
     syncState.value = SyncStatusState()
   }
 }

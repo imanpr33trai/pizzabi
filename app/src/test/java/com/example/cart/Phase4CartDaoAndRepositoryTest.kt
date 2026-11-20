@@ -146,7 +146,7 @@ class Phase4CartDaoAndRepositoryTest {
         respond("offline", HttpStatusCode.ServiceUnavailable)
       } else {
         when {
-          req.url.encodedPath == "/v1/cart" && req.method == HttpMethod.Get -> {
+          req.url.encodedPath == "/api/v1/cart" && req.method == HttpMethod.Get -> {
             respond(
               content = json.encodeToString(
                 CartResponseDto(
@@ -159,7 +159,7 @@ class Phase4CartDaoAndRepositoryTest {
               headers = headersOf(HttpHeaders.ContentType, "application/json"),
             )
           }
-          req.url.encodedPath == "/v1/cart" && req.method == HttpMethod.Put -> {
+          req.url.encodedPath == "/api/v1/cart" && req.method == HttpMethod.Put -> {
             val bodyStr = (req.body as? TextContent)?.text ?: "{}"
             val replaceReq = json.decodeFromString<ReplaceCartRequest>(bodyStr)
             serverItems = replaceReq.items.mapIndexed { idx, input ->
@@ -203,7 +203,7 @@ class Phase4CartDaoAndRepositoryTest {
               headers = headersOf(HttpHeaders.ContentType, "application/json"),
             )
           }
-          req.url.encodedPath == "/v1/cart/validate" && req.method == HttpMethod.Post -> {
+          req.url.encodedPath == "/api/v1/cart/validate" && req.method == HttpMethod.Post -> {
             val bodyStr = (req.body as? TextContent)?.text ?: "{}"
             val validateReq = json.decodeFromString<ValidateCartRequest>(bodyStr)
             val validated = validateReq.items.mapIndexed { idx, input ->
@@ -247,7 +247,7 @@ class Phase4CartDaoAndRepositoryTest {
               headers = headersOf(HttpHeaders.ContentType, "application/json"),
             )
           }
-          req.url.encodedPath == "/v1/cart" && req.method == HttpMethod.Delete -> {
+          req.url.encodedPath == "/api/v1/cart" && req.method == HttpMethod.Delete -> {
             serverItems.clear()
             respond("{}", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
           }
@@ -267,6 +267,7 @@ class Phase4CartDaoAndRepositoryTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     db = Room.inMemoryDatabaseBuilder(context, PizzoraDatabase::class.java)
       .allowMainThreadQueries()
+      .addCallback(PizzoraDatabase.FOREIGN_KEY_CALLBACK)
       .build()
   }
 
@@ -488,6 +489,18 @@ class Phase4CartDaoAndRepositoryTest {
   fun undoViewModelTokenGuardsPreventDuplicateExpiredWrongItemAndRestoreConcurrentMerge() = runTest {
     val testDispatcher = StandardTestDispatcher(testScheduler)
     Dispatchers.setMain(testDispatcher)
+    fun waitForCondition(condition: () -> Boolean) {
+      val deadline = System.currentTimeMillis() + 5_000
+      while (true) {
+        advanceUntilIdle()
+        if (condition()) return
+        if (System.currentTimeMillis() > deadline) {
+          throw AssertionError("Timed out waiting for async ViewModel/Room completion")
+        }
+        Thread.sleep(10)
+      }
+    }
+
     try {
       val storage = InMemoryTokenStorage(user1Session)
       val dao = db.cartDao()
@@ -500,10 +513,14 @@ class Phase4CartDaoAndRepositoryTest {
 
       repo.addCustomizedItem(margherita, margherita.variants[0], handCrust, listOf(basilTopping), 1)
       repo.addCustomizedItem(margherita, margherita.variants[1], panCrust, listOf(oliveTopping), 2)
-      advanceUntilIdle()
+      waitForCondition { runBlocking { dao.getCartItemsWithToppingsOnce("user-1").size == 2 } }
 
       val prompts = mutableListOf<CartUndoPrompt>()
-      val job = backgroundScope.launch { vm.undoPrompts.collect { prompts.add(it) } }
+      val job = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
+        vm.undoPrompts.collect {
+          prompts.add(it)
+        }
+      }
       advanceUntilIdle()
 
       val items = dao.getCartItemsWithToppingsOnce("user-1")
@@ -512,9 +529,9 @@ class Phase4CartDaoAndRepositoryTest {
 
       // Repeated removal: remove reg, then remove med -> only latest token (med) can undo
       vm.removeItem(itemReg.item.id)
-      advanceUntilIdle()
+      waitForCondition { prompts.size == 1 }
       vm.removeItem(itemMed.item.id)
-      advanceUntilIdle()
+      waitForCondition { prompts.size == 2 }
 
       assertEquals(2, prompts.size)
       val tokenA = prompts[0].token
@@ -527,10 +544,10 @@ class Phase4CartDaoAndRepositoryTest {
 
       // Re-add an identical itemMed concurrently (qty 3) before undoing tokenB (qty 2) -> merges cleanly to qty 5!
       repo.addCustomizedItem(margherita, margherita.variants[1], panCrust, listOf(oliveTopping), 3)
-      advanceUntilIdle()
+      waitForCondition { runBlocking { dao.getCartItemsWithToppingsOnce("user-1").size == 1 } }
 
       vm.undoRemoval(tokenB)
-      advanceUntilIdle()
+      waitForCondition { runBlocking { dao.getCartItemsWithToppingsOnce("user-1").singleOrNull()?.item?.quantity == 5 } }
       val afterRestore = dao.getCartItemsWithToppingsOnce("user-1")
       assertEquals(1, afterRestore.size)
       assertEquals(5, afterRestore.single().item.quantity)
@@ -543,7 +560,7 @@ class Phase4CartDaoAndRepositoryTest {
       // Dismissing an undo token invalidates it
       val currentId = dao.getCartItemsWithToppingsOnce("user-1").single().item.id
       vm.removeItem(currentId)
-      advanceUntilIdle()
+      waitForCondition { prompts.size == 3 }
       val tokenC = prompts.last().token
       vm.dismissUndo(tokenC)
       vm.undoRemoval(tokenC)
@@ -561,6 +578,109 @@ class Phase4CartDaoAndRepositoryTest {
       job.cancel()
     } finally {
       Dispatchers.resetMain()
+    }
+  }
+
+  @Test
+  fun repositoryOnlineConsecutiveEditsSyncAndPreserveChildToppingIntegrity() = runBlocking {
+    val storage = InMemoryTokenStorage(user1Session)
+    val dao = db.cartDao()
+    val repo = NetworkCartRepository(
+      apiClient = createMirroringApiClient(storage, failNetwork = false),
+      cartDao = dao,
+      tokenStorage = storage,
+    )
+
+    val addRes = repo.addCustomizedItem(
+      product = margherita,
+      variant = margherita.variants[0],
+      crust = handCrust,
+      toppings = listOf(basilTopping),
+      quantity = 1,
+    )
+    assertFalse(addRes.isOffline)
+    val initialId = dao.getCartItemsWithToppingsOnce("user-1").single().item.id
+
+    // Edit 1: Medium + Pan + Olives, qty 2
+    val edit1 = repo.updateCustomizedItem(
+      existingItemId = initialId,
+      product = margherita,
+      variant = margherita.variants[1],
+      crust = panCrust,
+      toppings = listOf(oliveTopping),
+      quantity = 2,
+    )
+    assertFalse(edit1.isOffline)
+    assertFalse(edit1.wasMerged)
+    assertEquals(2, edit1.finalQuantity)
+    assertEquals(initialId, edit1.resultingItemId)
+
+    // Edit 2 (repeated edit on same item): Large + Hand + Basil + Olives, qty 3
+    val edit2 = repo.updateCustomizedItem(
+      existingItemId = initialId,
+      product = margherita,
+      variant = margherita.variants[2],
+      crust = handCrust,
+      toppings = listOf(basilTopping, oliveTopping),
+      quantity = 3,
+    )
+    assertFalse(edit2.isOffline)
+    assertEquals(3, edit2.finalQuantity)
+
+    val finalRows = dao.getCartItemsWithToppingsOnce("user-1")
+    assertEquals(1, finalRows.size)
+    assertEquals("var-lrg", finalRows.single().item.variantId)
+    assertEquals(3, finalRows.single().item.quantity)
+    assertEquals(listOf("top-basil", "top-olive"), finalRows.single().toppings.map { it.toppingId }.sorted())
+  }
+
+  @Test
+  fun failedTransactionAndForeignKeyCascadeMaintainZeroOrphans() = runBlocking {
+    val dao = db.cartDao()
+    val item = CartItemEntity(
+      id = "tx-1",
+      userId = "user-1",
+      productId = "prod-marg",
+      productName = "Margherita Verace",
+      imageUrl = null,
+      variantId = "var-reg",
+      sizeCode = SizeCode.REGULAR.name,
+      crustId = "crust-hand",
+      crustName = "Hand-Tossed",
+      unitPricePaise = 32_400L,
+      quantity = 2,
+      updatedAtMs = 1_000L,
+    )
+    dao.upsertItemWithToppings(
+      item,
+      listOf(CartItemToppingEntity("tx-1", "top-basil", "Extra Basil", 2_500L)),
+    )
+
+    // Mismatched userId inside replaceOrMergeItemWithToppings fails transaction atomically
+    val thrown = runCatching {
+      dao.replaceOrMergeItemWithToppings(
+        userId = "user-1",
+        existingLocalId = "tx-1",
+        updatedItem = item.copy(userId = "user-2", quantity = 5),
+        updatedToppings = emptyList(),
+      )
+    }.exceptionOrNull()
+    assertNotNull(thrown)
+
+    // Prior item & topping remain untouched
+    val preserved = dao.getCartItemsWithToppingsOnce("user-1")
+    assertEquals(1, preserved.size)
+    assertEquals(2, preserved.single().item.quantity)
+    assertEquals(listOf("top-basil"), preserved.single().toppings.map { it.toppingId })
+
+    // Deleting parent cart item cascades to child toppings automatically via FOREIGN_KEY_CALLBACK
+    dao.deleteItemById("user-1", "tx-1")
+    val cursor = db.openHelper.writableDatabase.query(
+      "SELECT COUNT(*) FROM cart_item_toppings WHERE cart_item_id = 'tx-1'",
+    )
+    cursor.use {
+      assertTrue(it.moveToFirst())
+      assertEquals(0, it.getInt(0))
     }
   }
 }

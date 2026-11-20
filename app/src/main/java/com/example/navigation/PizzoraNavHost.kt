@@ -864,9 +864,10 @@ fun CustomerRoleShell(
       exit = if (reducedMotion) fadeOut() else fadeOut(tween(180)),
     ) {
       val currentMenuState = menuState
-      if (isEditBuilderOverlayOpen && activeEditingCartItem != null && cartViewModel != null) {
+      if (isEditBuilderOverlayOpen) {
+        val editEntry = activeEditingCartItem!!
         val resolvedProduct = currentMenuState?.allProducts?.firstOrNull {
-          it.id == activeEditingCartItem.item.productId
+          it.id == editEntry.item.productId
         }
         val catalogLoading = currentMenuState?.isLoading == true || currentMenuState?.isRefreshing == true
         Surface(
@@ -883,7 +884,7 @@ fun CustomerRoleShell(
               product = resolvedProduct,
               crusts = currentMenuState?.crusts ?: emptyList(),
               toppings = currentMenuState?.toppings ?: emptyList(),
-              mode = PizzaBuilderMode.Edit(activeEditingCartItem),
+              mode = PizzaBuilderMode.Edit(editEntry),
               isCatalogLoading = catalogLoading,
               isAcceptingOrders = currentMenuState?.isAcceptingOrders ?: true,
               isFromOfflineCache = currentMenuState?.isFromOfflineCache ?: false,
@@ -893,15 +894,21 @@ fun CustomerRoleShell(
               },
               onConfirmAdd = { variant, crust, selectedToppings, qty, onResult ->
                 val targetProduct = resolvedProduct
-                if (targetProduct != null) {
-                  cartViewModel.updateEditedPizza(
-                    existingItemId = activeEditingCartItem.item.id,
+                val activeCartVm = cartViewModel
+                if (targetProduct != null && activeCartVm != null) {
+                  activeCartVm.updateEditedPizza(
+                    existingItemId = editEntry.item.id,
                     product = targetProduct,
                     variant = variant,
                     crust = crust,
                     toppings = selectedToppings,
                     quantity = qty,
                     onResult = onResult,
+                    onEditCommitted = { editResult ->
+                      editResult.resultingItemId?.let { targetId ->
+                        lastEditedCartItemId = targetId
+                      }
+                    },
                   )
                 } else {
                   onResult(false, "Unable to update this item right now.")

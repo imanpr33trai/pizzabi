@@ -54,6 +54,7 @@ data class CartEditResult(
   val wasMerged: Boolean = false,
   val wasQuantityCapped: Boolean = false,
   val finalQuantity: Int = 0,
+  val resultingItemId: String? = null,
   val errorMessage: String? = null,
 )
 
@@ -286,6 +287,7 @@ class NetworkCartRepository(
       wasMerged = daoResult.action == CartEditMergeAction.MERGED_INTO_EXISTING,
       wasQuantityCapped = daoResult.wasQuantityCapped,
       finalQuantity = daoResult.finalQuantity,
+      resultingItemId = daoResult.resultingItemId,
       errorMessage = syncResult.errorMessage,
     )
   }

@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 fun PizzoraStickyActionDock(
   modifier: Modifier = Modifier,
   applyNavigationBarsPadding: Boolean = true,
+  verticalPadding: Dp = 12.dp,
   topSlot: (@Composable ColumnScope.() -> Unit)? = null,
   content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -47,7 +49,7 @@ fun PizzoraStickyActionDock(
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 16.dp, vertical = 12.dp),
+          .padding(horizontal = 16.dp, vertical = verticalPadding),
         content = content,
       )
     }

@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.LocalPizzoraSemanticColors
 
@@ -42,6 +43,7 @@ fun PizzoraStatusBanner(
   actionLabel: String? = null,
   onAction: (() -> Unit)? = null,
   actionTestTag: String? = null,
+  verticalPadding: Dp = 10.dp,
 ) {
   val semantic = LocalPizzoraSemanticColors.current
   val (containerColor: Color, contentColor: Color, defaultIcon: ImageVector) = when (tone) {
@@ -74,12 +76,12 @@ fun PizzoraStatusBanner(
     shape = MaterialTheme.shapes.small,
     modifier = modifier
       .fillMaxWidth()
-      .semantics(mergeDescendants = false) {},
+      .semantics(mergeDescendants = actionLabel.isNullOrBlank() || onAction == null) {},
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 10.dp),
+        .padding(horizontal = 12.dp, vertical = verticalPadding),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
