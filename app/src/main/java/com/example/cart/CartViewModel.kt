@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 data class CartUiState(
@@ -56,6 +58,7 @@ class CartViewModel(
   private var pendingUndoPrompt: CartUndoPrompt? = null
   private var isClearingCart: Boolean = false
   private val editingItemIdsInFlight = mutableSetOf<String>()
+  private val removalMutex = Mutex()
 
   val uiState: StateFlow<CartUiState> = combine(
     cartRepository.observeCart(),
@@ -215,16 +218,18 @@ class CartViewModel(
 
   private fun removeItemWithUndoInternal(itemId: String) {
     viewModelScope.launch {
-      val (snapshot, result) = cartRepository.removeItemWithSnapshot(itemId)
-      syncState.update { it.copy(isOffline = result.isOffline) }
-      if (snapshot != null) {
-        val prompt = CartUndoPrompt(
-          token = UUID.randomUUID().toString(),
-          productName = snapshot.entry.item.productName,
-          snapshot = snapshot,
-        )
-        pendingUndoPrompt = prompt
-        _undoPrompts.tryEmit(prompt)
+      removalMutex.withLock {
+        val (snapshot, result) = cartRepository.removeItemWithSnapshot(itemId)
+        syncState.update { it.copy(isOffline = result.isOffline) }
+        if (snapshot != null) {
+          val prompt = CartUndoPrompt(
+            token = UUID.randomUUID().toString(),
+            productName = snapshot.entry.item.productName,
+            snapshot = snapshot,
+          )
+          pendingUndoPrompt = prompt
+          _undoPrompts.tryEmit(prompt)
+        }
       }
     }
   }
@@ -236,24 +241,26 @@ class CartViewModel(
     }
     pendingUndoPrompt = null
     viewModelScope.launch {
-      syncState.update { it.copy(isSyncing = true, statusMessage = null) }
-      val result = try {
-        cartRepository.restoreRemovedItem(prompt.snapshot)
-      } catch (ce: CancellationException) {
-        throw ce
-      } catch (t: Throwable) {
-        CartSyncResult(
-          isOffline = false,
-          unavailableCount = 0,
-          errorMessage = t.message ?: "Unable to restore cart item.",
-        )
-      }
-      syncState.update {
-        it.copy(
-          isSyncing = false,
-          isOffline = result.isOffline,
-          statusMessage = if (result.isOffline) "Saved offline — will validate when back online." else null,
-        )
+      removalMutex.withLock {
+        syncState.update { it.copy(isSyncing = true, statusMessage = null) }
+        val result = try {
+          cartRepository.restoreRemovedItem(prompt.snapshot)
+        } catch (ce: CancellationException) {
+          throw ce
+        } catch (t: Throwable) {
+          CartSyncResult(
+            isOffline = false,
+            unavailableCount = 0,
+            errorMessage = t.message ?: "Unable to restore cart item.",
+          )
+        }
+        syncState.update {
+          it.copy(
+            isSyncing = false,
+            isOffline = result.isOffline,
+            statusMessage = if (result.isOffline) "Saved offline — will validate when back online." else null,
+          )
+        }
       }
     }
   }

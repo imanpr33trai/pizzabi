@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -91,6 +90,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -803,11 +803,7 @@ private fun FulfillmentAndPincodeCard(
             selectedBorderWidth = 1.5.dp,
           ),
           modifier = Modifier
-            .selectable(
-              selected = quoteState.fulfillmentType == FulfillmentType.DELIVERY,
-              role = Role.RadioButton,
-              onClick = { onFulfillmentTypeChange(FulfillmentType.DELIVERY) },
-            )
+            .semantics { role = Role.RadioButton }
             .minimumInteractiveComponentSize()
             .testTag("fulfillment_delivery_chip"),
         )
@@ -824,11 +820,7 @@ private fun FulfillmentAndPincodeCard(
             selectedBorderWidth = 1.5.dp,
           ),
           modifier = Modifier
-            .selectable(
-              selected = quoteState.fulfillmentType == FulfillmentType.PICKUP,
-              role = Role.RadioButton,
-              onClick = { onFulfillmentTypeChange(FulfillmentType.PICKUP) },
-            )
+            .semantics { role = Role.RadioButton }
             .minimumInteractiveComponentSize()
             .testTag("fulfillment_pickup_chip"),
         )

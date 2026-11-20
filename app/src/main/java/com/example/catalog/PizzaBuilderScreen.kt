@@ -278,7 +278,7 @@ fun PizzaBuilderScreen(
   val isEditMode = editCartEntry != null
 
   if (editCartEntry != null) {
-    if (product == null && isCatalogLoading) {
+    if ((product == null || crusts.isEmpty()) && isCatalogLoading) {
       BuilderCatalogLoadingGuard(
         onDismiss = onDismiss,
         modifier = modifier,
@@ -457,7 +457,11 @@ fun PizzaBuilderScreen(
         onDismiss()
       } else {
         isSubmitting = false
-        submissionError = err ?: "Unable to add this pizza to your cart. Please try again."
+        submissionError = err ?: if (isEditMode) {
+          "Unable to update this pizza in your cart. Please try again."
+        } else {
+          "Unable to add this pizza to your cart. Please try again."
+        }
       }
     }
   }

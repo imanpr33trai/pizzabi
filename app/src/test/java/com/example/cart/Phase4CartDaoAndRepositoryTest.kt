@@ -683,4 +683,279 @@ class Phase4CartDaoAndRepositoryTest {
       assertEquals(0, it.getInt(0))
     }
   }
+
+  @Test
+  fun daoScenarioB2_underCapMergeDeletesOldItemAndOldToppingsLeavingZeroOrphans() = runBlocking {
+    val dao = db.cartDao()
+    val itemA = CartItemEntity(
+      id = "item-a",
+      userId = "user-1",
+      productId = "prod-marg",
+      productName = "Margherita Verace",
+      imageUrl = null,
+      variantId = "var-reg",
+      sizeCode = SizeCode.REGULAR.name,
+      crustId = "crust-hand",
+      crustName = "Hand-Tossed",
+      unitPricePaise = 33_400L,
+      quantity = 2,
+      updatedAtMs = 1_000L,
+    )
+    val itemB = itemA.copy(
+      id = "item-b",
+      variantId = "var-med",
+      sizeCode = SizeCode.MEDIUM.name,
+      crustId = "crust-pan",
+      crustName = "Sourdough Pan",
+      unitPricePaise = 50_400L,
+      quantity = 3,
+      updatedAtMs = 1_500L,
+    )
+    val unrelated = itemA.copy(
+      id = "item-other",
+      productId = "prod-unrelated",
+      productName = "Marinara Antica",
+      quantity = 1,
+      updatedAtMs = 1_200L,
+    )
+    dao.upsertItemWithToppings(itemA, listOf(CartItemToppingEntity("item-a", "top-olive", "Black Olives", 3_500L)))
+    dao.upsertItemWithToppings(itemB, listOf(CartItemToppingEntity("item-b", "top-basil", "Extra Basil", 2_500L)))
+    dao.upsertItemWithToppings(unrelated, emptyList())
+
+    // Edit itemA (previously had top-olive) to match itemB (var-med + crust-pan + top-basil), qty 2 -> 3 + 2 = 5 (uncapped)
+    val result = dao.replaceOrMergeItemWithToppings(
+      userId = "user-1",
+      existingLocalId = "item-a",
+      updatedItem = itemA.copy(
+        variantId = "var-med",
+        sizeCode = SizeCode.MEDIUM.name,
+        crustId = "crust-pan",
+        crustName = "Sourdough Pan",
+        unitPricePaise = 50_400L,
+        quantity = 2,
+        updatedAtMs = 3_000L,
+      ),
+      updatedToppings = listOf(CartItemToppingEntity("item-a", "top-basil", "Extra Basil", 2_500L)),
+    )
+
+    assertEquals(CartEditMergeAction.MERGED_INTO_EXISTING, result.action)
+    assertEquals("item-b", result.resultingItemId)
+    assertEquals(5, result.finalQuantity)
+    assertFalse(result.wasQuantityCapped)
+
+    val rows = dao.getCartItemsWithToppingsOnce("user-1")
+    assertEquals(2, rows.size)
+    val merged = rows.first { it.item.id == "item-b" }
+    assertEquals(5, merged.item.quantity)
+    assertEquals(listOf("top-basil"), merged.toppings.map { it.toppingId })
+    assertEquals(1, rows.first { it.item.id == "item-other" }.item.quantity)
+
+    // Verify zero orphan child topping rows remain for deleted item-a
+    val cursor = db.openHelper.writableDatabase.query(
+      "SELECT COUNT(*) FROM cart_item_toppings WHERE cart_item_id = 'item-a'",
+    )
+    cursor.use {
+      assertTrue(it.moveToFirst())
+      assertEquals(0, it.getInt(0))
+    }
+  }
+
+  @Test
+  fun repositoryOfflineEditPersistsAtomicallyInRoomAndViewModelSurfacesOfflineNotice() = runTest {
+    val testDispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(testDispatcher)
+    fun waitForCondition(condition: () -> Boolean) {
+      val deadline = System.currentTimeMillis() + 5_000
+      while (true) {
+        advanceUntilIdle()
+        if (condition()) return
+        if (System.currentTimeMillis() > deadline) {
+          throw AssertionError("Timed out waiting for offline edit completion")
+        }
+        Thread.sleep(10)
+      }
+    }
+
+    try {
+      val storage = InMemoryTokenStorage(user1Session)
+      val dao = db.cartDao()
+      val repo = NetworkCartRepository(
+        apiClient = createMirroringApiClient(storage, failNetwork = true),
+        cartDao = dao,
+        tokenStorage = storage,
+      )
+      val vm = CartViewModel(repo)
+
+      val seed = CartItemEntity(
+        id = "offline-edit-1",
+        userId = "user-1",
+        productId = "prod-marg",
+        productName = "Margherita Verace",
+        imageUrl = "https://cdn.example.com/marg.jpg",
+        variantId = "var-reg",
+        sizeCode = SizeCode.REGULAR.name,
+        crustId = "crust-hand",
+        crustName = "Hand-Tossed",
+        unitPricePaise = 32_400L,
+        quantity = 1,
+        updatedAtMs = 1_000L,
+      )
+      dao.upsertItemWithToppings(seed, listOf(CartItemToppingEntity("offline-edit-1", "top-basil", "Extra Basil", 2_500L)))
+
+      val events = mutableListOf<String>()
+      val eventJob = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
+        vm.events.collect { events.add(it) }
+      }
+
+      var callbackResult: Pair<Boolean, String?>? = null
+      var committedEdit: CartEditResult? = null
+      vm.updateEditedPizza(
+        existingItemId = "offline-edit-1",
+        product = margherita,
+        variant = margherita.variants[2],
+        crust = panCrust,
+        toppings = listOf(oliveTopping),
+        quantity = 4,
+        onResult = { ok, err -> callbackResult = ok to err },
+        onEditCommitted = { committedEdit = it },
+      )
+
+      waitForCondition { callbackResult != null }
+      assertEquals(true to null, callbackResult)
+      assertNotNull(committedEdit)
+      assertTrue(committedEdit!!.isOffline)
+      assertEquals(4, committedEdit!!.finalQuantity)
+      assertTrue(vm.uiState.value.isOffline)
+      assertEquals("Saved offline — will validate when back online.", vm.uiState.value.statusMessage)
+      assertEquals(listOf("Margherita Verace updated"), events)
+
+      val stored = dao.getCartItemsWithToppingsOnce("user-1").single()
+      assertEquals("var-lrg", stored.item.variantId)
+      assertEquals("crust-pan", stored.item.crustId)
+      assertEquals(4, stored.item.quantity)
+      assertEquals(listOf("top-olive"), stored.toppings.map { it.toppingId })
+
+      val orphanCursor = db.openHelper.writableDatabase.query(
+        "SELECT COUNT(*) FROM cart_item_toppings WHERE cart_item_id = 'offline-edit-1' AND topping_id = 'top-basil'",
+      )
+      orphanCursor.use {
+        assertTrue(it.moveToFirst())
+        assertEquals(0, it.getInt(0))
+      }
+
+      eventJob.cancel()
+    } finally {
+      Dispatchers.resetMain()
+    }
+  }
+
+  @Test
+  fun viewModelFailedEditTransactionReportsFailureWithoutSuccessEventAndAllowsRetry() = runTest {
+    val testDispatcher = StandardTestDispatcher(testScheduler)
+    Dispatchers.setMain(testDispatcher)
+    fun waitForCondition(condition: () -> Boolean) {
+      val deadline = System.currentTimeMillis() + 5_000
+      while (true) {
+        advanceUntilIdle()
+        if (condition()) return
+        if (System.currentTimeMillis() > deadline) {
+          throw AssertionError("Timed out waiting for failed edit callback")
+        }
+        Thread.sleep(10)
+      }
+    }
+
+    try {
+      val storage = InMemoryTokenStorage(user1Session)
+      val dao = db.cartDao()
+      val realRepo = NetworkCartRepository(
+        apiClient = createMirroringApiClient(storage),
+        cartDao = dao,
+        tokenStorage = storage,
+      )
+      var shouldFail = true
+      val flakyRepo = object : CartRepository by realRepo {
+        override suspend fun updateCustomizedItem(
+          existingItemId: String,
+          product: ProductDto,
+          variant: ProductVariantDto,
+          crust: CrustOptionDto,
+          toppings: List<ToppingDto>,
+          quantity: Int,
+        ): CartEditResult {
+          if (shouldFail) {
+            throw IllegalStateException("Simulated Room write failure")
+          }
+          return realRepo.updateCustomizedItem(existingItemId, product, variant, crust, toppings, quantity)
+        }
+      }
+
+      val seed = CartItemEntity(
+        id = "fail-edit-1",
+        userId = "user-1",
+        productId = "prod-marg",
+        productName = "Margherita Verace",
+        imageUrl = null,
+        variantId = "var-reg",
+        sizeCode = SizeCode.REGULAR.name,
+        crustId = "crust-hand",
+        crustName = "Hand-Tossed",
+        unitPricePaise = 29_900L,
+        quantity = 1,
+        updatedAtMs = 1_000L,
+      )
+      dao.upsertItemWithToppings(seed, emptyList())
+
+      val vm = CartViewModel(flakyRepo)
+      val events = mutableListOf<String>()
+      val eventJob = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
+        vm.events.collect { events.add(it) }
+      }
+
+      var firstResult: Pair<Boolean, String?>? = null
+      var committedCount = 0
+      vm.updateEditedPizza(
+        existingItemId = "fail-edit-1",
+        product = margherita,
+        variant = margherita.variants[1],
+        crust = panCrust,
+        toppings = listOf(basilTopping),
+        quantity = 2,
+        onResult = { ok, err -> firstResult = ok to err },
+        onEditCommitted = { committedCount++ },
+      )
+      waitForCondition { firstResult != null && vm.uiState.value.statusMessage == "Simulated Room write failure" }
+
+      assertEquals(false to "Simulated Room write failure", firstResult)
+      assertEquals(0, committedCount)
+      assertTrue(events.isEmpty())
+      assertFalse(vm.uiState.value.isSyncing)
+      assertEquals("Simulated Room write failure", vm.uiState.value.statusMessage)
+      assertEquals("var-reg", dao.getCartItemsWithToppingsOnce("user-1").single().item.variantId)
+
+      // Retry after transient failure succeeds (in-flight lock was released in finally)
+      shouldFail = false
+      var retryResult: Pair<Boolean, String?>? = null
+      vm.updateEditedPizza(
+        existingItemId = "fail-edit-1",
+        product = margherita,
+        variant = margherita.variants[1],
+        crust = panCrust,
+        toppings = listOf(basilTopping),
+        quantity = 2,
+        onResult = { ok, err -> retryResult = ok to err },
+        onEditCommitted = { committedCount++ },
+      )
+      waitForCondition { retryResult != null }
+
+      assertEquals(true to null, retryResult)
+      assertEquals(1, committedCount)
+      assertEquals(listOf("Margherita Verace updated"), events)
+      assertEquals("var-med", dao.getCartItemsWithToppingsOnce("user-1").single().item.variantId)
+
+      eventJob.cancel()
+    } finally {
+      Dispatchers.resetMain()
+    }
+  }
 }

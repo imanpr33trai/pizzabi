@@ -3,6 +3,8 @@ package com.example.checkout
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.ui.components.PizzoraBannerTone
@@ -180,6 +183,7 @@ fun CouponPickerSheet(
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CouponOptionCard(
   coupon: CustomerCouponDto,
@@ -224,10 +228,12 @@ private fun CouponOptionCard(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
+        FlowRow(
           horizontalArrangement = Arrangement.spacedBy(6.dp),
-          modifier = Modifier.weight(1f),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+          modifier = Modifier
+            .weight(1f)
+            .padding(end = 8.dp),
         ) {
           Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
@@ -237,6 +243,8 @@ private fun CouponOptionCard(
               text = coupon.code,
               style = PizzoraMonoTitle,
               color = MaterialTheme.colorScheme.onPrimaryContainer,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
               modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             )
           }
@@ -273,6 +281,8 @@ private fun CouponOptionCard(
                 } else {
                   MaterialTheme.colorScheme.onSurfaceVariant
                 },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
               )
             }
           }
@@ -284,7 +294,11 @@ private fun CouponOptionCard(
             .minimumInteractiveComponentSize()
             .testTag("apply_coupon_btn_${coupon.code}"),
         ) {
-          Text(stringResource(R.string.action_apply))
+          Text(
+            text = stringResource(R.string.action_apply),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
         }
       }
 
@@ -331,7 +345,7 @@ fun PriceBreakdownCard(
 ) {
   Card(
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     modifier = modifier.fillMaxWidth().testTag("price_breakdown_card"),
   ) {
     Column(

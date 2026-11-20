@@ -12,6 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -26,6 +29,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -47,6 +51,8 @@ import coil.request.ErrorResult
 import coil.request.SuccessResult
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.NetworkCatalogRepository
+import com.example.catalog.PizzaBuilderMode
+import com.example.catalog.PizzaBuilderScreen
 import com.example.checkout.CheckoutQuoteUiState
 import com.example.checkout.CheckoutQuoteViewModel
 import com.example.checkout.CheckoutViewModel
@@ -884,7 +890,8 @@ class Phase4CartAndReEditRobolectricTest {
     composeTestRule.onNodeWithTag("cart_qty_minus_u-1").performClick()
     waitUntil {
       cartVm.uiState.value.items.none { it.item.id == "u-1" } &&
-        composeTestRule.onAllNodesWithTag("cart_item_u-2").fetchSemanticsNodes().isNotEmpty()
+        composeTestRule.onAllNodesWithTag("cart_item_u-2").fetchSemanticsNodes().isNotEmpty() &&
+        composeTestRule.onAllNodesWithText("Removed Margherita Verace").fetchSemanticsNodes().isNotEmpty()
     }
 
     // Snackbar shows Undo -> click Undo -> item u-1 and its topping return
@@ -902,7 +909,10 @@ class Phase4CartAndReEditRobolectricTest {
     waitUntil { cartVm.uiState.value.items.none { it.item.id == "u-1" } }
     composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_remove_u-2"))
     composeTestRule.onNodeWithTag("cart_remove_u-2").performClick()
-    waitUntil { cartVm.uiState.value.items.isEmpty() }
+    waitUntil {
+      cartVm.uiState.value.items.isEmpty() &&
+        composeTestRule.onAllNodesWithText("Removed Marinara Antica").fetchSemanticsNodes().isNotEmpty()
+    }
 
     composeTestRule.onNodeWithText("Removed Marinara Antica").assertIsDisplayed()
     composeTestRule.onNodeWithText("Undo").performClick()
@@ -1282,5 +1292,250 @@ class Phase4CartAndReEditRobolectricTest {
     assertEquals(putsBeforeEdit + 1, putCounter.get())
     val updated = harness.second.uiState.value.items.first { it.item.id == "seq-1" }
     assertEquals("var-lrg", updated.item.variantId)
+  }
+
+  @Test
+  fun reEditMergeUnder25CombinesWithoutCapAndShowsStandardMergeSnackbar() {
+    val itemA = sampleItem(
+      id = "merge-a",
+      variantId = "var-reg",
+      sizeCode = SizeCode.REGULAR,
+      crustId = "crust-hand",
+      crustName = "Hand-Tossed",
+      unitPricePaise = 29_900L,
+      quantity = 2,
+    )
+    val itemB = sampleItem(
+      id = "merge-b",
+      variantId = "var-med",
+      sizeCode = SizeCode.MEDIUM,
+      crustId = "crust-hand",
+      crustName = "Hand-Tossed",
+      unitPricePaise = 42_900L,
+      quantity = 3,
+    )
+    val (catalogVm, cartVm, quoteVm) = buildTestShellHarness(listOf(itemA to emptyList(), itemB to emptyList()))
+
+    composeTestRule.setContent {
+      PizzoraTheme {
+        CustomerRoleShell(
+          session = customerSession,
+          catalogViewModel = catalogVm,
+          cartViewModel = cartVm,
+          checkoutQuoteViewModel = quoteVm,
+          onSignOut = {},
+        )
+      }
+    }
+
+    composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("cart_edit_merge-a").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_merge-a"))
+    composeTestRule.onNodeWithTag("cart_edit_merge-a").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("size_option_MEDIUM").fetchSemanticsNodes().isNotEmpty()
+    }
+
+    composeTestRule.onNodeWithTag("size_option_MEDIUM").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isEmpty()
+    }
+
+    composeTestRule.onNodeWithText("Combined with matching item in your cart").assertIsDisplayed()
+    assertEquals(1, cartVm.uiState.value.items.size)
+    assertEquals("merge-b", cartVm.uiState.value.items.single().item.id)
+    assertEquals(5, cartVm.uiState.value.items.single().item.quantity)
+    composeTestRule.onNodeWithTag("cart_item_merge-b").assertIsFocused()
+  }
+
+  @Test
+  fun failedEditSubmissionKeepsBuilderOpenShowsErrorAndAllowsRetry() {
+    val seedEntry = CartItemWithToppings(
+      item = sampleItem(id = "err-1", variantId = "var-reg", quantity = 1),
+      toppings = listOf(CartItemToppingEntity("err-1", "top-basil", "Extra Basil", 2_500L)),
+    )
+    var failNext = true
+    var dismissed = false
+    var submitAttempts = 0
+
+    composeTestRule.setContent {
+      PizzoraTheme {
+        if (!dismissed) {
+          PizzaBuilderScreen(
+            product = margherita,
+            crusts = crusts,
+            toppings = toppings,
+            mode = PizzaBuilderMode.Edit(seedEntry),
+            onDismiss = { dismissed = true },
+            onConfirmAdd = { _, _, _, _, onResult ->
+              submitAttempts++
+              if (failNext) {
+                failNext = false
+                onResult(false, "Could not save cart changes")
+              } else {
+                onResult(true, null)
+              }
+            },
+          )
+        }
+      }
+    }
+
+    composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
+    composeTestRule.waitForIdle()
+
+    // Builder remains open, shows inline error, and re-enables button for retry
+    assertEquals(1, submitAttempts)
+    assertEquals(false, dismissed)
+    composeTestRule.onNodeWithTag("pizza_customizer_sheet").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Could not save cart changes").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithTag("add_to_cart_button").assertIsEnabled().performClick()
+    composeTestRule.waitForIdle()
+
+    assertEquals(2, submitAttempts)
+    assertEquals(true, dismissed)
+  }
+
+  @Test
+  fun cartItemAtMaxQuantity25DisablesPlusShowsCapNoteAndFulfillmentChipsExposeRadioRole() {
+    val maxItem = sampleItem(id = "max-25", quantity = 25)
+    var fulfillmentClicks = 0
+
+    composeTestRule.setContent {
+      PizzoraTheme {
+        CartScreen(
+          uiState = CartUiState(
+            items = listOf(CartItemWithToppings(maxItem, emptyList())),
+            subtotalPaise = maxItem.unitPricePaise * 25,
+            totalItemCount = 25,
+          ),
+          quoteState = CheckoutQuoteUiState(fulfillmentType = FulfillmentType.DELIVERY),
+          onUpdateQuantity = { _, _ -> },
+          onRemoveItem = {},
+          onClearCart = {},
+          onValidateAndSync = {},
+          onBrowseMenu = {},
+          onFulfillmentTypeChange = { fulfillmentClicks++ },
+          onProceedToCheckout = {},
+        )
+      }
+    }
+
+    composeTestRule.onNodeWithTag("cart_qty_plus_max-25").assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("cart_qty_max_note_max-25")
+      .assertIsDisplayed()
+      .assertTextContains("Max 25 per item")
+
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("fulfillment_card"))
+    composeTestRule.onNodeWithTag("fulfillment_delivery_chip")
+      .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+    composeTestRule.onNodeWithTag("fulfillment_pickup_chip")
+      .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+      .performClick()
+    composeTestRule.waitForIdle()
+    assertEquals(1, fulfillmentClicks)
+  }
+
+  @Test
+  fun editModeUnavailableSavedToppingShowsWarningBannerAndSavesCleanActiveToppings() {
+    val seedItem = sampleItem(id = "stale-top-1", variantId = "var-reg", quantity = 1)
+    val seedToppings = listOf(
+      CartItemToppingEntity("stale-top-1", "top-basil", "Extra Basil", 2_500L),
+      CartItemToppingEntity("stale-top-1", "top-retired", "Truffle Oil", 8_000L),
+    )
+    val (catalogVm, cartVm, quoteVm) = buildTestShellHarness(listOf(seedItem to seedToppings))
+
+    composeTestRule.setContent {
+      PizzoraTheme {
+        CustomerRoleShell(
+          session = customerSession,
+          catalogViewModel = catalogVm,
+          cartViewModel = cartVm,
+          checkoutQuoteViewModel = quoteVm,
+          onSignOut = {},
+        )
+      }
+    }
+
+    composeTestRule.onNodeWithTag("customer_tab_cart").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("cart_edit_stale-top-1").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("cart_lazy_column").performScrollToNode(hasTestTag("cart_edit_stale-top-1"))
+    composeTestRule.onNodeWithTag("cart_edit_stale-top-1").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("builder_unavailable_topping_warning").fetchSemanticsNodes().isNotEmpty()
+    }
+
+    composeTestRule.onNodeWithTag("builder_unavailable_topping_warning").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithTag("add_to_cart_button").performClick()
+    waitUntil {
+      composeTestRule.onAllNodesWithTag("pizza_customizer_sheet").fetchSemanticsNodes().isEmpty()
+    }
+
+    val updated = cartVm.uiState.value.items.first { it.item.id == "stale-top-1" }
+    assertEquals(listOf("top-basil"), updated.toppings.map { it.toppingId })
+  }
+
+  @Test
+  @Config(qualifiers = "w320dp-h640dp")
+  fun couponPickerAt320dpAndLargeFontKeepsEligibleAndLockedControlsUnclipped() {
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1.5f)) {
+        PizzoraTheme {
+          CouponPickerSheet(
+            coupons = listOf(
+              CustomerCouponDto(
+                id = "c1",
+                code = "PIZZA20",
+                discountType = DiscountType.PERCENT_BPS,
+                discountValue = 2000L,
+                minOrderPaise = 20_000L,
+                maxUsesPerUser = 2,
+                userUsageCount = 0,
+                remainingUserUses = 2,
+                startsAt = "2026-11-01T00:00:00Z",
+                endsAt = "2026-12-01T00:00:00Z",
+                isEligible = true,
+                estimatedDiscountPaise = 5_980L,
+              ),
+              CustomerCouponDto(
+                id = "c2",
+                code = "FEAST999",
+                discountType = DiscountType.FLAT_PAISE,
+                discountValue = 15_000L,
+                minOrderPaise = 99_900L,
+                maxUsesPerUser = 1,
+                userUsageCount = 0,
+                remainingUserUses = 1,
+                startsAt = "2026-11-01T00:00:00Z",
+                endsAt = "2026-12-01T00:00:00Z",
+                isEligible = false,
+                ineligibleReason = "Add ₹700.00 more to unlock",
+              ),
+            ),
+            isLoading = false,
+            onSelectCoupon = {},
+            onDismiss = {},
+          )
+        }
+      }
+    }
+
+    composeTestRule.onNodeWithTag("coupon_section_eligible").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("apply_coupon_btn_PIZZA20")
+      .assertIsDisplayed()
+      .assertIsEnabled()
+      .assertHeightIsAtLeast(48.dp)
+    composeTestRule.onNodeWithTag("coupon_sheet_list").performScrollToNode(hasTestTag("coupon_section_locked"))
+    composeTestRule.onNodeWithTag("coupon_section_locked").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("coupon_sheet_list").performScrollToNode(hasTestTag("apply_coupon_btn_FEAST999"))
+    composeTestRule.onNodeWithTag("apply_coupon_btn_FEAST999")
+      .assertIsDisplayed()
+      .assertIsNotEnabled()
+      .assertHeightIsAtLeast(48.dp)
   }
 }
