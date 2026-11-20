@@ -398,3 +398,150 @@ Signed Android production APKs (`com.aistudio.pizzora.xkqzmw`) are distributed v
 
 See [docs/IN_APP_UPDATES.md](../docs/IN_APP_UPDATES.md) for release tagging, `release-policy.json` (`minimumSupportedVersionCode` and `mandatory` updates), APK signature verification & PackageInstaller flows, troubleshooting, and Android forward-only hotfix procedures when rolling back a faulty release.
 
+---
+
+## 15. Phase 4 — Manual `nightly` → `main` Promotion (Exact-SHA)
+
+Promotion of `nightly` into `main` is **manual and exact-SHA**. The workflow
+`.github/workflows/promote-nightly-to-main.yml` ("Promote Nightly to Main")
+verifies that one specific nightly commit passed the complete post-merge
+nightly validation, then creates or updates the promotion PR. It **never**
+merges, pushes, approves, tags, deploys, publishes releases, or touches Railway.
+
+### 15.1 Preconditions
+
+1. The workflow file exists on `refs/heads/main` (land it through a normal PR
+   first; a `workflow_dispatch` run always uses the workflow definition from the
+   selected ref, and this workflow refuses to run from anything but `main`).
+2. The `nightly` ruleset is active and `Nightly Validation — Complete` is the
+   terminal gate owned by `.github/workflows/security-and-ci.yml`.
+3. `refs/heads/main` is an ancestor of `refs/heads/nightly`.
+4. Repository setting for bot-created PRs: **Settings → Actions → General →
+   Workflow permissions → “Allow GitHub Actions to create and approve pull
+   requests”** must be enabled for the workflow’s `GITHUB_TOKEN`
+   (`pull-requests: write`) to open the PR. The repository currently reports
+   `default_workflow_permissions: "read"` and
+   `can_approve_pull_request_reviews: false` via the API, so PR creation will
+   fail closed with an explicit error until this is enabled. Do **not** add a
+   PAT or GitHub App token as a workaround without explicit approval and a
+   documented rotation plan.
+5. The repository default branch is **not** used by this workflow. It always
+   verifies `refs/heads/nightly` and opens the PR against `main`, regardless of
+   which branch is the repository default.
+
+### 15.2 What the workflow verifies (all must pass)
+
+| # | Check | Rejection reason |
+|---|---|---|
+| 1 | Trigger is `workflow_dispatch` and `GITHUB_REF == refs/heads/main` | verification code would not come from protected main |
+| 2 | `expected_sha` is 40 lowercase hex characters | malformed input |
+| 3 | `expected_sha` equals the current `refs/heads/nightly` tip | stale, previous, or unknown SHA |
+| 4 | `compare main...nightly` → `behind_by == 0`, `status == ahead` | main has commits not in nightly, or nothing to promote |
+| 5 | The **latest** `push` run of `security-and-ci.yml` on branch `nightly` has `head_branch=nightly`, `head_sha=expected_sha`, `status=completed`, `conclusion=success` | failed, cancelled, in-progress, or superseded run; a `pull_request` run never qualifies |
+| 6 | Run detail (latest attempt) is `completed`/`success` (records `run_attempt`) | incomplete or re-run-failed attempt |
+| 7 | The run’s check suite contains `Nightly Validation — Complete` with `status=completed`, `conclusion=success`, `head_sha=expected_sha` | missing or failing terminal gate (CI Summary is never a substitute) |
+| 8 | The nightly tip is re-read immediately before the PR write and still equals `expected_sha` | nightly moved during promotion → abort, no PR write |
+
+Only after all checks pass does it create or update the PR (title
+`release: promote validated nightly to main`, head `nightly`, base `main`).
+An existing open nightly→main PR is updated in place (body + evidence comment),
+never duplicated. If the PR head SHA is not the validated SHA, the comment says
+so explicitly and requires validation to be checked again.
+
+### 15.3 Procedure (GitHub UI)
+
+1. Read the current tip and the latest nightly run:
+
+   ```bash
+   REPO=imanpr33trai/pizzabi
+   TIP="$(gh api "repos/$REPO/git/ref/heads/nightly" --jq '.object.sha')"
+   echo "$TIP"
+   gh api "repos/$REPO/actions/workflows/security-and-ci.yml/runs?branch=nightly&event=push&per_page=1" \
+     --jq '.workflow_runs[0] | {id, head_sha, status, conclusion, html_url}'
+   ```
+
+   The run’s `head_sha` must equal `$TIP`, `status` must be `completed`, and
+   `conclusion` must be `success`.
+
+2. In GitHub: **Actions → Promote Nightly to Main → Run workflow**.
+   - Branch: **main**
+   - `expected_sha`: paste `$TIP` exactly.
+
+3. Wait for the workflow run to finish. Expected result: **success**, with the
+   summary table showing the validated SHA, nightly run URL/attempt, terminal
+   gate `success`, and the promotion PR URL.
+
+4. Open the promotion PR. Confirm:
+   - Title: `release: promote validated nightly to main`
+   - Head `nightly`, base `main`
+   - Body lists the validated SHA, the nightly run URL, the terminal gate
+     result, and the `main..nightly` commit summary.
+
+### 15.4 Procedure (CLI)
+
+```bash
+REPO=imanpr33trai/pizzabi
+TIP="$(gh api "repos/$REPO/git/ref/heads/nightly" --jq '.object.sha')"
+gh workflow run promote-nightly-to-main.yml --repo "$REPO" --ref main \
+  -f expected_sha="$TIP"
+sleep 5
+gh run list --repo "$REPO" --workflow promote-nightly-to-main.yml --limit 1
+gh run watch <run-id> --repo "$REPO" --exit-status
+gh pr list --repo "$REPO" --base main --head nightly --state open
+```
+
+### 15.5 After the promotion PR exists
+
+1. The PR triggers the normal `pull_request` tier, including the required
+   `Main PR Validation — Complete` terminal gate and `strict_required_status_checks_policy`.
+2. Immediately before merging, re-verify the PR head is still the nightly tip:
+
+   ```bash
+   REPO=imanpr33trai/pizzabi
+   PR=<number>
+   TIP="$(gh api "repos/$REPO/git/ref/heads/nightly" --jq '.object.sha')"
+   HEAD="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
+   test "$TIP" = "$HEAD" && echo "OK: promotion candidate is the current nightly tip"
+   ```
+
+3. Merge with a **merge commit only** (the `main-branch-protection` ruleset
+   rejects squash and rebase). Approval and merge are human actions; the
+   workflow never performs them.
+4. Production release remains a separate, manual `v*` tag on `main` (see
+   Section 14). Promotion to `main` only runs the existing post-merge/preview
+   tier; it never publishes production artifacts.
+
+### 15.6 Failure recovery
+
+| Workflow error | Meaning | Recovery |
+|---|---|---|
+| `dispatch this workflow from refs/heads/main` | Wrong ref selected in the UI/CLI | Re-dispatch with Branch: `main` |
+| `expected_sha must be a 40-character lowercase hex SHA` | Bad input | Copy the full 40-char SHA |
+| `expected_sha does not equal the current nightly tip` | Nightly moved or a previous SHA was supplied | Wait for the new tip’s nightly push run to succeed, re-dispatch with the new SHA |
+| `main has N commit(s) not in nightly` | main diverged (main is not an ancestor) | Merge main into nightly through a PR, wait for a green `Nightly Validation — Complete`, re-dispatch |
+| `nightly is not strictly ahead of main` | Nothing to promote | No action; wait for new nightly commits |
+| `no push run ... found on branch nightly` | Nightly push run missing (or run history pruned) | Push/merge to nightly through a PR and wait for the full nightly run |
+| `latest nightly push run validated <other SHA>` | Successful run is stale/superseded | A newer nightly commit exists; validate it first, then promote that SHA |
+| `latest nightly push run is 'in_progress'` | Validation still running | Wait for completion, re-dispatch |
+| `concluded 'failure'/'cancelled'` | Nightly tip is not validated | Fix the failure via a PR to nightly; wait for a fresh green run |
+| `terminal gate ... is MISSING` | Run predates the terminal gate or the gate was skipped | Treat the SHA as unvalidated; re-run nightly validation on the current tip |
+| `terminal gate concluded ... not success` | Terminal gate failed | Inspect the run’s failed stage; fix and revalidate |
+| `nightly moved during promotion` | Race: nightly advanced between verification and PR write | Automatic abort; no PR was touched. Re-dispatch with the new tip after its validation |
+| `PR creation failed` + GitHub Actions PR setting hint | Repo setting blocks bot-created PRs | Enable Settings → Actions → General → Workflow permissions → “Allow GitHub Actions to create and approve pull requests” (or obtain approval for a scoped PAT/App; do not add one silently) |
+| Promotion PR exists but head SHA ≠ validated SHA | PR head no longer matches the evidence | Do not merge; re-run validation and promotion, then re-check the body/comment |
+
+If a promotion PR must be withdrawn, close it manually. The workflow does not
+reopen closed PRs; a later successful dispatch creates a new PR.
+
+### 15.7 Permissions and concurrency
+
+- Workflow permissions: `contents: read`, `actions: read`, `checks: read`,
+  `pull-requests: write` — nothing else. It uses `secrets.GITHUB_TOKEN` and
+  never prints it.
+- Concurrency group `pizzora-promote-nightly-to-main` with
+  `cancel-in-progress: false`: simultaneous promotion requests queue instead of
+  racing.
+- No `actions/checkout` and no execution of branch code: all state is read via
+  the Git Data, Actions, and Checks APIs, so nightly (or PR) content can never
+  influence the privileged verification logic.
+
