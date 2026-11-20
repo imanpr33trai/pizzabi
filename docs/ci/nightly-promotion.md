@@ -30,7 +30,16 @@ cancelled. Never use an older successful run as proof that a newer tip passed.
 
 ## Pre-promotion verification
 
-Run these read-only queries immediately before opening a promotion PR:
+The manual promotion workflow
+[`.github/workflows/promote-nightly-to-main.yml`](../../.github/workflows/promote-nightly-to-main.yml)
+performs these same checks itself and refuses to create or update the promotion
+PR unless every one passes. It is `workflow_dispatch`-only, must be dispatched
+from `refs/heads/main`, and requires the exact nightly tip as `expected_sha`.
+It never merges, pushes, tags, deploys, or publishes. Procedure and failure
+recovery: `infra/RUNBOOK.md` section 15.
+
+Run these read-only queries immediately before dispatching it (or before opening
+a promotion PR by hand):
 
 ```bash
 REPO=imanpr33trai/pizzabi
@@ -58,6 +67,7 @@ The implementation PR carries the workflow change itself, so it is not affected.
 ## Human control
 
 No workflow merges `nightly` into `main`. Promotion remains a manually
-initiated, reviewed PR. Main branch protection, merge-commit-only policy, and
-release-tag protection are separate controls and must not be bypassed by
-automation.
+initiated, reviewed PR: the promotion workflow may open or update it after
+exact-SHA verification, but a human approves and merges. Main branch
+protection, merge-commit-only policy, and release-tag protection are separate
+controls and must not be bypassed by automation.

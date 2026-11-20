@@ -90,15 +90,37 @@ nightly-to-main promotion PR carries the job itself, so it is not affected.
 
 ## Promotion procedure
 
+Promotion uses the manual workflow
+[`.github/workflows/promote-nightly-to-main.yml`](../../.github/workflows/promote-nightly-to-main.yml)
+("Promote Nightly to Main"). It is `workflow_dispatch`-only, takes one input
+(`expected_sha`), and refuses to run from anything but `refs/heads/main`. It
+verifies that one exact nightly commit passed the full post-merge nightly
+validation, then creates or updates the promotion PR. It never merges, pushes,
+approves, tags, deploys, or publishes a release.
+
 1. Confirm the nightly push run is green and its `head_sha` is the nightly tip.
-2. Open a manual PR from `nightly` to `main`.
-3. Wait for all required checks, including `Main PR Validation — Complete`.
-4. Verify the gate summary's PR head SHA still equals the current nightly tip.
-5. Merge with a merge commit (the ruleset rejects squash and rebase).
-6. The post-merge `main` push keeps its existing behavior: full Rust/Kotlin and
+2. Dispatch **Actions → Promote Nightly to Main** from **main** with
+   `expected_sha` set to that tip (CLI and UI steps: `infra/RUNBOOK.md`
+   section 15).
+3. The workflow verifies the trigger/ref, the SHA format, the current nightly
+   tip, `main` ancestry, the latest nightly `push` run for that exact SHA, and
+   the terminal `Nightly Validation — Complete` check. Only then does it create
+   or update the PR (head `nightly`, base `main`).
+4. Wait for all required checks, including `Main PR Validation — Complete`.
+5. Verify the gate summary's PR head SHA still equals the current nightly tip.
+6. Merge with a merge commit (the ruleset rejects squash and rebase).
+7. The post-merge `main` push keeps its existing behavior: full Rust/Kotlin and
    Docker preview validation; Android and release jobs stay skipped.
 
-No workflow opens, updates, or merges a promotion PR automatically.
+The workflow is the only automation allowed to open or update a promotion PR.
+It never merges one; approval, merge, and any production `v*` tag remain human
+actions. A failed verification aborts before any PR write; recovery is listed in
+`infra/RUNBOOK.md` section 15.6.
+
+If the workflow is not yet on the default branch (`ui-ux-changes` at the time of
+writing), GitHub may not list it under **Run workflow**. Land it on the default
+branch too, but always dispatch with **Branch: main** so the privileged
+verification code comes from protected `main`.
 
 ## Read-only verification
 
