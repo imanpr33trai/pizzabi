@@ -398,3 +398,77 @@ Signed Android production APKs (`com.aistudio.pizzora.xkqzmw`) are distributed v
 
 See [docs/IN_APP_UPDATES.md](../docs/IN_APP_UPDATES.md) for release tagging, `release-policy.json` (`minimumSupportedVersionCode` and `mandatory` updates), APK signature verification & PackageInstaller flows, troubleshooting, and Android forward-only hotfix procedures when rolling back a faulty release.
 
+### 14.1 Release Tag Protection & Production Signing Environment
+
+Production tags (`refs/tags/v*`) are protected by the repository ruleset
+`release-tag-protection`, whose desired-state payload is
+[`.github/rulesets/release-tag-protection.json`](../.github/rulesets/release-tag-protection.json).
+The ruleset blocks tag creation, update, deletion, and non-fast-forward moves
+for every actor except the repository admin (`imanpr33trai`, user id
+`123877434`), who has an explicit bypass so a single-maintainer release remains
+possible. Non-admin collaborators and automation cannot create or move release
+tags.
+
+`build-release-apk` in `.github/workflows/security-and-ci.yml` additionally:
+
+1. Runs **“Verify release tag points to a commit on main”** after checkout and
+   fails unless the tagged commit is an ancestor of `origin/main`.
+2. Uses the protected **`production`** environment, which requires reviewer
+   approval and only permits deployments from `v*` tags.
+
+The environment exists with reviewer approval and the `v*` tag deployment
+policy. The three Android signing secrets (`ANDROID_KEYSTORE_BASE64`,
+`ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`) are still repository-level
+secrets at the time of writing; moving them into the `production` environment
+must be done manually because secret values cannot be read back through the
+API:
+
+```bash
+# Read each value from the secure password manager, then set it on the
+# environment. Repeat for all three names.
+gh secret set ANDROID_KEYSTORE_BASE64 --env production --repo imanpr33trai/pizzabi
+gh secret set ANDROID_STORE_PASSWORD --env production --repo imanpr33trai/pizzabi
+gh secret set ANDROID_KEY_PASSWORD --env production --repo imanpr33trai/pizzabi
+```
+
+Only after a controlled `v*` release succeeds with the environment secrets,
+delete the repository-level copies in **Settings → Secrets and variables →
+Actions**. Do not delete them first.
+
+Verification (read-only):
+
+```bash
+REPO=imanpr33trai/pizzabi
+gh api "repos/$REPO/rulesets?targets=tag" \
+  --jq '.[] | select(.name=="release-tag-protection") | {id,name,enforcement}'
+gh api "repos/$REPO/environments/production" \
+  --jq '{name, protection_rules, deployment_branch_policy}'
+gh api "repos/$REPO/environments/production/deployment-branch-policies" \
+  --jq '.branch_policies[] | {name, type}'
+```
+
+Expected results:
+
+| Check | Expected |
+|---|---|
+| Tag ruleset | `release-tag-protection`, `active`, target `tag`, include `refs/tags/v*` |
+| Tag rules | `creation`, `update`, `deletion`, `non_fast_forward` |
+| Environment | `production` with a required reviewer and custom tag policy |
+| Deployment policy | `v*`, type `tag` |
+| Release job | waits for environment approval; fails before signing if the tag is not on `main` |
+
+Failure recovery:
+
+| Symptom | Meaning | Recovery |
+|---|---|---|
+| Release job waits indefinitely | `production` environment approval pending | Approve the deployment in **Actions → the run → Review deployments** |
+| `release tag must point to a commit on main` | Tag was created on a feature/nightly commit | Do not bypass; delete/recreate the tag from a `main` commit after promotion |
+| `Missing required secret ANDROID_*` | Environment secret migration incomplete | Set the missing environment secret from the secure backup; do not re-add it at repository scope |
+| Non-admin cannot create/move a tag | Ruleset enforcement | An admin must create the tag after the release commit is on `main` |
+| Tag ruleset blocks an emergency rollback tag | Immutability control | Admin bypass is intentional; fix forward rather than moving a published tag |
+
+Rollback: delete the `release-tag-protection` ruleset, remove
+`environment: production` from `build-release-apk`, and (only if environment
+secrets were already added) restore the repository-level secrets from the
+secure backup before deleting the environment copies.
+
