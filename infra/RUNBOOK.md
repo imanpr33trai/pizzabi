@@ -417,7 +417,31 @@ tags.
    approval and only permits deployments from `v*` tags.
 
 The environment exists with reviewer approval and the `v*` tag deployment
-policy. The three Android signing secrets (`ANDROID_KEYSTORE_BASE64`,
+policy. Desired-state application (admin only; run once — re-posting the
+ruleset creates a duplicate, so check `rulesets?targets=tag` first):
+
+```bash
+REPO=imanpr33trai/pizzabi
+gh api -X POST "repos/$REPO/rulesets" \
+  --input .github/rulesets/release-tag-protection.json
+gh api -X PUT "repos/$REPO/environments/production" --input - <<'JSON'
+{
+  "wait_timer": 0,
+  "prevent_self_review": false,
+  "reviewers": [{ "type": "User", "id": 123877434 }],
+  "deployment_branch_policy": {
+    "protected_branches": false,
+    "custom_branch_policies": true
+  }
+}
+JSON
+gh api -X POST "repos/$REPO/environments/production/deployment-branch-policies" \
+  --input - <<'JSON'
+{ "name": "v*", "type": "tag" }
+JSON
+```
+
+The three Android signing secrets (`ANDROID_KEYSTORE_BASE64`,
 `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`) are still repository-level
 secrets at the time of writing; moving them into the `production` environment
 must be done manually because secret values cannot be read back through the
