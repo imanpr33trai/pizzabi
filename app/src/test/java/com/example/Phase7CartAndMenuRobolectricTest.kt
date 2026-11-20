@@ -634,8 +634,12 @@ class Phase7CartAndMenuRobolectricTest {
       .performScrollToNode(hasTestTag("cart_item_issue_$serverItemId"))
     composeTestRule.onNodeWithTag("cart_item_issue_$serverItemId").assertTextContains("Extra Basil ran out of stock.")
 
-    // Clear cart -> empty state displayed
+    // Clear cart -> confirm modal -> empty state displayed
     composeTestRule.onNodeWithTag("clear_cart_button").performClick()
+    waitUntilMainLooper {
+      composeTestRule.onAllNodesWithTag("confirm_clear_cart_button").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("confirm_clear_cart_button").performClick()
     waitUntilMainLooper {
       composeTestRule.onAllNodesWithTag("cart_empty_state").fetchSemanticsNodes().isNotEmpty()
     }

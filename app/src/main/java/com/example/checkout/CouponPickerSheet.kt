@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,12 +33,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.ui.components.PizzoraBannerTone
+import com.example.ui.components.PizzoraStatusBanner
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
 import com.pizzora.contracts.CustomerCouponDto
@@ -51,19 +56,26 @@ fun CouponPickerSheet(
   isLoading: Boolean,
   onSelectCoupon: (String) -> Unit,
   onDismiss: () -> Unit,
+  errorMessage: String? = null,
+  onRetry: (() -> Unit)? = null,
 ) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val eligibleCoupons = remember(coupons) { coupons.filter { it.isEligible } }
+  val lockedCoupons = remember(coupons) { coupons.filterNot { it.isEligible } }
+
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     sheetState = sheetState,
+    containerColor = MaterialTheme.colorScheme.surface,
+    tonalElevation = 0.dp,
     modifier = Modifier.testTag("coupon_picker_sheet"),
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 20.dp)
-        .padding(bottom = 24.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+        .padding(horizontal = 16.dp)
+        .padding(bottom = 20.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -94,6 +106,15 @@ fun CouponPickerSheet(
 
       if (isLoading) {
         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+      } else if (!errorMessage.isNullOrBlank()) {
+        PizzoraStatusBanner(
+          message = errorMessage,
+          tone = PizzoraBannerTone.ERROR,
+          actionLabel = if (onRetry != null) stringResource(R.string.action_retry) else null,
+          onAction = onRetry,
+          actionTestTag = "coupon_sheet_retry_button",
+          modifier = Modifier.testTag("coupon_sheet_error"),
+        )
       } else if (coupons.isEmpty()) {
         Surface(
           color = MaterialTheme.colorScheme.surfaceVariant,
@@ -111,16 +132,47 @@ fun CouponPickerSheet(
         LazyColumn(
           modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 380.dp)
+            .heightIn(max = 460.dp)
             .testTag("coupon_sheet_list"),
-          contentPadding = PaddingValues(vertical = 4.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
+          contentPadding = PaddingValues(vertical = 2.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          items(coupons, key = { it.id }) { coupon ->
-            CouponOptionCard(
-              coupon = coupon,
-              onApply = { onSelectCoupon(coupon.code) },
-            )
+          if (eligibleCoupons.isNotEmpty()) {
+            item(key = "coupon_section_eligible") {
+              Text(
+                text = stringResource(R.string.coupon_section_eligible, eligibleCoupons.size),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier
+                  .padding(top = 2.dp)
+                  .testTag("coupon_section_eligible"),
+              )
+            }
+            items(eligibleCoupons, key = { it.id }) { coupon ->
+              CouponOptionCard(
+                coupon = coupon,
+                onApply = { onSelectCoupon(coupon.code) },
+              )
+            }
+          }
+
+          if (lockedCoupons.isNotEmpty()) {
+            item(key = "coupon_section_locked") {
+              Text(
+                text = stringResource(R.string.coupon_section_locked, lockedCoupons.size),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                  .padding(top = if (eligibleCoupons.isNotEmpty()) 6.dp else 2.dp)
+                  .testTag("coupon_section_locked"),
+              )
+            }
+            items(lockedCoupons, key = { it.id }) { coupon ->
+              CouponOptionCard(
+                coupon = coupon,
+                onApply = { onSelectCoupon(coupon.code) },
+              )
+            }
           }
         }
       }
@@ -149,13 +201,14 @@ private fun CouponOptionCard(
       containerColor = if (coupon.isEligible) {
         MaterialTheme.colorScheme.surface
       } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        MaterialTheme.colorScheme.surfaceVariant
       },
     ),
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     border = BorderStroke(
-      width = 1.dp,
+      width = if (coupon.isEligible) 1.5.dp else 1.dp,
       color = if (coupon.isEligible) {
-        MaterialTheme.colorScheme.secondary.copy(alpha = 0.65f)
+        MaterialTheme.colorScheme.secondary
       } else {
         MaterialTheme.colorScheme.outline
       },
@@ -163,24 +216,66 @@ private fun CouponOptionCard(
     modifier = Modifier.fillMaxWidth().testTag("coupon_card_${coupon.code}"),
   ) {
     Column(
-      modifier = Modifier.fillMaxWidth().padding(14.dp),
-      verticalArrangement = Arrangement.spacedBy(6.dp),
+      modifier = Modifier.fillMaxWidth().padding(12.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Surface(
-          color = MaterialTheme.colorScheme.primaryContainer,
-          shape = MaterialTheme.shapes.small,
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          modifier = Modifier.weight(1f),
         ) {
-          Text(
-            text = coupon.code,
-            style = PizzoraMonoTitle,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-          )
+          Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = MaterialTheme.shapes.small,
+          ) {
+            Text(
+              text = coupon.code,
+              style = PizzoraMonoTitle,
+              color = MaterialTheme.colorScheme.onPrimaryContainer,
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            )
+          }
+          Surface(
+            color = if (coupon.isEligible) {
+              MaterialTheme.colorScheme.secondaryContainer
+            } else {
+              MaterialTheme.colorScheme.surface
+            },
+            shape = MaterialTheme.shapes.small,
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+              Icon(
+                imageVector = if (coupon.isEligible) Icons.Filled.CheckCircle else Icons.Filled.Lock,
+                contentDescription = null,
+                tint = if (coupon.isEligible) {
+                  MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                  MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(12.dp),
+              )
+              Text(
+                text = stringResource(
+                  if (coupon.isEligible) R.string.coupon_badge_eligible else R.string.coupon_badge_locked,
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (coupon.isEligible) {
+                  MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                  MaterialTheme.colorScheme.onSurfaceVariant
+                },
+              )
+            }
+          }
         }
         Button(
           onClick = onApply,
@@ -209,9 +304,15 @@ private fun CouponOptionCard(
           style = MaterialTheme.typography.labelLarge,
           color = MaterialTheme.colorScheme.secondary,
         )
-      } else if (!coupon.ineligibleReason.isNullOrBlank()) {
+      } else if (!coupon.isEligible) {
+        val reasonText = coupon.ineligibleReason?.takeIf { it.isNotBlank() }
+          ?: if (coupon.minOrderPaise > 0L) {
+            "Min order ${Money.formatInr(coupon.minOrderPaise)} required"
+          } else {
+            "Currently unavailable"
+          }
         Text(
-          text = coupon.ineligibleReason ?: "",
+          text = reasonText,
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.error,
           modifier = Modifier.testTag("coupon_ineligible_${coupon.code}"),

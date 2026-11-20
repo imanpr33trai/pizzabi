@@ -1,6 +1,7 @@
 package com.example.cart
 
 import com.example.core.database.CartDao
+import com.example.core.database.CartEditMergeAction
 import com.example.core.database.CartItemEntity
 import com.example.core.database.CartItemToppingEntity
 import com.example.core.database.CartItemWithToppings
@@ -18,6 +19,7 @@ import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CartResponseDto
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.ProductDto
+import com.pizzora.contracts.ProductImageStatus
 import com.pizzora.contracts.ProductVariantDto
 import com.pizzora.contracts.ReplaceCartRequest
 import com.pizzora.contracts.ToppingDto
@@ -41,6 +43,20 @@ data class CartSyncResult(
   val errorMessage: String? = null,
 )
 
+data class RemovedCartItemSnapshot(
+  val userId: String,
+  val entry: CartItemWithToppings,
+)
+
+data class CartEditResult(
+  val isOffline: Boolean,
+  val unavailableCount: Int,
+  val wasMerged: Boolean = false,
+  val wasQuantityCapped: Boolean = false,
+  val finalQuantity: Int = 0,
+  val errorMessage: String? = null,
+)
+
 interface CartRepository {
   fun observeCart(): Flow<List<CartItemWithToppings>>
   fun observeCartBadgeCount(): Flow<Int>
@@ -52,8 +68,19 @@ interface CartRepository {
     quantity: Int,
   ): CartSyncResult
 
+  suspend fun updateCustomizedItem(
+    existingItemId: String,
+    product: ProductDto,
+    variant: ProductVariantDto,
+    crust: CrustOptionDto,
+    toppings: List<ToppingDto>,
+    quantity: Int,
+  ): CartEditResult
+
   suspend fun updateQuantity(itemId: String, newQuantity: Int): CartSyncResult
   suspend fun removeItem(itemId: String): CartSyncResult
+  suspend fun removeItemWithSnapshot(itemId: String): Pair<RemovedCartItemSnapshot?, CartSyncResult>
+  suspend fun restoreRemovedItem(snapshot: RemovedCartItemSnapshot): CartSyncResult
   suspend fun clearCart(): CartSyncResult
   suspend fun bootstrapFromServer(): CartSyncResult
   suspend fun syncAndValidateCart(persistToServer: Boolean = true): CartSyncResult
@@ -152,7 +179,7 @@ class NetworkCartRepository(
         userId = capturedUserId,
         productId = product.id,
         productName = product.name,
-        imageUrl = product.images.firstOrNull()?.publicUrl,
+        imageUrl = primaryProductImageUrl(product),
         variantId = variant.id,
         sizeCode = variant.sizeCode.name,
         crustId = crust.id,
@@ -186,6 +213,83 @@ class NetworkCartRepository(
     )
   }
 
+  override suspend fun updateCustomizedItem(
+    existingItemId: String,
+    product: ProductDto,
+    variant: ProductVariantDto,
+    crust: CrustOptionDto,
+    toppings: List<ToppingDto>,
+    quantity: Int,
+  ): CartEditResult {
+    require(quantity > 0) { "Quantity must be positive" }
+    val (capturedEpoch, capturedUserId) = captureSession()
+      ?: return CartEditResult(isOffline = false, unavailableCount = 0, errorMessage = "Authentication required")
+
+    val distinctToppings = toppings.distinctBy { it.id }.sortedBy { it.id }
+    val unitPricePaise = variant.pricePaise + crust.extraPricePaise + distinctToppings.sumOf { it.extraPricePaise }
+    val safeQty = quantity.coerceIn(1, 25)
+    val now = System.currentTimeMillis()
+
+    val updatedEntity = CartItemEntity(
+      id = existingItemId,
+      userId = capturedUserId,
+      productId = product.id,
+      productName = product.name,
+      imageUrl = primaryProductImageUrl(product),
+      variantId = variant.id,
+      sizeCode = variant.sizeCode.name,
+      crustId = crust.id,
+      crustName = crust.name,
+      unitPricePaise = unitPricePaise,
+      quantity = safeQty,
+      isAvailable = true,
+      unavailableReason = null,
+      updatedAtMs = now,
+    )
+    val toppingEntities = distinctToppings.map { topping ->
+      CartItemToppingEntity(
+        cartItemId = existingItemId,
+        toppingId = topping.id,
+        toppingName = topping.name,
+        extraPricePaise = topping.extraPricePaise,
+      )
+    }
+
+    val daoResult = commitIfSessionMatches(capturedEpoch, capturedUserId) {
+      cartDao.replaceOrMergeItemWithToppings(
+        userId = capturedUserId,
+        existingLocalId = existingItemId,
+        updatedItem = updatedEntity,
+        updatedToppings = toppingEntities,
+      )
+    } ?: return CartEditResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
+
+    if (daoResult.action == CartEditMergeAction.NOT_FOUND) {
+      return CartEditResult(
+        isOffline = false,
+        unavailableCount = 0,
+        errorMessage = "This cart item is no longer in your cart.",
+      )
+    }
+
+    val syncResult = syncAndValidateCartInternal(
+      trigger = CartSyncTrigger.EXPLICIT_MUTATION,
+      persistToServer = true,
+      allowEmptyReplace = false,
+      capturedEpoch = capturedEpoch,
+      capturedUserId = capturedUserId,
+    )
+
+    return CartEditResult(
+      isOffline = syncResult.isOffline,
+      unavailableCount = syncResult.unavailableCount,
+      wasMerged = daoResult.action == CartEditMergeAction.MERGED_INTO_EXISTING,
+      wasQuantityCapped = daoResult.wasQuantityCapped,
+      finalQuantity = daoResult.finalQuantity,
+      errorMessage = syncResult.errorMessage,
+    )
+  }
+
   override suspend fun updateQuantity(itemId: String, newQuantity: Int): CartSyncResult {
     if (newQuantity <= 0) {
       return removeItem(itemId)
@@ -209,25 +313,67 @@ class NetworkCartRepository(
     )
   }
 
-  override suspend fun removeItem(itemId: String): CartSyncResult {
-    val (capturedEpoch, capturedUserId) = captureSession()
-      ?: return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Authentication required")
+  override suspend fun removeItem(itemId: String): CartSyncResult =
+    removeItemWithSnapshot(itemId).second
 
-    val removed = commitIfSessionMatches(capturedEpoch, capturedUserId) {
+  override suspend fun removeItemWithSnapshot(
+    itemId: String,
+  ): Pair<RemovedCartItemSnapshot?, CartSyncResult> {
+    val (capturedEpoch, capturedUserId) = captureSession()
+      ?: return null to CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Authentication required")
+
+    val snapshotOrNull = commitIfSessionMatches(capturedEpoch, capturedUserId) {
+      val existing = cartDao.getCartItemsWithToppingsOnce(capturedUserId)
+        .firstOrNull { it.item.id == itemId }
       cartDao.deleteItemById(capturedUserId, itemId)
-      true
+      existing?.let { RemovedCartItemSnapshot(userId = capturedUserId, entry = it) }
     }
-    if (removed != true) {
-      return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
+    if (snapshotOrNull == null && !isSessionActive(capturedEpoch, capturedUserId)) {
+      return null to CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
     }
-    return syncAndValidateCartInternal(
+    val syncResult = syncAndValidateCartInternal(
       trigger = CartSyncTrigger.EXPLICIT_CLEAR_OR_REMOVE,
       persistToServer = true,
       allowEmptyReplace = true,
       capturedEpoch = capturedEpoch,
       capturedUserId = capturedUserId,
     )
+    return snapshotOrNull to syncResult
   }
+
+  override suspend fun restoreRemovedItem(snapshot: RemovedCartItemSnapshot): CartSyncResult {
+    val (capturedEpoch, capturedUserId) = captureSession()
+      ?: return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Authentication required")
+    if (snapshot.userId != capturedUserId) {
+      return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
+    }
+
+    val restored = commitIfSessionMatches(capturedEpoch, capturedUserId) {
+      cartDao.restoreItemWithToppings(
+        userId = capturedUserId,
+        item = snapshot.entry.item,
+        toppings = snapshot.entry.toppings,
+      )
+    }
+    if (restored != true) {
+      return CartSyncResult(isOffline = false, unavailableCount = 0, errorMessage = "Stale session discarded")
+    }
+    return syncAndValidateCartInternal(
+      trigger = CartSyncTrigger.EXPLICIT_MUTATION,
+      persistToServer = true,
+      allowEmptyReplace = false,
+      capturedEpoch = capturedEpoch,
+      capturedUserId = capturedUserId,
+    )
+  }
+
+  private fun primaryProductImageUrl(product: ProductDto): String? =
+    product.images
+      .filter { it.status == ProductImageStatus.ACTIVE }
+      .minByOrNull { it.sortOrder }
+      ?.publicUrl
+      ?.takeIf { it.isNotBlank() }
+      ?: product.images.firstOrNull()?.publicUrl?.takeIf { it.isNotBlank() }
 
   override suspend fun clearCart(): CartSyncResult {
     val (capturedEpoch, capturedUserId) = captureSession()

@@ -7,6 +7,19 @@ import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
+enum class CartEditMergeAction {
+  UPDATED_IN_PLACE,
+  MERGED_INTO_EXISTING,
+  NOT_FOUND,
+}
+
+data class CartDaoEditResult(
+  val action: CartEditMergeAction,
+  val resultingItemId: String,
+  val finalQuantity: Int,
+  val wasQuantityCapped: Boolean,
+)
+
 @Dao
 interface CartDao {
   @Transaction
@@ -45,6 +58,135 @@ interface CartDao {
     if (toppings.isNotEmpty()) {
       insertToppings(toppings)
     }
+  }
+
+  /**
+   * Atomically replaces an edited cart item's configuration & toppings or merges into an existing
+   * matching row (capping combined quantity at 25), leaving all unrelated cart items & child rows untouched.
+   */
+  @Transaction
+  suspend fun replaceOrMergeItemWithToppings(
+    userId: String,
+    existingLocalId: String,
+    updatedItem: CartItemEntity,
+    updatedToppings: List<CartItemToppingEntity>,
+  ): CartDaoEditResult {
+    require(updatedItem.userId == userId) {
+      "Updated cart item must belong to active user $userId"
+    }
+    val requestedQty = updatedItem.quantity.coerceIn(1, 25)
+    val sanitizedToppings = updatedToppings
+      .distinctBy { it.toppingId }
+      .sortedBy { it.toppingId }
+    val targetToppingIds = sanitizedToppings.map { it.toppingId }
+
+    val currentItems = getCartItemsWithToppingsOnce(userId)
+    currentItems.firstOrNull { it.item.id == existingLocalId }
+      ?: return CartDaoEditResult(
+        action = CartEditMergeAction.NOT_FOUND,
+        resultingItemId = existingLocalId,
+        finalQuantity = 0,
+        wasQuantityCapped = false,
+      )
+
+    val matchingOther = currentItems.firstOrNull { candidate ->
+      candidate.item.id != existingLocalId &&
+        candidate.item.productId == updatedItem.productId &&
+        candidate.item.variantId == updatedItem.variantId &&
+        candidate.item.crustId == updatedItem.crustId &&
+        candidate.toppings.map { it.toppingId }.sorted() == targetToppingIds
+    }
+
+    if (matchingOther != null) {
+      val combinedRaw = matchingOther.item.quantity + requestedQty
+      val cappedQty = combinedRaw.coerceAtMost(25)
+      val wasCapped = combinedRaw > 25
+
+      deleteToppingsForItemForUser(userId, existingLocalId)
+      deleteItemById(userId, existingLocalId)
+
+      val mergedEntity = matchingOther.item.copy(
+        productName = updatedItem.productName,
+        imageUrl = updatedItem.imageUrl ?: matchingOther.item.imageUrl,
+        unitPricePaise = updatedItem.unitPricePaise,
+        quantity = cappedQty,
+        isAvailable = true,
+        unavailableReason = null,
+        updatedAtMs = updatedItem.updatedAtMs,
+      )
+      val mergedToppings = sanitizedToppings.map {
+        it.copy(cartItemId = matchingOther.item.id)
+      }
+      upsertItemWithToppings(mergedEntity, mergedToppings)
+
+      return CartDaoEditResult(
+        action = CartEditMergeAction.MERGED_INTO_EXISTING,
+        resultingItemId = matchingOther.item.id,
+        finalQuantity = cappedQty,
+        wasQuantityCapped = wasCapped,
+      )
+    }
+
+    val normalizedUpdated = updatedItem.copy(
+      id = existingLocalId,
+      userId = userId,
+      quantity = requestedQty,
+    )
+    val normalizedToppings = sanitizedToppings.map {
+      it.copy(cartItemId = existingLocalId)
+    }
+    upsertItemWithToppings(normalizedUpdated, normalizedToppings)
+
+    return CartDaoEditResult(
+      action = CartEditMergeAction.UPDATED_IN_PLACE,
+      resultingItemId = existingLocalId,
+      finalQuantity = requestedQty,
+      wasQuantityCapped = false,
+    )
+  }
+
+  /**
+   * Restores a previously removed cart item (for Undo) without touching unrelated cart rows.
+   * If an identical configuration was added concurrently, merges cleanly capped at 25.
+   */
+  @Transaction
+  suspend fun restoreItemWithToppings(
+    userId: String,
+    item: CartItemEntity,
+    toppings: List<CartItemToppingEntity>,
+  ): Boolean {
+    if (item.userId != userId) return false
+    val sanitizedToppings = toppings
+      .distinctBy { it.toppingId }
+      .sortedBy { it.toppingId }
+    val targetToppingIds = sanitizedToppings.map { it.toppingId }
+    val currentItems = getCartItemsWithToppingsOnce(userId)
+
+    val matchingExisting = currentItems.firstOrNull { candidate ->
+      candidate.item.productId == item.productId &&
+        candidate.item.variantId == item.variantId &&
+        candidate.item.crustId == item.crustId &&
+        candidate.toppings.map { it.toppingId }.sorted() == targetToppingIds
+    }
+
+    if (matchingExisting != null) {
+      val mergedQty = (matchingExisting.item.quantity + item.quantity.coerceIn(1, 25)).coerceAtMost(25)
+      updateQuantity(
+        userId = userId,
+        itemId = matchingExisting.item.id,
+        quantity = mergedQty,
+        updatedAtMs = System.currentTimeMillis(),
+      )
+      return true
+    }
+
+    val safeEntity = item.copy(
+      quantity = item.quantity.coerceIn(1, 25),
+      updatedAtMs = System.currentTimeMillis(),
+    )
+    val safeToppings = sanitizedToppings.map { it.copy(cartItemId = safeEntity.id) }
+    upsertItemWithToppings(safeEntity, safeToppings)
+    return true
   }
 
   @Transaction

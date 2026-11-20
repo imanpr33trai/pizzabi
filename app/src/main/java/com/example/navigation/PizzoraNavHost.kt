@@ -52,8 +52,10 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -97,11 +99,14 @@ import com.example.cart.CartViewModel
 import androidx.compose.runtime.mutableStateOf
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.CustomerMenuScreen
+import com.example.catalog.PizzaBuilderMode
 import com.example.catalog.PizzaBuilderScreen
 import com.example.checkout.CheckoutQuoteViewModel
 import com.example.checkout.CheckoutScreen
 import com.example.checkout.CheckoutViewModel
+import com.example.core.database.CartItemWithToppings
 import com.example.core.security.AuthSession
+import kotlinx.coroutines.flow.collectLatest
 import com.example.kds.KdsScreen
 import com.example.kds.KdsViewModel
 import com.example.notifications.NotificationsScreen
@@ -404,11 +409,43 @@ fun CustomerRoleShell(
   var isCheckoutOpen by rememberSaveable { mutableStateOf(false) }
   var isNotificationsOpen by rememberSaveable { mutableStateOf(false) }
   var showFallbackSignOutConfirm by rememberSaveable { mutableStateOf(false) }
+  var editingCartItem by remember { mutableStateOf<CartItemWithToppings?>(null) }
+  var savedEditingCartItemId by rememberSaveable { mutableStateOf<String?>(null) }
+  var focusRestoreItemId by remember { mutableStateOf<String?>(null) }
+  var lastEditedCartItemId by remember { mutableStateOf<String?>(null) }
+  var wasEditOverlayOpen by remember { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
   val overlaySnackbarHostState = remember { SnackbarHostState() }
   val menuState = catalogViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+  val cartState = cartViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+
+  LaunchedEffect(savedEditingCartItemId, cartState?.items) {
+    val targetId = savedEditingCartItemId
+    if (targetId != null && editingCartItem == null) {
+      val restored = cartState?.items?.firstOrNull { it.item.id == targetId }
+      if (restored != null) {
+        editingCartItem = restored
+      }
+    }
+  }
+
+  LaunchedEffect(editingCartItem?.item?.id) {
+    val currentId = editingCartItem?.item?.id
+    if (currentId != null) {
+      lastEditedCartItemId = currentId
+      wasEditOverlayOpen = true
+    } else if (wasEditOverlayOpen) {
+      wasEditOverlayOpen = false
+      focusRestoreItemId = lastEditedCartItemId
+      lastEditedCartItemId = null
+    }
+  }
+
+  val activeEditingCartItem = editingCartItem
   val activeBuilderProduct = menuState?.customizingProduct
-  val isBuilderOverlayOpen = catalogViewModel != null && menuState != null && activeBuilderProduct != null
+  val isEditBuilderOverlayOpen = cartViewModel != null && activeEditingCartItem != null
+  val isAddBuilderOverlayOpen = !isEditBuilderOverlayOpen && catalogViewModel != null && menuState != null && activeBuilderProduct != null
+  val isBuilderOverlayOpen = isEditBuilderOverlayOpen || isAddBuilderOverlayOpen
   val isNotificationsOverlayOpen = isNotificationsOpen && notificationsViewModel != null
   val hasActiveOverlay = isBuilderOverlayOpen || isNotificationsOverlayOpen
   val currentSnackbarHostState by rememberUpdatedState(
@@ -423,6 +460,12 @@ fun CustomerRoleShell(
     notificationsViewModel.uiState.collectAsStateWithLifecycle().value.unreadCount
   } else {
     0
+  }
+
+  LaunchedEffect(isEditBuilderOverlayOpen, catalogViewModel) {
+    if (isEditBuilderOverlayOpen) {
+      catalogViewModel?.ensureLoaded()
+    }
   }
 
   LaunchedEffect(openNotificationsRequested) {
@@ -454,7 +497,22 @@ fun CustomerRoleShell(
 
   LaunchedEffect(cartViewModel) {
     cartViewModel?.events?.collect { message ->
-      currentSnackbarHostState.showSnackbar(message)
+      snackbarHostState.showSnackbar(message)
+    }
+  }
+
+  LaunchedEffect(cartViewModel) {
+    cartViewModel?.undoPrompts?.collectLatest { prompt ->
+      snackbarHostState.currentSnackbarData?.dismiss()
+      val snackbarResult = snackbarHostState.showSnackbar(
+        message = context.getString(R.string.cart_item_removed_fmt, prompt.productName),
+        actionLabel = context.getString(R.string.action_undo),
+        duration = SnackbarDuration.Long,
+      )
+      when (snackbarResult) {
+        SnackbarResult.ActionPerformed -> cartViewModel.undoRemoval(prompt.token)
+        SnackbarResult.Dismissed -> cartViewModel.dismissUndo(prompt.token)
+      }
     }
   }
 
@@ -496,7 +554,9 @@ fun CustomerRoleShell(
         .focusProperties { canFocus = !hasActiveOverlay }
         .let { base -> if (hasActiveOverlay) base.clearAndSetSemantics {} else base },
     ) {
-      val useRail = maxWidth >= 600.dp
+      val shellMaxWidth = maxWidth
+      val shellMaxHeight = maxHeight
+      val useRail = shellMaxWidth >= 600.dp
       Scaffold(
         contentWindowInsets = if (hasActiveOverlay) WindowInsets(0) else WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -613,11 +673,11 @@ fun CustomerRoleShell(
               )
             }
           selectedIndex == 1 && cartViewModel != null -> {
-            val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
+            val activeCartState = cartState ?: cartViewModel.uiState.collectAsStateWithLifecycle().value
             val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
 
-            LaunchedEffect(cartState.items, cartState.subtotalPaise, checkoutQuoteViewModel) {
-              checkoutQuoteViewModel?.onCartChanged(cartState.items, cartState.subtotalPaise)
+            LaunchedEffect(activeCartState.items, activeCartState.subtotalPaise, checkoutQuoteViewModel) {
+              checkoutQuoteViewModel?.onCartChanged(activeCartState.items, activeCartState.subtotalPaise)
             }
 
             if (isCheckoutOpen && checkoutViewModel != null) {
@@ -628,8 +688,8 @@ fun CustomerRoleShell(
               CheckoutScreen(
                 uiState = checkoutState,
                 quoteState = quoteState,
-                itemCount = cartState.totalItemCount,
-                subtotalPaise = cartState.subtotalPaise,
+                itemCount = activeCartState.totalItemCount,
+                subtotalPaise = activeCartState.subtotalPaise,
                 onFulfillmentTypeChange = { type ->
                   checkoutQuoteViewModel?.onFulfillmentTypeChange(type)
                   checkoutViewModel.onFulfillmentChanged(type)
@@ -643,7 +703,7 @@ fun CustomerRoleShell(
                 onSelectPaymentMethod = checkoutViewModel::selectPaymentMethod,
                 onPlaceOrder = {
                   checkoutViewModel.placeOrder(
-                    cartItems = cartState.items,
+                    cartItems = activeCartState.items,
                     fulfillmentType = quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
                     couponCode = quoteState?.appliedCouponCode,
                     onCartCleared = {
@@ -687,10 +747,14 @@ fun CustomerRoleShell(
               )
             } else {
               CartScreen(
-                uiState = cartState,
+                uiState = activeCartState,
                 onUpdateQuantity = cartViewModel::updateQuantity,
                 onRemoveItem = cartViewModel::removeItem,
-                onClearCart = cartViewModel::clearCart,
+                onClearCart = {
+                  editingCartItem = null
+                  savedEditingCartItemId = null
+                  cartViewModel.clearCart()
+                },
                 onValidateAndSync = cartViewModel::validateAndSyncCart,
                 onBrowseMenu = { selectedIndex = 0 },
                 modifier = Modifier.weight(1f),
@@ -710,6 +774,17 @@ fun CustomerRoleShell(
                 } else {
                   null
                 },
+                onEditItem = { entry ->
+                  catalogViewModel?.ensureLoaded()
+                  editingCartItem = entry
+                  savedEditingCartItemId = entry.item.id
+                },
+                focusRestoreItemId = focusRestoreItemId,
+                onFocusRestored = { focusRestoreItemId = null },
+                onRetryCoupons = { checkoutQuoteViewModel?.openCouponPicker() },
+                applyDockNavigationBarsPadding = false,
+                shellWindowWidth = shellMaxWidth,
+                shellWindowHeight = shellMaxHeight,
               )
             }
           }
@@ -782,15 +857,18 @@ fun CustomerRoleShell(
     }
     }
 
-    // Unified shell-level full-screen overlay host (Builder, Notifications, and future Checkout)
+    // Unified shell-level full-screen overlay host (Builder Add/Edit, Notifications, and future Checkout)
     AnimatedVisibility(
       visible = isBuilderOverlayOpen,
       enter = if (reducedMotion) fadeIn() else fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 12 },
       exit = if (reducedMotion) fadeOut() else fadeOut(tween(180)),
     ) {
-      val builderProduct = activeBuilderProduct
       val currentMenuState = menuState
-      if (builderProduct != null && currentMenuState != null && catalogViewModel != null) {
+      if (isEditBuilderOverlayOpen && activeEditingCartItem != null && cartViewModel != null) {
+        val resolvedProduct = currentMenuState?.allProducts?.firstOrNull {
+          it.id == activeEditingCartItem.item.productId
+        }
+        val catalogLoading = currentMenuState?.isLoading == true || currentMenuState?.isRefreshing == true
         Surface(
           modifier = Modifier
             .fillMaxSize()
@@ -802,17 +880,23 @@ fun CustomerRoleShell(
         ) {
           Box(modifier = Modifier.fillMaxSize()) {
             PizzaBuilderScreen(
-              product = builderProduct,
-              crusts = currentMenuState.crusts,
-              toppings = currentMenuState.toppings,
-              isAcceptingOrders = currentMenuState.isAcceptingOrders,
-              isFromOfflineCache = currentMenuState.isFromOfflineCache,
-              onDismiss = catalogViewModel::dismissCustomizer,
+              product = resolvedProduct,
+              crusts = currentMenuState?.crusts ?: emptyList(),
+              toppings = currentMenuState?.toppings ?: emptyList(),
+              mode = PizzaBuilderMode.Edit(activeEditingCartItem),
+              isCatalogLoading = catalogLoading,
+              isAcceptingOrders = currentMenuState?.isAcceptingOrders ?: true,
+              isFromOfflineCache = currentMenuState?.isFromOfflineCache ?: false,
+              onDismiss = {
+                editingCartItem = null
+                savedEditingCartItemId = null
+              },
               onConfirmAdd = { variant, crust, selectedToppings, qty, onResult ->
-                val vm = cartViewModel
-                if (vm != null) {
-                  vm.addCustomizedPizza(
-                    product = builderProduct,
+                val targetProduct = resolvedProduct
+                if (targetProduct != null) {
+                  cartViewModel.updateEditedPizza(
+                    existingItemId = activeEditingCartItem.item.id,
+                    product = targetProduct,
                     variant = variant,
                     crust = crust,
                     toppings = selectedToppings,
@@ -820,7 +904,7 @@ fun CustomerRoleShell(
                     onResult = onResult,
                   )
                 } else {
-                  onResult(false, "Cart is unavailable right now.")
+                  onResult(false, "Unable to update this item right now.")
                 }
               },
               modifier = Modifier.fillMaxSize(),
@@ -832,6 +916,55 @@ fun CustomerRoleShell(
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(bottom = 132.dp),
             )
+          }
+        }
+      } else {
+        val builderProduct = activeBuilderProduct
+        if (builderProduct != null && currentMenuState != null && catalogViewModel != null) {
+          Surface(
+            modifier = Modifier
+              .fillMaxSize()
+              .semantics { isTraversalGroup = true }
+              .focusGroup()
+              .testTag("customer_shell_overlay_host"),
+            color = MaterialTheme.colorScheme.background,
+            tonalElevation = 0.dp,
+          ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+              PizzaBuilderScreen(
+                product = builderProduct,
+                crusts = currentMenuState.crusts,
+                toppings = currentMenuState.toppings,
+                mode = PizzaBuilderMode.Add,
+                isCatalogLoading = false,
+                isAcceptingOrders = currentMenuState.isAcceptingOrders,
+                isFromOfflineCache = currentMenuState.isFromOfflineCache,
+                onDismiss = catalogViewModel::dismissCustomizer,
+                onConfirmAdd = { variant, crust, selectedToppings, qty, onResult ->
+                  val vm = cartViewModel
+                  if (vm != null) {
+                    vm.addCustomizedPizza(
+                      product = builderProduct,
+                      variant = variant,
+                      crust = crust,
+                      toppings = selectedToppings,
+                      quantity = qty,
+                      onResult = onResult,
+                    )
+                  } else {
+                    onResult(false, "Cart is unavailable right now.")
+                  }
+                },
+                modifier = Modifier.fillMaxSize(),
+              )
+              SnackbarHost(
+                hostState = overlaySnackbarHostState,
+                modifier = Modifier
+                  .align(Alignment.BottomCenter)
+                  .windowInsetsPadding(WindowInsets.navigationBars)
+                  .padding(bottom = 132.dp),
+              )
+            }
           }
         }
       }

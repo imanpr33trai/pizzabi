@@ -32,6 +32,7 @@ data class CheckoutQuoteUiState(
   val isCouponSheetOpen: Boolean = false,
   val couponError: String? = null,
   val quoteError: String? = null,
+  val couponSheetError: String? = null,
 )
 
 class CheckoutQuoteViewModel(
@@ -157,7 +158,7 @@ class CheckoutQuoteViewModel(
   }
 
   fun openCouponPicker() {
-    _uiState.update { it.copy(isCouponSheetOpen = true, isLoadingCoupons = true) }
+    _uiState.update { it.copy(isCouponSheetOpen = true, isLoadingCoupons = true, couponSheetError = null) }
     viewModelScope.launch {
       val subtotalArg = latestSubtotalPaise.takeIf { it > 0L }
       pricingRepository.fetchAvailableCoupons(subtotalArg)
@@ -166,6 +167,7 @@ class CheckoutQuoteViewModel(
             it.copy(
               availableCoupons = resp.coupons,
               isLoadingCoupons = false,
+              couponSheetError = null,
             )
           }
         }
@@ -173,7 +175,7 @@ class CheckoutQuoteViewModel(
           _uiState.update {
             it.copy(
               isLoadingCoupons = false,
-              couponError = err.message ?: "Unable to load coupons right now.",
+              couponSheetError = err.message ?: "Unable to load coupons right now.",
             )
           }
         }

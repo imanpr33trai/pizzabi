@@ -103,6 +103,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.core.database.CartItemWithToppings
 import com.example.core.domain.DomainBridge
 import com.example.core.domain.RustDomainBridge
 import com.example.ui.components.LocalReducedMotion
@@ -123,6 +124,11 @@ import com.pizzora.contracts.ProductImageStatus
 import com.pizzora.contracts.ProductVariantDto
 import com.pizzora.contracts.SizeCode
 import com.pizzora.contracts.ToppingDto
+
+sealed interface PizzaBuilderMode {
+  data object Add : PizzaBuilderMode
+  data class Edit(val cartItem: CartItemWithToppings) : PizzaBuilderMode
+}
 
 const val MIN_PIZZA_QTY = 1
 const val MAX_PIZZA_QTY = 25
@@ -198,11 +204,13 @@ fun hasBuilderUnsavedChanges(
   quantity: Int,
   initialVariantId: String,
   initialCrustId: String,
+  initialToppingIds: Collection<String> = emptyList(),
+  initialQuantity: Int = MIN_PIZZA_QTY,
 ): Boolean =
   selectedVariantId != initialVariantId ||
     selectedCrustId != initialCrustId ||
-    selectedToppingIds.isNotEmpty() ||
-    quantity != MIN_PIZZA_QTY
+    selectedToppingIds.toSet() != initialToppingIds.toSet() ||
+    quantity != initialQuantity
 
 fun calculatePizzaBuilderBreakdown(
   sortedVariants: List<ProductVariantDto>,
@@ -247,7 +255,7 @@ fun calculatePizzaBuilderBreakdown(
 
 @Composable
 fun PizzaBuilderScreen(
-  product: ProductDto,
+  product: ProductDto?,
   crusts: List<CrustOptionDto>,
   toppings: List<ToppingDto>,
   onDismiss: () -> Unit,
@@ -259,51 +267,107 @@ fun PizzaBuilderScreen(
     onResult: (success: Boolean, errorMessage: String?) -> Unit,
   ) -> Unit,
   modifier: Modifier = Modifier,
+  mode: PizzaBuilderMode = PizzaBuilderMode.Add,
+  isCatalogLoading: Boolean = false,
   isAcceptingOrders: Boolean = true,
   isFromOfflineCache: Boolean = false,
   modifierSlots: List<CustomizationSectionSlot> = defaultUnsupportedModifierSlots(),
   domainBridge: DomainBridge = RustDomainBridge,
 ) {
-  val sortedVariants = remember(product.id, product.variants) {
-    product.variants.sortedBy { it.sizeCode.ordinal }
+  val editCartEntry = (mode as? PizzaBuilderMode.Edit)?.cartItem
+  val isEditMode = editCartEntry != null
+
+  if (isEditMode && editCartEntry != null) {
+    if (product == null && isCatalogLoading) {
+      BuilderCatalogLoadingGuard(
+        onDismiss = onDismiss,
+        modifier = modifier,
+      )
+      return
+    }
+    val savedVariantOk = product != null &&
+      product.isActive &&
+      product.variants.any { it.id == editCartEntry.item.variantId && it.isActive }
+    val savedCrustOk = crusts.any { it.id == editCartEntry.item.crustId && it.isActive }
+    if (product == null || !savedVariantOk || !savedCrustOk) {
+      BuilderDiscontinuedEditGuard(
+        cartItem = editCartEntry,
+        onDismiss = onDismiss,
+        domainBridge = domainBridge,
+        modifier = modifier,
+      )
+      return
+    }
+  }
+
+  val activeProduct = product ?: return
+
+  val sortedVariants = remember(activeProduct.id, activeProduct.variants) {
+    activeProduct.variants.sortedBy { it.sizeCode.ordinal }
   }
   val hasRequiredActiveOptions = remember(sortedVariants, crusts) {
     sortedVariants.any { it.isActive } && crusts.any { it.isActive }
   }
 
-  val initialVariantId = remember(product.id, sortedVariants) {
-    firstActiveVariantId(sortedVariants)
-  }
-  val initialCrustId = remember(product.id, crusts) {
-    firstActiveCrustId(crusts)
+  val activeToppingIds = remember(toppings) {
+    toppings.filter { it.isActive }.map { it.id }.toSet()
   }
 
-  var selectedVariantId by rememberSaveable(product.id) { mutableStateOf(initialVariantId) }
-  var selectedCrustId by rememberSaveable(product.id) { mutableStateOf(initialCrustId) }
-  var selectedToppingIds by rememberSaveable(product.id) { mutableStateOf(emptyList<String>()) }
-  var quantity by rememberSaveable(product.id) { mutableIntStateOf(MIN_PIZZA_QTY) }
-  var vegToppingsOnly by rememberSaveable(product.id) { mutableStateOf(false) }
-  var isBreakdownExpanded by rememberSaveable(product.id) { mutableStateOf(false) }
+  val initialVariantId = remember(activeProduct.id, editCartEntry?.item?.id, sortedVariants) {
+    editCartEntry?.item?.variantId ?: firstActiveVariantId(sortedVariants)
+  }
+  val initialCrustId = remember(activeProduct.id, editCartEntry?.item?.id, crusts) {
+    editCartEntry?.item?.crustId ?: firstActiveCrustId(crusts)
+  }
+  val initialToppingIds = remember(editCartEntry?.item?.id, editCartEntry?.toppings, activeToppingIds) {
+    editCartEntry?.toppings
+      ?.map { it.toppingId }
+      ?.filter { it in activeToppingIds }
+      ?.distinct()
+      ?.sorted()
+      ?: emptyList()
+  }
+  val hadUnavailableSavedToppings = remember(editCartEntry?.item?.id, editCartEntry?.toppings, activeToppingIds) {
+    editCartEntry?.toppings?.any { it.toppingId !in activeToppingIds } == true
+  }
+  val initialQuantity = remember(editCartEntry?.item?.id, editCartEntry?.item?.quantity) {
+    (editCartEntry?.item?.quantity ?: MIN_PIZZA_QTY).coerceIn(MIN_PIZZA_QTY, MAX_PIZZA_QTY)
+  }
+
+  val stateKey = remember(activeProduct.id, editCartEntry?.item?.id) {
+    if (editCartEntry != null) "edit_${editCartEntry.item.id}" else "add_${activeProduct.id}"
+  }
+
+  var selectedVariantId by rememberSaveable(stateKey) { mutableStateOf(initialVariantId) }
+  var selectedCrustId by rememberSaveable(stateKey) { mutableStateOf(initialCrustId) }
+  var selectedToppingIds by rememberSaveable(stateKey) { mutableStateOf(initialToppingIds) }
+  var quantity by rememberSaveable(stateKey) { mutableIntStateOf(initialQuantity) }
+  var vegToppingsOnly by rememberSaveable(stateKey) { mutableStateOf(false) }
+  var isBreakdownExpanded by rememberSaveable(stateKey) { mutableStateOf(false) }
   var isSubmitting by remember { mutableStateOf(false) }
-  var submissionError by remember(product.id) { mutableStateOf<String?>(null) }
-  var showDiscardConfirm by rememberSaveable(product.id) { mutableStateOf(false) }
+  var submissionError by remember(stateKey) { mutableStateOf<String?>(null) }
+  var showDiscardConfirm by rememberSaveable(stateKey) { mutableStateOf(false) }
 
-  // Keep defaults hydrated strictly from active options if catalog data updates after mount
-  LaunchedEffect(initialVariantId, sortedVariants) {
-    val currentStillActive = sortedVariants.any { it.isActive && it.id == selectedVariantId }
-    if (!currentStillActive) {
-      selectedVariantId = initialVariantId
+  // Keep defaults hydrated strictly from active options in Add Mode if catalog updates after mount
+  LaunchedEffect(isEditMode, initialVariantId, sortedVariants) {
+    if (!isEditMode) {
+      val currentStillActive = sortedVariants.any { it.isActive && it.id == selectedVariantId }
+      if (!currentStillActive) {
+        selectedVariantId = initialVariantId
+      }
     }
   }
-  LaunchedEffect(initialCrustId, crusts) {
-    val currentStillActive = crusts.any { it.isActive && it.id == selectedCrustId }
-    if (!currentStillActive) {
-      selectedCrustId = initialCrustId
+  LaunchedEffect(isEditMode, initialCrustId, crusts) {
+    if (!isEditMode) {
+      val currentStillActive = crusts.any { it.isActive && it.id == selectedCrustId }
+      if (!currentStillActive) {
+        selectedCrustId = initialCrustId
+      }
     }
   }
   LaunchedEffect(toppings) {
-    val activeToppingIds = toppings.filter { it.isActive }.map { it.id }.toSet()
-    val sanitized = selectedToppingIds.filter { it in activeToppingIds }
+    val activeIds = toppings.filter { it.isActive }.map { it.id }.toSet()
+    val sanitized = selectedToppingIds.filter { it in activeIds }
     if (sanitized != selectedToppingIds) {
       selectedToppingIds = sanitized
     }
@@ -338,14 +402,16 @@ fun PizzaBuilderScreen(
     quantity = quantity,
     initialVariantId = initialVariantId,
     initialCrustId = initialCrustId,
+    initialToppingIds = initialToppingIds,
+    initialQuantity = initialQuantity,
   )
 
-  val heroImageUrl = remember(product.id, product.images) {
-    product.images
+  val heroImageUrl = remember(activeProduct.id, activeProduct.images) {
+    activeProduct.images
       .filter { it.status == ProductImageStatus.ACTIVE }
       .minByOrNull { it.sortOrder }
       ?.publicUrl
-      ?: product.images.firstOrNull()?.publicUrl?.takeIf { it.isNotBlank() }
+      ?: activeProduct.images.firstOrNull()?.publicUrl?.takeIf { it.isNotBlank() }
   }
   var imageLoadFailed by remember(heroImageUrl) { mutableStateOf(false) }
   val showHeroPhoto = !heroImageUrl.isNullOrBlank() && !imageLoadFailed
@@ -433,10 +499,11 @@ fun PizzaBuilderScreen(
         ) {
           Column(modifier = Modifier.fillMaxSize()) {
             BuilderPinnedTopBar(
-              product = product,
+              product = activeProduct,
               titleVisible = true,
               overHero = false,
               isSubmitting = isSubmitting,
+              isEditMode = isEditMode,
               onCloseClick = handleCloseAction,
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -451,16 +518,16 @@ fun PizzaBuilderScreen(
               if (showHeroPhoto) {
                 BuilderPhotoFrame(
                   imageUrl = heroImageUrl!!,
-                  productName = product.name,
+                  productName = activeProduct.name,
                   height = 180.dp,
                   onImageError = { imageLoadFailed = true },
                 )
               } else {
-                BuilderCompactSummaryCard(product = product)
+                BuilderCompactSummaryCard(product = activeProduct, isEditMode = isEditMode)
               }
 
               if (showHeroPhoto) {
-                BuilderProductInfoBlock(product = product)
+                BuilderProductInfoBlock(product = activeProduct, isEditMode = isEditMode)
               }
 
               PriceBreakdownReceiptCard(
@@ -484,6 +551,7 @@ fun PizzaBuilderScreen(
               isAcceptingOrders = isAcceptingOrders,
               hasRequiredActiveOptions = hasRequiredActiveOptions,
               isSubmitting = isSubmitting,
+              isEditMode = isEditMode,
               stackControls = stackDockControls,
               compactPadding = false,
               maxDrawerHeight = 200.dp,
@@ -508,6 +576,13 @@ fun PizzaBuilderScreen(
             .testTag("builder_right_pane"),
           verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+          if (hadUnavailableSavedToppings) {
+            PizzoraStatusBanner(
+              message = stringResource(R.string.builder_unavailable_topping_warning),
+              tone = PizzoraBannerTone.WARNING,
+              modifier = Modifier.testTag("builder_unavailable_topping_warning"),
+            )
+          }
           BuilderCustomizationSections(
             isAcceptingOrders = isAcceptingOrders,
             hasRequiredActiveOptions = hasRequiredActiveOptions,
@@ -546,7 +621,7 @@ fun PizzaBuilderScreen(
       val baseTopBarDp = 60.dp
       val heroExtraDp = if (showHeroPhoto && !isLandscapeCompact) 150.dp else 0.dp
       val heroExtraPx = with(density) { heroExtraDp.toPx() }
-      var heroCollapseOffsetPx by rememberSaveable(product.id, showHeroPhoto, isLandscapeCompact) {
+      var heroCollapseOffsetPx by rememberSaveable(stateKey, showHeroPhoto, isLandscapeCompact) {
         mutableFloatStateOf(0f)
       }
       val collapseFraction = if (heroExtraPx > 0f) {
@@ -589,26 +664,29 @@ fun PizzaBuilderScreen(
           Box(modifier = Modifier.fillMaxWidth()) {
             if (!isCollapsed) {
               BuilderFullBleedHeroHeader(
-                product = product,
+                product = activeProduct,
                 heroImageUrl = heroImageUrl!!,
                 heroHeight = currentHeroHeight,
+                isEditMode = isEditMode,
                 onImageError = { imageLoadFailed = true },
               )
             }
             BuilderPinnedTopBar(
-              product = product,
-              titleVisible = isCollapsed,
+              product = activeProduct,
+              titleVisible = isCollapsed || isEditMode,
               overHero = !isCollapsed,
               isSubmitting = isSubmitting,
+              isEditMode = isEditMode,
               onCloseClick = handleCloseAction,
             )
           }
         } else {
           BuilderPinnedTopBar(
-            product = product,
-            titleVisible = isLandscapeCompact,
+            product = activeProduct,
+            titleVisible = isLandscapeCompact || isEditMode,
             overHero = false,
             isSubmitting = isSubmitting,
+            isEditMode = isEditMode,
             onCloseClick = handleCloseAction,
           )
           HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -628,8 +706,9 @@ fun PizzaBuilderScreen(
           ) {
             if (!showHeroPhoto || isLandscapeCompact) {
               BuilderCompactTopHeader(
-                product = product,
+                product = activeProduct,
                 compact = isLandscapeCompact,
+                isEditMode = isEditMode,
               )
             }
 
@@ -639,11 +718,19 @@ fun PizzaBuilderScreen(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
               verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-              if (showHeroPhoto && !isLandscapeCompact && product.description.isNotBlank()) {
+              if (showHeroPhoto && !isLandscapeCompact && activeProduct.description.isNotBlank()) {
                 Text(
-                  text = product.description,
+                  text = activeProduct.description,
                   style = MaterialTheme.typography.bodyMedium,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+
+              if (hadUnavailableSavedToppings) {
+                PizzoraStatusBanner(
+                  message = stringResource(R.string.builder_unavailable_topping_warning),
+                  tone = PizzoraBannerTone.WARNING,
+                  modifier = Modifier.testTag("builder_unavailable_topping_warning"),
                 )
               }
 
@@ -693,6 +780,7 @@ fun PizzaBuilderScreen(
           isAcceptingOrders = isAcceptingOrders,
           hasRequiredActiveOptions = hasRequiredActiveOptions,
           isSubmitting = isSubmitting,
+          isEditMode = isEditMode,
           stackControls = stackDockControls,
           compactPadding = isLandscapeCompact,
           maxDrawerHeight = (viewportHeight * 0.42f).coerceAtLeast(140.dp),
@@ -706,7 +794,7 @@ fun PizzaBuilderScreen(
     if (showDiscardConfirm) {
       PizzoraConfirmationDialog(
         title = stringResource(R.string.builder_discard_title),
-        body = stringResource(R.string.builder_discard_body, product.name),
+        body = stringResource(R.string.builder_discard_body, activeProduct.name),
         confirmLabel = stringResource(R.string.builder_discard_confirm),
         dismissLabel = stringResource(R.string.builder_keep_editing),
         onConfirm = {
@@ -728,6 +816,7 @@ private fun BuilderPinnedTopBar(
   titleVisible: Boolean,
   overHero: Boolean,
   isSubmitting: Boolean,
+  isEditMode: Boolean = false,
   onCloseClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -782,15 +871,37 @@ private fun BuilderPinnedTopBar(
           Text(
             text = product.name,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (overHero) WarmParchmentText else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
           )
         }
       } else {
         Spacer(modifier = Modifier.weight(1f))
       }
+
+      if (isEditMode) {
+        BuilderEditModeTag(overHero = overHero)
+      }
     }
+  }
+}
+
+@Composable
+private fun BuilderEditModeTag(overHero: Boolean = false) {
+  Surface(
+    color = if (overHero) EspressoBackground.copy(alpha = 0.85f) else MaterialTheme.colorScheme.primaryContainer,
+    shape = RoundedCornerShape(8.dp),
+    tonalElevation = 0.dp,
+    modifier = Modifier.testTag("builder_edit_mode_badge"),
+  ) {
+    Text(
+      text = stringResource(R.string.builder_header_editing),
+      style = MaterialTheme.typography.labelSmall,
+      color = if (overHero) WarmParchmentText else MaterialTheme.colorScheme.onPrimaryContainer,
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+    )
   }
 }
 
@@ -799,6 +910,7 @@ private fun BuilderFullBleedHeroHeader(
   product: ProductDto,
   heroImageUrl: String,
   heroHeight: Dp,
+  isEditMode: Boolean = false,
   onImageError: () -> Unit,
 ) {
   Box(
@@ -842,7 +954,11 @@ private fun BuilderFullBleedHeroHeader(
       ) {
         PizzoraDietaryIndicator(isVeg = product.isVeg)
         Text(
-          text = product.categoryName,
+          text = if (isEditMode) {
+            "${product.categoryName} · ${stringResource(R.string.builder_editing_badge)}"
+          } else {
+            product.categoryName
+          },
           style = MaterialTheme.typography.labelMedium,
           color = Color(0xFFE5D8CA),
           maxLines = 1,
@@ -864,6 +980,7 @@ private fun BuilderFullBleedHeroHeader(
 private fun BuilderCompactTopHeader(
   product: ProductDto,
   compact: Boolean,
+  isEditMode: Boolean = false,
 ) {
   Surface(
     color = MaterialTheme.colorScheme.surface,
@@ -881,14 +998,17 @@ private fun BuilderCompactTopHeader(
         ),
       verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-      BuilderProductInfoBlock(product = product, compact = compact)
+      BuilderProductInfoBlock(product = product, compact = compact, isEditMode = isEditMode)
     }
   }
   HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 }
 
 @Composable
-private fun BuilderCompactSummaryCard(product: ProductDto) {
+private fun BuilderCompactSummaryCard(
+  product: ProductDto,
+  isEditMode: Boolean = false,
+) {
   Card(
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -917,7 +1037,7 @@ private fun BuilderCompactSummaryCard(product: ProductDto) {
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
       }
-      BuilderProductInfoBlock(product = product)
+      BuilderProductInfoBlock(product = product, isEditMode = isEditMode)
     }
   }
 }
@@ -952,6 +1072,7 @@ private fun BuilderPhotoFrame(
 private fun BuilderProductInfoBlock(
   product: ProductDto,
   compact: Boolean = false,
+  isEditMode: Boolean = false,
 ) {
   Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
     Row(
@@ -960,7 +1081,11 @@ private fun BuilderProductInfoBlock(
     ) {
       PizzoraDietaryIndicator(isVeg = product.isVeg)
       Text(
-        text = product.categoryName,
+        text = if (isEditMode) {
+          "${product.categoryName} · ${stringResource(R.string.builder_editing_badge)}"
+        } else {
+          product.categoryName
+        },
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
@@ -1699,6 +1824,7 @@ private fun BuilderStickyDock(
   isAcceptingOrders: Boolean,
   hasRequiredActiveOptions: Boolean,
   isSubmitting: Boolean,
+  isEditMode: Boolean,
   stackControls: Boolean,
   compactPadding: Boolean,
   maxDrawerHeight: Dp,
@@ -1801,7 +1927,9 @@ private fun BuilderStickyDock(
     val ctaLabel = when {
       !isAcceptingOrders -> stringResource(R.string.builder_store_paused_cta)
       !hasRequiredActiveOptions || !breakdown.hasRequiredSelections -> stringResource(R.string.builder_unavailable_cta)
+      isSubmitting && isEditMode -> stringResource(R.string.builder_updating_item)
       isSubmitting -> stringResource(R.string.builder_adding_to_cart)
+      isEditMode -> stringResource(R.string.builder_update_item_fmt, domainBridge.formatInr(breakdown.itemTotalPaise))
       else -> stringResource(R.string.builder_add_to_cart_fmt, domainBridge.formatInr(breakdown.itemTotalPaise))
     }
 
@@ -2173,3 +2301,185 @@ private fun BreakdownLineRow(
 
 private fun sizeDisplayName(sizeCode: SizeCode): String =
   sizeCode.name.lowercase().replaceFirstChar { it.uppercase() }
+
+@Composable
+private fun BuilderCatalogLoadingGuard(
+  onDismiss: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  BackHandler(enabled = true, onBack = onDismiss)
+  Column(
+    modifier = modifier
+      .fillMaxSize()
+      .background(MaterialTheme.colorScheme.background)
+      .semantics { isTraversalGroup = true }
+      .focusGroup()
+      .testTag("pizza_customizer_sheet"),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .statusBarsPadding()
+        .heightIn(min = 60.dp)
+        .padding(horizontal = 12.dp, vertical = 6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      IconButton(
+        onClick = onDismiss,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("customizer_close_button"),
+      ) {
+        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_close))
+      }
+      Text(
+        text = stringResource(R.string.builder_header_editing),
+        style = MaterialTheme.typography.titleMedium,
+      )
+    }
+    Box(
+      modifier = Modifier
+        .weight(1f)
+        .fillMaxWidth(),
+      contentAlignment = Alignment.Center,
+    ) {
+      CircularProgressIndicator()
+    }
+  }
+}
+
+@Composable
+private fun BuilderDiscontinuedEditGuard(
+  cartItem: CartItemWithToppings,
+  onDismiss: () -> Unit,
+  domainBridge: DomainBridge,
+  modifier: Modifier = Modifier,
+) {
+  BackHandler(enabled = true, onBack = onDismiss)
+  val savedItem = cartItem.item
+  val sizeLabel = savedItem.sizeCode.lowercase().replaceFirstChar { it.uppercase() }
+
+  Column(
+    modifier = modifier
+      .fillMaxSize()
+      .background(MaterialTheme.colorScheme.background)
+      .semantics { isTraversalGroup = true }
+      .focusGroup()
+      .testTag("pizza_customizer_sheet"),
+  ) {
+    Surface(
+      color = MaterialTheme.colorScheme.surface,
+      tonalElevation = 0.dp,
+      modifier = Modifier.fillMaxWidth(),
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .statusBarsPadding()
+          .heightIn(min = 60.dp)
+          .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        IconButton(
+          onClick = onDismiss,
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("customizer_close_button"),
+        ) {
+          Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = stringResource(R.string.action_close),
+          )
+        }
+        Text(
+          text = savedItem.productName,
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f),
+        )
+        BuilderEditModeTag()
+      }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+    Column(
+      modifier = Modifier
+        .weight(1f)
+        .fillMaxWidth()
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp)
+        .testTag("builder_discontinued_guard"),
+      verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+      PizzoraStatusBanner(
+        message = stringResource(R.string.builder_discontinued_body),
+        tone = PizzoraBannerTone.ERROR,
+        modifier = Modifier.testTag("builder_unavailable_state"),
+      )
+
+      Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("cart_item_preserved_summary"),
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Text(
+            text = savedItem.productName,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = "$sizeLabel · ${savedItem.crustName} · Qty ${savedItem.quantity}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          if (cartItem.toppings.isNotEmpty()) {
+            Text(
+              text = "Toppings: ${cartItem.toppings.joinToString(", ") { it.toppingName }}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          Text(
+            text = domainBridge.formatInr(savedItem.unitPricePaise * savedItem.quantity),
+            style = PizzoraMonoBody,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+        }
+      }
+    }
+
+    PizzoraStickyActionDock(applyNavigationBarsPadding = true) {
+      Button(
+        onClick = onDismiss,
+        colors = ButtonDefaults.buttonColors(
+          containerColor = MaterialTheme.colorScheme.primary,
+          contentColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+        modifier = Modifier
+          .fillMaxWidth()
+          .heightIn(min = 50.dp)
+          .minimumInteractiveComponentSize()
+          .testTag("builder_back_to_cart_button"),
+      ) {
+        Text(
+          text = stringResource(R.string.builder_back_to_cart),
+          style = MaterialTheme.typography.labelLarge,
+        )
+      }
+    }
+  }
+}

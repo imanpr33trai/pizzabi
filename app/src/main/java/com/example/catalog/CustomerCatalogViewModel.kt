@@ -103,6 +103,15 @@ class CustomerCatalogViewModel(
     }
   }
 
+  fun loadMenuIfNeeded() = ensureLoaded()
+
+  fun ensureLoaded() {
+    val state = _uiState.value
+    if (state.allProducts.isEmpty() && !state.isLoading && !state.isRefreshing) {
+      loadMenu(initialLoad = true)
+    }
+  }
+
   fun onSearchQueryChange(query: String) {
     _uiState.update { it.copy(searchQuery = query) }
   }
