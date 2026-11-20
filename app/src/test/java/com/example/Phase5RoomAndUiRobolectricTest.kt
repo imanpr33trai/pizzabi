@@ -166,8 +166,13 @@ class Phase5RoomAndUiRobolectricTest {
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("customer_shell_root").assertIsDisplayed()
 
-    // Sign out -> back to login
-    composeTestRule.onNodeWithTag("shell_sign_out_button").performClick()
+    // Decision #5: Global Top-Bar Sign Out removed on Customer shell; Sign Out lives in Profile with confirmation
+    composeTestRule.onNodeWithTag("shell_sign_out_button").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("customer_tab_profile").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("profile_sign_out_button").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("confirm_sign_out_button").performClick()
     composeTestRule.mainClock.advanceTimeBy(1_000)
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("login_email_input").performScrollTo().assertIsDisplayed()

@@ -1,5 +1,7 @@
 package com.example.navigation
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
@@ -42,9 +45,11 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -56,10 +61,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -102,6 +109,9 @@ import com.example.owner.OwnerSettingsAndStaffScreen
 import com.example.owner.OwnerViewModel
 import com.example.profile.CustomerProfileScreen
 import com.example.profile.ProfileViewModel
+import com.example.ui.components.LocalReducedMotion
+import com.example.ui.components.PizzoraConfirmationDialog
+import com.example.ui.theme.LocalPizzoraSemanticColors
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.PizzoraTheme
 import com.example.update.UpdateHostOverlay
@@ -383,7 +393,14 @@ fun CustomerRoleShell(
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
   var isCheckoutOpen by rememberSaveable { mutableStateOf(false) }
   var isNotificationsOpen by rememberSaveable { mutableStateOf(false) }
+  var showFallbackSignOutConfirm by rememberSaveable { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
+  val overlaySnackbarHostState = remember { SnackbarHostState() }
+  val hasActiveOverlay = isNotificationsOpen && notificationsViewModel != null
+  val currentSnackbarHostState by rememberUpdatedState(
+    if (hasActiveOverlay) overlaySnackbarHostState else snackbarHostState,
+  )
+  val menuState = catalogViewModel?.uiState?.collectAsStateWithLifecycle()?.value
   val cartBadgeCount = if (cartViewModel != null) {
     cartViewModel.badgeCount.collectAsStateWithLifecycle().value
   } else {
@@ -424,19 +441,19 @@ fun CustomerRoleShell(
 
   LaunchedEffect(cartViewModel) {
     cartViewModel?.events?.collect { message ->
-      snackbarHostState.showSnackbar(message)
+      currentSnackbarHostState.showSnackbar(message)
     }
   }
 
   LaunchedEffect(profileViewModel) {
     profileViewModel?.events?.collect { message ->
-      snackbarHostState.showSnackbar(message)
+      currentSnackbarHostState.showSnackbar(message)
     }
   }
 
   LaunchedEffect(notificationsViewModel) {
     notificationsViewModel?.events?.collect { message ->
-      snackbarHostState.showSnackbar(message)
+      currentSnackbarHostState.showSnackbar(message)
     }
   }
 
@@ -456,103 +473,123 @@ fun CustomerRoleShell(
     }
   }
 
-  if (isNotificationsOpen && notificationsViewModel != null) {
-    val notifState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
-    NotificationsScreen(
-      uiState = notifState,
-      onRefresh = notificationsViewModel::refreshAll,
-      onSelectUnreadOnly = notificationsViewModel::setUnreadOnlyFilter,
-      onMarkRead = notificationsViewModel::markAsRead,
-      onMarkAllRead = notificationsViewModel::markAllAsRead,
-      onToggleOrderUpdates = { enabled -> notificationsViewModel.updatePreferences(orderUpdates = enabled) },
-      onTogglePromoAlerts = { enabled -> notificationsViewModel.updatePreferences(promoAlerts = enabled) },
-      onNotificationPermissionResult = notificationsViewModel::onPermissionResult,
-      onBackClick = { isNotificationsOpen = false },
-      onClearActionMessage = notificationsViewModel::clearActionMessage,
-      modifier = Modifier.fillMaxSize(),
-    )
-    return
-  }
+  val semanticColors = LocalPizzoraSemanticColors.current
 
-  BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("customer_shell_root")) {
-    val useRail = maxWidth >= 600.dp
-    Scaffold(
-      contentWindowInsets = WindowInsets.safeDrawing,
-      snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-      topBar = {
-        TopAppBar(
-          title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall) },
-          actions = {
-            if (notificationsViewModel != null) {
-              IconButton(
-                onClick = { isNotificationsOpen = true },
-                modifier = Modifier.minimumInteractiveComponentSize().testTag("customer_notifications_button"),
-              ) {
-                NotificationBellIcon(unreadCount = unreadNotificationsCount)
+  Box(modifier = Modifier.fillMaxSize().testTag("customer_shell_root")) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+      val useRail = maxWidth >= 600.dp
+      Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        topBar = {
+          TopAppBar(
+            title = {
+              when (selectedIndex) {
+                0 -> Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.testTag("customer_topbar_title"),
+                  )
+                  if (menuState != null && !menuState.isAcceptingOrders) {
+                    Surface(
+                      color = semanticColors.warningContainer,
+                      shape = MaterialTheme.shapes.small,
+                      modifier = Modifier.testTag("shell_kitchen_paused_badge"),
+                    ) {
+                      Text(
+                        text = stringResource(R.string.shell_kitchen_paused_badge),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = semanticColors.onWarningContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                      )
+                    }
+                  }
+                }
+                1 -> Text(
+                  text = stringResource(R.string.shell_title_cart),
+                  style = MaterialTheme.typography.titleLarge,
+                  modifier = Modifier.testTag("customer_topbar_title"),
+                )
+                2 -> Text(
+                  text = stringResource(R.string.orders_title),
+                  style = MaterialTheme.typography.titleLarge,
+                  modifier = Modifier.testTag("customer_topbar_title"),
+                )
+                else -> Text(
+                  text = stringResource(R.string.shell_title_profile),
+                  style = MaterialTheme.typography.titleLarge,
+                  modifier = Modifier.testTag("customer_topbar_title"),
+                )
+              }
+            },
+            actions = {
+              if (notificationsViewModel != null) {
+                IconButton(
+                  onClick = { isNotificationsOpen = true },
+                  modifier = Modifier.minimumInteractiveComponentSize().testTag("customer_notifications_button"),
+                ) {
+                  NotificationBellIcon(unreadCount = unreadNotificationsCount)
+                }
+              }
+            },
+          )
+        },
+        bottomBar = {
+          if (!useRail) {
+            NavigationBar {
+              tabs.forEachIndexed { idx, (label, icon) ->
+                NavigationBarItem(
+                  selected = selectedIndex == idx,
+                  onClick = { selectedIndex = idx },
+                  icon = {
+                    CustomerTabIcon(label = label, icon = icon, badgeCount = if (idx == 1) cartBadgeCount else 0)
+                  },
+                  label = { Text(label) },
+                  modifier = Modifier.testTag("customer_tab_${label.lowercase()}"),
+                )
               }
             }
-            IconButton(
-              onClick = onSignOut,
-              modifier = Modifier.minimumInteractiveComponentSize().testTag("shell_sign_out_button"),
-            ) {
-              Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.action_sign_out))
-            }
-          },
-        )
-      },
-      bottomBar = {
-        if (!useRail) {
-          NavigationBar(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
-            tabs.forEachIndexed { idx, (label, icon) ->
-              NavigationBarItem(
-                selected = selectedIndex == idx,
-                onClick = { selectedIndex = idx },
-                icon = {
-                  CustomerTabIcon(label = label, icon = icon, badgeCount = if (idx == 1) cartBadgeCount else 0)
-                },
-                label = { Text(label) },
-                modifier = Modifier.testTag("customer_tab_${label.lowercase()}"),
-              )
+          }
+        },
+      ) { innerPadding ->
+        Row(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+          if (useRail) {
+            NavigationRail {
+              tabs.forEachIndexed { idx, (label, icon) ->
+                NavigationRailItem(
+                  selected = selectedIndex == idx,
+                  onClick = { selectedIndex = idx },
+                  icon = {
+                    CustomerTabIcon(label = label, icon = icon, badgeCount = if (idx == 1) cartBadgeCount else 0)
+                  },
+                  label = { Text(label) },
+                  modifier = Modifier.testTag("customer_tab_${label.lowercase()}"),
+                )
+              }
             }
           }
-        }
-      },
-    ) { innerPadding ->
-      Row(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-        if (useRail) {
-          NavigationRail {
-            tabs.forEachIndexed { idx, (label, icon) ->
-              NavigationRailItem(
-                selected = selectedIndex == idx,
-                onClick = { selectedIndex = idx },
-                icon = {
-                  CustomerTabIcon(label = label, icon = icon, badgeCount = if (idx == 1) cartBadgeCount else 0)
-                },
-                label = { Text(label) },
-                modifier = Modifier.testTag("customer_tab_${label.lowercase()}"),
-              )
-            }
-          }
-        }
 
-        when {
-          selectedIndex == 0 && catalogViewModel != null -> {
-            val menuState by catalogViewModel.uiState.collectAsStateWithLifecycle()
-            CustomerMenuScreen(
-              uiState = menuState,
-              onSearchQueryChange = catalogViewModel::onSearchQueryChange,
-              onCategorySelected = catalogViewModel::onCategorySelected,
-              onVegOnlyToggle = catalogViewModel::onVegOnlyToggle,
-              onClearFilters = catalogViewModel::clearFilters,
-              onRefreshMenu = { catalogViewModel.loadMenu(initialLoad = false) },
-              onOpenCustomizer = catalogViewModel::openCustomizer,
-              onDismissCustomizer = catalogViewModel::dismissCustomizer,
-              onAddCustomizedToCart = { prod, variant, crust, toppings, qty ->
-                cartViewModel?.addCustomizedPizza(prod, variant, crust, toppings, qty)
-              },
-              modifier = Modifier.weight(1f),
-            )
-          }
+          when {
+            selectedIndex == 0 && catalogViewModel != null && menuState != null -> {
+              CustomerMenuScreen(
+                uiState = menuState,
+                onSearchQueryChange = catalogViewModel::onSearchQueryChange,
+                onCategorySelected = catalogViewModel::onCategorySelected,
+                onVegOnlyToggle = catalogViewModel::onVegOnlyToggle,
+                onClearFilters = catalogViewModel::clearFilters,
+                onRefreshMenu = { catalogViewModel.loadMenu(initialLoad = false) },
+                onOpenCustomizer = catalogViewModel::openCustomizer,
+                onDismissCustomizer = catalogViewModel::dismissCustomizer,
+                onAddCustomizedToCart = { prod, variant, crust, toppings, qty ->
+                  cartViewModel?.addCustomizedPizza(prod, variant, crust, toppings, qty)
+                },
+                modifier = Modifier.weight(1f),
+              )
+            }
           selectedIndex == 1 && cartViewModel != null -> {
             val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
             val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
@@ -710,11 +747,65 @@ fun CustomerRoleShell(
               title = "${stringResource(R.string.role_customer_title)} • ${tabs[selectedIndex].first}",
               subtitle = "Signed in as ${session.user.fullName} (${session.user.email})",
               badge = "CUSTOMER",
+              onSignOut = if (selectedIndex == 3) {
+                { showFallbackSignOutConfirm = true }
+              } else {
+                null
+              },
               modifier = Modifier.weight(1f),
             )
           }
         }
       }
+    }
+    }
+
+    // Unified shell-level full-screen overlay host (Notifications today; Builder & Checkout in Phases 3 & 5)
+    if (isNotificationsOpen && notificationsViewModel != null) {
+      val notifState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
+      Surface(
+        modifier = Modifier.fillMaxSize().testTag("customer_shell_overlay_host"),
+        color = MaterialTheme.colorScheme.background,
+      ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+          NotificationsScreen(
+            uiState = notifState,
+            onRefresh = notificationsViewModel::refreshAll,
+            onSelectUnreadOnly = notificationsViewModel::setUnreadOnlyFilter,
+            onMarkRead = notificationsViewModel::markAsRead,
+            onMarkAllRead = notificationsViewModel::markAllAsRead,
+            onToggleOrderUpdates = { enabled -> notificationsViewModel.updatePreferences(orderUpdates = enabled) },
+            onTogglePromoAlerts = { enabled -> notificationsViewModel.updatePreferences(promoAlerts = enabled) },
+            onNotificationPermissionResult = notificationsViewModel::onPermissionResult,
+            onBackClick = { isNotificationsOpen = false },
+            onClearActionMessage = notificationsViewModel::clearActionMessage,
+            modifier = Modifier.fillMaxSize(),
+          )
+          SnackbarHost(
+            hostState = overlaySnackbarHostState,
+            modifier = Modifier
+              .align(Alignment.BottomCenter)
+              .windowInsetsPadding(WindowInsets.navigationBars)
+              .padding(bottom = 12.dp),
+          )
+        }
+      }
+    }
+
+    if (showFallbackSignOutConfirm) {
+      PizzoraConfirmationDialog(
+        title = stringResource(R.string.sign_out_dialog_title),
+        body = stringResource(R.string.sign_out_dialog_body),
+        confirmLabel = stringResource(R.string.action_sign_out),
+        onConfirm = {
+          showFallbackSignOutConfirm = false
+          onSignOut()
+        },
+        onDismiss = { showFallbackSignOutConfirm = false },
+        isDestructive = true,
+        confirmTestTag = "confirm_sign_out_button",
+        dismissTestTag = "cancel_sign_out_button",
+      )
     }
   }
 }
@@ -725,10 +816,29 @@ private fun CustomerTabIcon(
   icon: androidx.compose.ui.graphics.vector.ImageVector,
   badgeCount: Int,
 ) {
+  val reducedMotion = LocalReducedMotion.current
+  val badgeScale = remember { Animatable(1f) }
+  var previousBadgeCount by remember { mutableIntStateOf(badgeCount) }
+
+  LaunchedEffect(badgeCount, reducedMotion) {
+    if (badgeCount > previousBadgeCount && badgeCount > 0 && !reducedMotion) {
+      badgeScale.snapTo(1.22f)
+      badgeScale.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = 180))
+    } else {
+      badgeScale.snapTo(1f)
+    }
+    previousBadgeCount = badgeCount
+  }
+
   if (badgeCount > 0) {
     BadgedBox(
       badge = {
-        Badge {
+        Badge(
+          modifier = Modifier.graphicsLayer(
+            scaleX = badgeScale.value,
+            scaleY = badgeScale.value,
+          ),
+        ) {
           Text(
             text = badgeCount.toString(),
             modifier = Modifier.testTag("cart_tab_badge"),
@@ -1122,6 +1232,7 @@ private fun RoleShellCard(
   title: String,
   subtitle: String,
   badge: String,
+  onSignOut: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   Column(
@@ -1150,6 +1261,17 @@ private fun RoleShellCard(
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (onSignOut != null) {
+          Spacer(modifier = Modifier.height(16.dp))
+          OutlinedButton(
+            onClick = onSignOut,
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_sign_out_button"),
+          ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.size(6.dp))
+            Text(stringResource(R.string.action_sign_out))
+          }
+        }
       }
     }
   }

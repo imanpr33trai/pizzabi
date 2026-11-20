@@ -349,6 +349,9 @@ class Phase19EndToEndRobolectricTest {
         path == "/api/v1/auth/logout" && request.method == HttpMethod.Post -> {
           respond(json.encodeToString(MessageResponse("Signed out")), HttpStatusCode.OK, headers)
         }
+        path == "/api/v1/me" && request.method == HttpMethod.Get -> {
+          respond(json.encodeToString(customerProfile), HttpStatusCode.OK, headers)
+        }
         path == "/api/v1/catalog/menu" && request.method == HttpMethod.Get -> {
           respond(json.encodeToString(sampleMenu), HttpStatusCode.OK, headers)
         }
@@ -823,8 +826,19 @@ class Phase19EndToEndRobolectricTest {
     composeTestRule.onNodeWithTag("order_detail_status_badge").assertIsDisplayed()
     assertEquals(1, orders.size)
 
-    // Customer Sign Out -> back to LoginScreen
-    composeTestRule.onNodeWithTag("shell_sign_out_button").performClick()
+    // Decision #5: Customer Sign Out via Profile tab with confirmation modal -> back to LoginScreen
+    composeTestRule.onNodeWithTag("shell_sign_out_button").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("customer_tab_profile").performClick()
+    composeTestRule.waitUntil(timeoutMillis = 5_000) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      composeTestRule.onAllNodesWithTag("profile_sign_out_button").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("profile_sign_out_button").performClick()
+    composeTestRule.waitUntil(timeoutMillis = 5_000) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      composeTestRule.onAllNodesWithTag("confirm_sign_out_button").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("confirm_sign_out_button").performClick()
     composeTestRule.waitUntil(timeoutMillis = 5_000) {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
       composeTestRule.onAllNodesWithTag("login_email_input").fetchSemanticsNodes().isNotEmpty()

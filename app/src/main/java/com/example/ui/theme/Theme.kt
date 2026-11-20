@@ -11,20 +11,22 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.LocalReducedMotion
+import com.example.ui.components.rememberSystemReducedMotion
 
-private val PizzoraLightColorScheme = lightColorScheme(
+internal val PizzoraLightColorScheme = lightColorScheme(
   primary = SanMarzanoTerracotta,
   onPrimary = Color.White,
   primaryContainer = TerracottaContainer,
-  onPrimaryContainer = Color(0xFF5C150C),
+  onPrimaryContainer = OnTerracottaContainerLight,
   secondary = FreshBasilGreen,
   onSecondary = Color.White,
   secondaryContainer = BasilContainer,
-  onSecondaryContainer = Color(0xFF103825),
+  onSecondaryContainer = OnBasilContainerLight,
   tertiary = GoldenCrustAmber,
   onTertiary = Color.White,
   tertiaryContainer = AmberContainer,
-  onTertiaryContainer = Color(0xFF6B3900),
+  onTertiaryContainer = OnAmberContainerLight,
   background = CreamBackground,
   onBackground = CharredInk,
   surface = PureWhiteSurface,
@@ -32,11 +34,14 @@ private val PizzoraLightColorScheme = lightColorScheme(
   surfaceVariant = OvenStoneSurfaceVariant,
   onSurfaceVariant = WarmTaupe,
   outline = DoughOutline,
+  outlineVariant = LightOutlineInteractive,
   error = CrimsonErrorLight,
   onError = Color.White,
+  errorContainer = LightErrorContainer,
+  onErrorContainer = LightOnErrorContainer,
 )
 
-private val PizzoraDarkColorScheme = darkColorScheme(
+internal val PizzoraDarkColorScheme = darkColorScheme(
   primary = EmberTerracotta,
   onPrimary = Color(0xFF280804),
   primaryContainer = Color(0xFF5B1E14),
@@ -47,8 +52,8 @@ private val PizzoraDarkColorScheme = darkColorScheme(
   onSecondaryContainer = Color(0xFFC8F3DB),
   tertiary = BrightAmber,
   onTertiary = Color(0xFF332000),
-  tertiaryContainer = Color(0xFF553A00),
-  onTertiaryContainer = Color(0xFFFFEEB8),
+  tertiaryContainer = DarkWarningContainer,
+  onTertiaryContainer = DarkOnWarningContainer,
   background = EspressoBackground,
   onBackground = WarmParchmentText,
   surface = DarkRoastSurface,
@@ -56,14 +61,19 @@ private val PizzoraDarkColorScheme = darkColorScheme(
   surfaceVariant = SmokedSlateSurfaceVariant,
   onSurfaceVariant = MutedStoneText,
   outline = DarkOutline,
+  outlineVariant = DarkOutlineInteractive,
   error = OverdueCrimson,
   onError = Color(0xFF3B0909),
+  errorContainer = DarkErrorContainer,
+  onErrorContainer = DarkOnErrorContainer,
 )
 
 val PizzoraShapes = Shapes(
-  small = RoundedCornerShape(10.dp),
-  medium = RoundedCornerShape(16.dp),
-  large = RoundedCornerShape(22.dp),
+  extraSmall = RoundedCornerShape(4.dp),
+  small = RoundedCornerShape(8.dp),
+  medium = RoundedCornerShape(12.dp),
+  large = RoundedCornerShape(16.dp),
+  extraLarge = RoundedCornerShape(20.dp),
 )
 
 val LocalPizzoraSemanticColors = staticCompositionLocalOf { LightSemanticColors }
@@ -72,13 +82,17 @@ val LocalPizzoraSemanticColors = staticCompositionLocalOf { LightSemanticColors 
 fun PizzoraTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
   kdsMode: Boolean = false,
+  reducedMotion: Boolean = rememberSystemReducedMotion(),
   content: @Composable () -> Unit,
 ) {
   val useDark = kdsMode || darkTheme
   val colorScheme = if (useDark) PizzoraDarkColorScheme else PizzoraLightColorScheme
   val semanticColors = if (useDark) DarkSemanticColors else LightSemanticColors
 
-  CompositionLocalProvider(LocalPizzoraSemanticColors provides semanticColors) {
+  CompositionLocalProvider(
+    LocalPizzoraSemanticColors provides semanticColors,
+    LocalReducedMotion provides reducedMotion,
+  ) {
     MaterialTheme(
       colorScheme = colorScheme,
       typography = PizzoraTypography,

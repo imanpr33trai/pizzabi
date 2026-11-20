@@ -51,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.ui.components.PizzoraConfirmationDialog
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.update.AppUpdatesSettingsCard
 import com.example.update.UpdateUiState
@@ -96,6 +98,8 @@ fun CustomerProfileScreen(
   onOpenUpdateDialog: () -> Unit = {},
   onRetryUpdate: () -> Unit = {},
 ) {
+  var showSignOutConfirm by rememberSaveable { mutableStateOf(false) }
+
   Box(modifier = modifier.fillMaxSize()) {
   Column(
     modifier = Modifier.fillMaxSize().testTag("customer_profile_screen"),
@@ -147,7 +151,7 @@ fun CustomerProfileScreen(
         AccountProfileCard(
           profile = uiState.profile,
           onEdit = onOpenEditProfile,
-          onSignOut = onSignOut,
+          onSignOut = { showSignOutConfirm = true },
         )
       }
 
@@ -251,6 +255,22 @@ fun CustomerProfileScreen(
       error = uiState.dialogError,
       onSave = onSaveAddress,
       onDismiss = onDismissAddressDialog,
+    )
+  }
+
+  if (showSignOutConfirm) {
+    PizzoraConfirmationDialog(
+      title = stringResource(R.string.sign_out_dialog_title),
+      body = stringResource(R.string.sign_out_dialog_body),
+      confirmLabel = stringResource(R.string.action_sign_out),
+      onConfirm = {
+        showSignOutConfirm = false
+        onSignOut()
+      },
+      onDismiss = { showSignOutConfirm = false },
+      isDestructive = true,
+      confirmTestTag = "confirm_sign_out_button",
+      dismissTestTag = "cancel_sign_out_button",
     )
   }
   }

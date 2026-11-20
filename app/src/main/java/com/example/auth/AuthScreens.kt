@@ -12,16 +12,20 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.LocalPizza
 import androidx.compose.material.icons.filled.Lock
@@ -31,8 +35,6 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,17 +53,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.ui.components.PizzoraBannerTone
+import com.example.ui.components.PizzoraStatusBanner
+import com.example.ui.theme.BrightAmber
+import com.example.ui.theme.WarmParchmentText
+
+private fun isValidEmailInput(value: String): Boolean {
+  val trimmed = value.trim()
+  val atIdx = trimmed.indexOf('@')
+  val dotIdx = trimmed.lastIndexOf('.')
+  return atIdx > 0 && dotIdx > atIdx + 1 && dotIdx < trimmed.length - 1 && !trimmed.contains(' ')
+}
+
+private fun isValidPhoneInput(value: String): Boolean =
+  value.count { it.isDigit() } >= 8
 
 @Composable
 fun LoginScreen(
@@ -74,6 +93,27 @@ fun LoginScreen(
   var email by rememberSaveable { mutableStateOf("") }
   var password by rememberSaveable { mutableStateOf("") }
   var passwordVisible by rememberSaveable { mutableStateOf(false) }
+  var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
+  val focusManager = LocalFocusManager.current
+
+  val emailError = if (attemptedSubmit && !isValidEmailInput(email)) {
+    stringResource(R.string.auth_error_invalid_email)
+  } else {
+    null
+  }
+  val passwordError = if (attemptedSubmit && password.length < 8) {
+    stringResource(R.string.auth_error_short_password)
+  } else {
+    null
+  }
+
+  val submitLogin = {
+    attemptedSubmit = true
+    if (isValidEmailInput(email) && password.length >= 8) {
+      focusManager.clearFocus()
+      onLoginClick(email, password)
+    }
+  }
 
   AuthScaffoldLayout {
     AuthHeroBanner()
@@ -99,7 +139,15 @@ fun LoginScreen(
       label = { Text(stringResource(R.string.label_email)) },
       leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
       singleLine = true,
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+      isError = emailError != null,
+      supportingText = emailError?.let { err -> { Text(err) } },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Email,
+        imeAction = ImeAction.Next,
+      ),
+      keyboardActions = KeyboardActions(
+        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("login_email_input"),
@@ -112,18 +160,22 @@ fun LoginScreen(
       label = { Text(stringResource(R.string.label_password)) },
       leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
       trailingIcon = {
-        IconButton(
-          onClick = { passwordVisible = !passwordVisible },
-          modifier = Modifier.minimumInteractiveComponentSize(),
-        ) {
-          Icon(
-            imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-            contentDescription = if (passwordVisible) "Hide password" else "Show password",
-          )
-        }
+        PasswordVisibilityToggle(
+          visible = passwordVisible,
+          onToggle = { passwordVisible = !passwordVisible },
+        )
       },
       visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
       singleLine = true,
+      isError = passwordError != null,
+      supportingText = passwordError?.let { err -> { Text(err) } },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Password,
+        imeAction = ImeAction.Done,
+      ),
+      keyboardActions = KeyboardActions(
+        onDone = { if (!uiState.isLoading) submitLogin() },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("login_password_input"),
@@ -131,16 +183,17 @@ fun LoginScreen(
     Spacer(modifier = Modifier.height(16.dp))
 
     Button(
-      onClick = { onLoginClick(email, password) },
+      onClick = submitLogin,
       enabled = !uiState.isLoading,
       modifier = Modifier
         .fillMaxWidth()
+        .heightIn(min = 52.dp)
         .minimumInteractiveComponentSize()
         .testTag("login_submit_button"),
     ) {
       if (uiState.isLoading) {
         CircularProgressIndicator(
-          modifier = Modifier.size(20.dp),
+          modifier = Modifier.size(18.dp),
           strokeWidth = 2.dp,
           color = MaterialTheme.colorScheme.onPrimary,
         )
@@ -157,6 +210,7 @@ fun LoginScreen(
     ) {
       TextButton(
         onClick = onNavigateToForgotPassword,
+        enabled = !uiState.isLoading,
         modifier = Modifier
           .minimumInteractiveComponentSize()
           .testTag("login_forgot_password_button"),
@@ -165,6 +219,7 @@ fun LoginScreen(
       }
       TextButton(
         onClick = { onNavigateToVerifyEmail(email) },
+        enabled = !uiState.isLoading,
         modifier = Modifier
           .minimumInteractiveComponentSize()
           .testTag("login_verify_email_button"),
@@ -176,6 +231,7 @@ fun LoginScreen(
     Spacer(modifier = Modifier.height(8.dp))
     OutlinedButton(
       onClick = onNavigateToRegister,
+      enabled = !uiState.isLoading,
       modifier = Modifier
         .fillMaxWidth()
         .minimumInteractiveComponentSize()
@@ -196,11 +252,28 @@ fun RegisterScreen(
   var phone by rememberSaveable { mutableStateOf("") }
   var email by rememberSaveable { mutableStateOf("") }
   var password by rememberSaveable { mutableStateOf("") }
+  var passwordVisible by rememberSaveable { mutableStateOf(false) }
+  var attemptedSubmit by rememberSaveable { mutableStateOf(false) }
+  val focusManager = LocalFocusManager.current
+
+  val nameError = if (attemptedSubmit && fullName.isBlank()) stringResource(R.string.auth_error_blank_name) else null
+  val phoneError = if (attemptedSubmit && !isValidPhoneInput(phone)) stringResource(R.string.auth_error_short_phone) else null
+  val emailError = if (attemptedSubmit && !isValidEmailInput(email)) stringResource(R.string.auth_error_invalid_email) else null
+  val passwordError = if (attemptedSubmit && password.length < 8) stringResource(R.string.auth_error_short_password) else null
+
+  val submitRegister = {
+    attemptedSubmit = true
+    if (fullName.isNotBlank() && isValidPhoneInput(phone) && isValidEmailInput(email) && password.length >= 8) {
+      focusManager.clearFocus()
+      onRegisterClick(email, password, fullName, phone)
+    }
+  }
 
   AuthScaffoldLayout {
     AuthBackHeader(
       title = stringResource(R.string.auth_create_account),
       onBackClick = onBackClick,
+      enabled = !uiState.isLoading,
     )
     Spacer(modifier = Modifier.height(12.dp))
     AuthStatusBanner(uiState = uiState)
@@ -211,6 +284,15 @@ fun RegisterScreen(
       label = { Text(stringResource(R.string.label_full_name)) },
       leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
       singleLine = true,
+      isError = nameError != null,
+      supportingText = nameError?.let { err -> { Text(err) } },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Text,
+        imeAction = ImeAction.Next,
+      ),
+      keyboardActions = KeyboardActions(
+        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("register_name_input"),
@@ -222,8 +304,16 @@ fun RegisterScreen(
       onValueChange = { phone = it },
       label = { Text(stringResource(R.string.label_phone)) },
       leadingIcon = { Icon(Icons.Filled.Phone, contentDescription = null) },
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Phone,
+        imeAction = ImeAction.Next,
+      ),
+      keyboardActions = KeyboardActions(
+        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+      ),
       singleLine = true,
+      isError = phoneError != null,
+      supportingText = phoneError?.let { err -> { Text(err) } },
       modifier = Modifier
         .fillMaxWidth()
         .testTag("register_phone_input"),
@@ -235,8 +325,16 @@ fun RegisterScreen(
       onValueChange = { email = it },
       label = { Text(stringResource(R.string.label_email)) },
       leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Email,
+        imeAction = ImeAction.Next,
+      ),
+      keyboardActions = KeyboardActions(
+        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+      ),
       singleLine = true,
+      isError = emailError != null,
+      supportingText = emailError?.let { err -> { Text(err) } },
       modifier = Modifier
         .fillMaxWidth()
         .testTag("register_email_input"),
@@ -248,8 +346,23 @@ fun RegisterScreen(
       onValueChange = { password = it },
       label = { Text(stringResource(R.string.label_password)) },
       leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-      visualTransformation = PasswordVisualTransformation(),
+      trailingIcon = {
+        PasswordVisibilityToggle(
+          visible = passwordVisible,
+          onToggle = { passwordVisible = !passwordVisible },
+        )
+      },
+      visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
       singleLine = true,
+      isError = passwordError != null,
+      supportingText = passwordError?.let { err -> { Text(err) } },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Password,
+        imeAction = ImeAction.Done,
+      ),
+      keyboardActions = KeyboardActions(
+        onDone = { if (!uiState.isLoading) submitRegister() },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("register_password_input"),
@@ -257,14 +370,23 @@ fun RegisterScreen(
     Spacer(modifier = Modifier.height(18.dp))
 
     Button(
-      onClick = { onRegisterClick(email, password, fullName, phone) },
+      onClick = submitRegister,
       enabled = !uiState.isLoading,
       modifier = Modifier
         .fillMaxWidth()
+        .heightIn(min = 52.dp)
         .minimumInteractiveComponentSize()
         .testTag("register_submit_button"),
     ) {
-      Text(stringResource(R.string.action_register))
+      if (uiState.isLoading) {
+        CircularProgressIndicator(
+          modifier = Modifier.size(18.dp),
+          strokeWidth = 2.dp,
+          color = MaterialTheme.colorScheme.onPrimary,
+        )
+      } else {
+        Text(stringResource(R.string.action_register))
+      }
     }
   }
 }
@@ -279,11 +401,26 @@ fun VerifyEmailScreen(
 ) {
   var email by rememberSaveable { mutableStateOf(initialEmail) }
   var token by rememberSaveable { mutableStateOf("") }
+  var attemptedVerify by rememberSaveable { mutableStateOf(false) }
+  var attemptedResend by rememberSaveable { mutableStateOf(false) }
+  val focusManager = LocalFocusManager.current
+
+  val emailError = if (attemptedResend && !isValidEmailInput(email)) stringResource(R.string.auth_error_invalid_email) else null
+  val tokenError = if (attemptedVerify && token.isBlank()) stringResource(R.string.auth_error_blank_token) else null
+
+  val submitVerify = {
+    attemptedVerify = true
+    if (token.isNotBlank()) {
+      focusManager.clearFocus()
+      onVerifyClick(token)
+    }
+  }
 
   AuthScaffoldLayout {
     AuthBackHeader(
       title = stringResource(R.string.auth_verify_email_title),
       onBackClick = onBackClick,
+      enabled = !uiState.isLoading,
     )
     Spacer(modifier = Modifier.height(12.dp))
     AuthStatusBanner(uiState = uiState)
@@ -294,6 +431,15 @@ fun VerifyEmailScreen(
       label = { Text(stringResource(R.string.label_email)) },
       leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
       singleLine = true,
+      isError = emailError != null,
+      supportingText = emailError?.let { err -> { Text(err) } },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Email,
+        imeAction = ImeAction.Next,
+      ),
+      keyboardActions = KeyboardActions(
+        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("verify_email_input"),
@@ -305,7 +451,30 @@ fun VerifyEmailScreen(
       onValueChange = { token = it },
       label = { Text(stringResource(R.string.label_token)) },
       leadingIcon = { Icon(Icons.Filled.VpnKey, contentDescription = null) },
+      trailingIcon = if (token.isNotEmpty()) {
+        {
+          IconButton(
+            onClick = { token = "" },
+            modifier = Modifier.minimumInteractiveComponentSize(),
+          ) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.auth_clear_field))
+          }
+        }
+      } else {
+        null
+      },
       singleLine = true,
+      isError = tokenError != null,
+      supportingText = {
+        Text(tokenError ?: stringResource(R.string.auth_token_helper))
+      },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Text,
+        imeAction = ImeAction.Done,
+      ),
+      keyboardActions = KeyboardActions(
+        onDone = { if (!uiState.isLoading) submitVerify() },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("verify_token_input"),
@@ -313,19 +482,34 @@ fun VerifyEmailScreen(
     Spacer(modifier = Modifier.height(16.dp))
 
     Button(
-      onClick = { onVerifyClick(token) },
+      onClick = submitVerify,
       enabled = !uiState.isLoading,
       modifier = Modifier
         .fillMaxWidth()
+        .heightIn(min = 52.dp)
         .minimumInteractiveComponentSize()
         .testTag("verify_submit_button"),
     ) {
-      Text(stringResource(R.string.action_verify))
+      if (uiState.isLoading) {
+        CircularProgressIndicator(
+          modifier = Modifier.size(18.dp),
+          strokeWidth = 2.dp,
+          color = MaterialTheme.colorScheme.onPrimary,
+        )
+      } else {
+        Text(stringResource(R.string.action_verify))
+      }
     }
 
     Spacer(modifier = Modifier.height(10.dp))
     OutlinedButton(
-      onClick = { onResendClick(email) },
+      onClick = {
+        attemptedResend = true
+        if (isValidEmailInput(email)) {
+          focusManager.clearFocus()
+          onResendClick(email)
+        }
+      },
       enabled = !uiState.isLoading,
       modifier = Modifier
         .fillMaxWidth()
@@ -347,11 +531,28 @@ fun ForgotPasswordScreen(
   var email by rememberSaveable { mutableStateOf("") }
   var resetToken by rememberSaveable { mutableStateOf("") }
   var newPassword by rememberSaveable { mutableStateOf("") }
+  var passwordVisible by rememberSaveable { mutableStateOf(false) }
+  var attemptedSend by rememberSaveable { mutableStateOf(false) }
+  var attemptedReset by rememberSaveable { mutableStateOf(false) }
+  val focusManager = LocalFocusManager.current
+
+  val emailError = if (attemptedSend && !isValidEmailInput(email)) stringResource(R.string.auth_error_invalid_email) else null
+  val tokenError = if (attemptedReset && resetToken.isBlank()) stringResource(R.string.auth_error_blank_token) else null
+  val passwordError = if (attemptedReset && newPassword.length < 8) stringResource(R.string.auth_error_short_password) else null
+
+  val submitReset = {
+    attemptedReset = true
+    if (resetToken.isNotBlank() && newPassword.length >= 8) {
+      focusManager.clearFocus()
+      onResetPasswordClick(resetToken, newPassword)
+    }
+  }
 
   AuthScaffoldLayout {
     AuthBackHeader(
       title = stringResource(R.string.auth_forgot_password_title),
       onBackClick = onBackClick,
+      enabled = !uiState.isLoading,
     )
     Spacer(modifier = Modifier.height(12.dp))
     AuthStatusBanner(uiState = uiState)
@@ -362,6 +563,21 @@ fun ForgotPasswordScreen(
       label = { Text(stringResource(R.string.label_email)) },
       leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
       singleLine = true,
+      isError = emailError != null,
+      supportingText = emailError?.let { err -> { Text(err) } },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Email,
+        imeAction = ImeAction.Done,
+      ),
+      keyboardActions = KeyboardActions(
+        onDone = {
+          attemptedSend = true
+          if (!uiState.isLoading && isValidEmailInput(email)) {
+            focusManager.clearFocus()
+            onSendResetClick(email)
+          }
+        },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("forgot_email_input"),
@@ -369,7 +585,13 @@ fun ForgotPasswordScreen(
     Spacer(modifier = Modifier.height(10.dp))
 
     OutlinedButton(
-      onClick = { onSendResetClick(email) },
+      onClick = {
+        attemptedSend = true
+        if (isValidEmailInput(email)) {
+          focusManager.clearFocus()
+          onSendResetClick(email)
+        }
+      },
       enabled = !uiState.isLoading,
       modifier = Modifier
         .fillMaxWidth()
@@ -385,7 +607,30 @@ fun ForgotPasswordScreen(
       onValueChange = { resetToken = it },
       label = { Text(stringResource(R.string.label_token)) },
       leadingIcon = { Icon(Icons.Filled.VpnKey, contentDescription = null) },
+      trailingIcon = if (resetToken.isNotEmpty()) {
+        {
+          IconButton(
+            onClick = { resetToken = "" },
+            modifier = Modifier.minimumInteractiveComponentSize(),
+          ) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.auth_clear_field))
+          }
+        }
+      } else {
+        null
+      },
       singleLine = true,
+      isError = tokenError != null,
+      supportingText = {
+        Text(tokenError ?: stringResource(R.string.auth_token_helper))
+      },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Text,
+        imeAction = ImeAction.Next,
+      ),
+      keyboardActions = KeyboardActions(
+        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("reset_token_input"),
@@ -397,8 +642,23 @@ fun ForgotPasswordScreen(
       onValueChange = { newPassword = it },
       label = { Text(stringResource(R.string.label_new_password)) },
       leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-      visualTransformation = PasswordVisualTransformation(),
+      trailingIcon = {
+        PasswordVisibilityToggle(
+          visible = passwordVisible,
+          onToggle = { passwordVisible = !passwordVisible },
+        )
+      },
+      visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
       singleLine = true,
+      isError = passwordError != null,
+      supportingText = passwordError?.let { err -> { Text(err) } },
+      keyboardOptions = KeyboardOptions(
+        keyboardType = KeyboardType.Password,
+        imeAction = ImeAction.Done,
+      ),
+      keyboardActions = KeyboardActions(
+        onDone = { if (!uiState.isLoading) submitReset() },
+      ),
       modifier = Modifier
         .fillMaxWidth()
         .testTag("reset_password_input"),
@@ -406,15 +666,42 @@ fun ForgotPasswordScreen(
     Spacer(modifier = Modifier.height(16.dp))
 
     Button(
-      onClick = { onResetPasswordClick(resetToken, newPassword) },
+      onClick = submitReset,
       enabled = !uiState.isLoading,
       modifier = Modifier
         .fillMaxWidth()
+        .heightIn(min = 52.dp)
         .minimumInteractiveComponentSize()
         .testTag("reset_submit_button"),
     ) {
-      Text(stringResource(R.string.action_reset_password))
+      if (uiState.isLoading) {
+        CircularProgressIndicator(
+          modifier = Modifier.size(18.dp),
+          strokeWidth = 2.dp,
+          color = MaterialTheme.colorScheme.onPrimary,
+        )
+      } else {
+        Text(stringResource(R.string.action_reset_password))
+      }
     }
+  }
+}
+
+@Composable
+private fun PasswordVisibilityToggle(
+  visible: Boolean,
+  onToggle: () -> Unit,
+) {
+  IconButton(
+    onClick = onToggle,
+    modifier = Modifier.minimumInteractiveComponentSize(),
+  ) {
+    Icon(
+      imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+      contentDescription = stringResource(
+        if (visible) R.string.auth_hide_password else R.string.auth_show_password,
+      ),
+    )
   }
 }
 
@@ -430,14 +717,15 @@ private fun AuthScaffoldLayout(
       modifier = Modifier
         .fillMaxSize()
         .windowInsetsPadding(WindowInsets.safeDrawing)
+        .imePadding()
         .verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp, vertical = 16.dp),
+        .padding(horizontal = 16.dp, vertical = 16.dp),
       contentAlignment = Alignment.TopCenter,
     ) {
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .widthIn(max = 520.dp),
+          .widthIn(max = 440.dp),
       ) {
         content()
       }
@@ -464,7 +752,7 @@ private fun AuthHeroBanner() {
         .fillMaxSize()
         .background(
           Brush.verticalGradient(
-            colors = listOf(Color.Transparent, Color(0xCC1E1916)),
+            colors = listOf(Color(0x33121110), Color(0xCC121110)),
           ),
         )
         .padding(16.dp),
@@ -477,18 +765,18 @@ private fun AuthHeroBanner() {
         Icon(
           imageVector = Icons.Filled.LocalPizza,
           contentDescription = null,
-          tint = Color(0xFFFBBF24),
+          tint = BrightAmber,
         )
         Column {
           Text(
             text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
+            color = WarmParchmentText,
           )
           Text(
             text = stringResource(R.string.brand_tagline),
             style = MaterialTheme.typography.labelMedium,
-            color = Color(0xFFF5EBE0),
+            color = Color(0xFFE5D8CA),
           )
         }
       }
@@ -500,6 +788,7 @@ private fun AuthHeroBanner() {
 private fun AuthBackHeader(
   title: String,
   onBackClick: () -> Unit,
+  enabled: Boolean = true,
 ) {
   Row(
     verticalAlignment = Alignment.CenterVertically,
@@ -507,6 +796,7 @@ private fun AuthBackHeader(
   ) {
     IconButton(
       onClick = onBackClick,
+      enabled = enabled,
       modifier = Modifier
         .minimumInteractiveComponentSize()
         .testTag("auth_back_button"),
@@ -527,22 +817,13 @@ private fun AuthBackHeader(
 private fun AuthStatusBanner(uiState: AuthUiState) {
   AnimatedVisibility(visible = uiState.errorMessage != null || uiState.infoMessage != null) {
     val isError = uiState.errorMessage != null
-    val container = if (isError) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-    val contentColor = if (isError) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
     val message = uiState.errorMessage ?: uiState.infoMessage.orEmpty()
-
-    Card(
-      colors = CardDefaults.cardColors(containerColor = container, contentColor = contentColor),
+    PizzoraStatusBanner(
+      message = message,
+      tone = if (isError) PizzoraBannerTone.ERROR else PizzoraBannerTone.SUCCESS,
       modifier = Modifier
-        .fillMaxWidth()
         .padding(bottom = 14.dp)
         .testTag("auth_status_banner"),
-    ) {
-      Text(
-        text = message,
-        style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(14.dp),
-      )
-    }
+    )
   }
 }
