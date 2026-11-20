@@ -540,19 +540,91 @@ private fun OrderDetailScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
               ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                   Text("${item.quantity}x ${item.productName}", style = MaterialTheme.typography.titleSmall)
                   Text(
                     text = "${item.variantSize} • ${item.crustName}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                   )
-                  if (item.toppings.isNotEmpty()) {
+                  val snap = item.customizationSnapshot
+                  if (snap != null) {
+                    if (snap.isHalfAndHalf && !snap.rightProductName.isNullOrBlank()) {
+                      Text(
+                        text = "Half & Half: ${snap.leftProductName.ifBlank { item.productName }} / ${snap.rightProductName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                      )
+                    }
+                    snap.cheeseName?.takeIf { it.isNotBlank() }?.let { cheeseName ->
+                      Text(
+                        text = "Cheese: $cheeseName${if (snap.extraCheese) " (+ Extra Cheese)" else ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    }
+                    snap.sauceName?.takeIf { it.isNotBlank() }?.let { sauceName ->
+                      val sauceText = if (
+                        snap.isHalfAndHalf &&
+                        !snap.rightSauceName.isNullOrBlank() &&
+                        snap.rightSauceName != sauceName
+                      ) {
+                        "Sauces: L: $sauceName / R: ${snap.rightSauceName}${if (snap.extraSauce) " (+ Extra Sauce)" else ""}"
+                      } else {
+                        "Sauce: $sauceName${if (snap.extraSauce) " (+ Extra Sauce)" else ""}"
+                      }
+                      Text(
+                        text = sauceText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    }
+                    if (snap.removedIncludedToppings.isNotEmpty()) {
+                      Text(
+                        text = "Removed: ${snap.removedIncludedToppings.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                      )
+                    }
+                    if (snap.toppingDetails.isNotEmpty()) {
+                      val detailSummary = snap.toppingDetails.joinToString(", ") { detail ->
+                        val side = when (detail.placement.name) {
+                          "LEFT" -> " (Left)"
+                          "RIGHT" -> " (Right)"
+                          else -> ""
+                        }
+                        val qty = if (detail.quantity > 1) " x${detail.quantity}" else ""
+                        val inc = if (detail.isIncluded && detail.totalPricePaise == 0L) " (Included)" else ""
+                        "${detail.name}$side$qty$inc"
+                      }
+                      Text(
+                        text = "Toppings: $detailSummary",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    } else if (item.toppings.isNotEmpty()) {
+                      Text(
+                        text = "Toppings: ${item.toppings.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    }
+                  } else if (item.toppings.isNotEmpty()) {
                     Text(
                       text = "Toppings: ${item.toppings.joinToString(", ")}",
                       style = MaterialTheme.typography.bodySmall,
                       color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                  }
+                  item.priceBreakdown?.let { b ->
+                    val customExtras = b.unitPricePaise - b.basePricePaise
+                    if (customExtras > 0L) {
+                      Text(
+                        text = "Base ${Money.formatInr(b.basePricePaise)} + Custom ${Money.formatInr(customExtras)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    }
                   }
                 }
                 Text(

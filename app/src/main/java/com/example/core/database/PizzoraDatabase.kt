@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     CachedMenuSnapshotEntity::class,
     NotificationInboxEntity::class,
   ],
-  version = 3,
+  version = 4,
   exportSchema = true,
 )
 abstract class PizzoraDatabase : RoomDatabase() {
@@ -105,6 +105,76 @@ abstract class PizzoraDatabase : RoomDatabase() {
       }
     }
 
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("PRAGMA foreign_keys = ON")
+
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `cheese_id` TEXT")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `extra_cheese` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `sauce_id` TEXT")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `extra_sauce` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `is_half_and_half` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `right_product_id` TEXT")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `right_product_name` TEXT")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `right_variant_id` TEXT")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `right_sauce_id` TEXT")
+        db.execSQL(
+          "ALTER TABLE `cart_items` ADD COLUMN `removed_included_topping_ids_json` TEXT NOT NULL DEFAULT '[]'",
+        )
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `customization_json` TEXT")
+        db.execSQL("ALTER TABLE `cart_items` ADD COLUMN `price_breakdown_json` TEXT")
+        db.execSQL(
+          "ALTER TABLE `cart_items` ADD COLUMN `configuration_signature` TEXT NOT NULL DEFAULT ''",
+        )
+
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS `cart_item_toppings_v4` (
+            `cart_item_id` TEXT NOT NULL,
+            `topping_id` TEXT NOT NULL,
+            `topping_name` TEXT NOT NULL,
+            `extra_price_paise` INTEGER NOT NULL,
+            `placement` TEXT NOT NULL,
+            `quantity` INTEGER NOT NULL,
+            PRIMARY KEY(`cart_item_id`, `topping_id`, `placement`),
+            FOREIGN KEY(`cart_item_id`) REFERENCES `cart_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+          )
+          """.trimIndent(),
+        )
+        db.execSQL(
+          """
+          INSERT INTO `cart_item_toppings_v4` (
+            `cart_item_id`,
+            `topping_id`,
+            `topping_name`,
+            `extra_price_paise`,
+            `placement`,
+            `quantity`
+          )
+          SELECT
+            `cart_item_id`,
+            `topping_id`,
+            `topping_name`,
+            `extra_price_paise`,
+            'WHOLE',
+            1
+          FROM `cart_item_toppings`
+          """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE `cart_item_toppings`")
+        db.execSQL("ALTER TABLE `cart_item_toppings_v4` RENAME TO `cart_item_toppings`")
+        db.execSQL(
+          "CREATE INDEX IF NOT EXISTS `index_cart_item_toppings_cart_item_id` ON `cart_item_toppings` (`cart_item_id`)",
+        )
+
+        db.query("PRAGMA foreign_key_check").use { cursor ->
+          if (cursor.moveToFirst()) {
+            throw IllegalStateException("Room v3->v4 migration detected foreign key constraint violation.")
+          }
+        }
+      }
+    }
+
     val FOREIGN_KEY_CALLBACK: Callback = object : Callback() {
       override fun onOpen(db: SupportSQLiteDatabase) {
         super.onOpen(db)
@@ -120,7 +190,7 @@ abstract class PizzoraDatabase : RoomDatabase() {
         PizzoraDatabase::class.java,
         "pizzora.db",
       )
-        .addMigrations(MIGRATION_2_3)
+        .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
         .addCallback(FOREIGN_KEY_CALLBACK)
         .build()
   }

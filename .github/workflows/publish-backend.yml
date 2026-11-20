@@ -68,6 +68,11 @@ jobs:
     timeout-minutes: 60
     if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || needs.verify-backend-for-manual-dispatch.result == 'success') }}
     needs: [verify-backend-for-manual-dispatch]
+    # Release images must publish through the protected `production` GitHub
+    # Environment (required reviewer + v* tag deployment policy). Validate and
+    # preview modes use an unprotected environment, so PR/nightly/feature
+    # validation and main preview publishing are unaffected.
+    environment: ${{ inputs.mode == 'release' && 'production' || 'ci-image-validation' }}
     permissions:
       contents: read
       packages: write

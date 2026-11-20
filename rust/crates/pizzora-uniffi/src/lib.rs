@@ -1,11 +1,15 @@
 use std::sync::Mutex;
 
 use pizzora_core::{
-    CartSyncAction, CartSyncPlanRequest, CartSyncPlanner, CartSyncTrigger, CouponCalculationSpec,
-    CouponEvaluator, DiscountType, FulfillmentType, Money, OrderCausalTracker, OrderStateMachine,
-    OrderStatus, PaymentAttemptStatus, PaymentStateMachine, PaymentStatus, PriceBreakdown,
-    PricedLineInput, PricingEngine, RealtimeEventInput, SessionIdentity, StorageKeyValidator,
-    UserRole,
+    compute_item_signature_from_input, evaluate_item_from_input, CartItemCustomizationSummary,
+    CartItemInput, CartSyncAction, CartSyncPlanRequest, CartSyncPlanner, CartSyncTrigger,
+    CartToppingInput, CartValidationIssue, CartValidationIssueCode, CatalogSizeRuleRef,
+    CouponCalculationSpec, CouponEvaluator, DiscountType, FulfillmentType, Money,
+    OrderCausalTracker, OrderStateMachine, OrderStatus, PaymentAttemptStatus, PaymentStateMachine,
+    PaymentStatus, PizzaPriceBreakdown, PriceBreakdown, PricedLineInput, PricingEngine,
+    RawCatalogCheeseRef, RawCatalogCrustRef, RawCatalogLookupInput, RawCatalogProductRef,
+    RawCatalogSauceRef, RawCatalogToppingRef, RawCatalogVariantRef, RealtimeEventInput,
+    SessionIdentity, SizeCode, StorageKeyValidator, ToppingPlacement, UserRole,
 };
 
 uniffi::setup_scaffolding!();
@@ -360,6 +364,491 @@ pub struct FfiCartSyncPlanRequest {
     pub allow_empty_replace: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiSizeCode {
+    Regular,
+    Medium,
+    Large,
+    ExtraLarge,
+}
+
+impl From<FfiSizeCode> for SizeCode {
+    fn from(value: FfiSizeCode) -> Self {
+        match value {
+            FfiSizeCode::Regular => Self::Regular,
+            FfiSizeCode::Medium => Self::Medium,
+            FfiSizeCode::Large => Self::Large,
+            FfiSizeCode::ExtraLarge => Self::ExtraLarge,
+        }
+    }
+}
+
+impl From<SizeCode> for FfiSizeCode {
+    fn from(value: SizeCode) -> Self {
+        match value {
+            SizeCode::Regular => Self::Regular,
+            SizeCode::Medium => Self::Medium,
+            SizeCode::Large => Self::Large,
+            SizeCode::ExtraLarge => Self::ExtraLarge,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiToppingPlacement {
+    Whole,
+    Left,
+    Right,
+}
+
+impl From<FfiToppingPlacement> for ToppingPlacement {
+    fn from(value: FfiToppingPlacement) -> Self {
+        match value {
+            FfiToppingPlacement::Whole => Self::Whole,
+            FfiToppingPlacement::Left => Self::Left,
+            FfiToppingPlacement::Right => Self::Right,
+        }
+    }
+}
+
+impl From<ToppingPlacement> for FfiToppingPlacement {
+    fn from(value: ToppingPlacement) -> Self {
+        match value {
+            ToppingPlacement::Whole => Self::Whole,
+            ToppingPlacement::Left => Self::Left,
+            ToppingPlacement::Right => Self::Right,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiCartValidationIssueCode {
+    ProductUnavailable,
+    VariantUnavailable,
+    CrustUnavailable,
+    ToppingUnavailable,
+    InvalidQuantity,
+    VariantProductMismatch,
+    SizeUnavailable,
+    CheeseUnavailable,
+    SauceUnavailable,
+    ExtraCheeseUnavailable,
+    ExtraSauceUnavailable,
+    HalfAndHalfUnsupported,
+    RightHalfInvalid,
+    ToppingPlacementInvalid,
+    ToppingLimitExceeded,
+    ExtraToppingLimitExceeded,
+    DuplicateSelection,
+    IncludedToppingInvalid,
+}
+
+impl From<CartValidationIssueCode> for FfiCartValidationIssueCode {
+    fn from(value: CartValidationIssueCode) -> Self {
+        match value {
+            CartValidationIssueCode::ProductUnavailable => Self::ProductUnavailable,
+            CartValidationIssueCode::VariantUnavailable => Self::VariantUnavailable,
+            CartValidationIssueCode::CrustUnavailable => Self::CrustUnavailable,
+            CartValidationIssueCode::ToppingUnavailable => Self::ToppingUnavailable,
+            CartValidationIssueCode::InvalidQuantity => Self::InvalidQuantity,
+            CartValidationIssueCode::VariantProductMismatch => Self::VariantProductMismatch,
+            CartValidationIssueCode::SizeUnavailable => Self::SizeUnavailable,
+            CartValidationIssueCode::CheeseUnavailable => Self::CheeseUnavailable,
+            CartValidationIssueCode::SauceUnavailable => Self::SauceUnavailable,
+            CartValidationIssueCode::ExtraCheeseUnavailable => Self::ExtraCheeseUnavailable,
+            CartValidationIssueCode::ExtraSauceUnavailable => Self::ExtraSauceUnavailable,
+            CartValidationIssueCode::HalfAndHalfUnsupported => Self::HalfAndHalfUnsupported,
+            CartValidationIssueCode::RightHalfInvalid => Self::RightHalfInvalid,
+            CartValidationIssueCode::ToppingPlacementInvalid => Self::ToppingPlacementInvalid,
+            CartValidationIssueCode::ToppingLimitExceeded => Self::ToppingLimitExceeded,
+            CartValidationIssueCode::ExtraToppingLimitExceeded => Self::ExtraToppingLimitExceeded,
+            CartValidationIssueCode::DuplicateSelection => Self::DuplicateSelection,
+            CartValidationIssueCode::IncludedToppingInvalid => Self::IncludedToppingInvalid,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCartValidationIssue {
+    pub code: FfiCartValidationIssueCode,
+    pub message: String,
+}
+
+impl From<CartValidationIssue> for FfiCartValidationIssue {
+    fn from(value: CartValidationIssue) -> Self {
+        Self {
+            code: value.code.into(),
+            message: value.message,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCartToppingInput {
+    pub topping_id: String,
+    pub placement: FfiToppingPlacement,
+    pub quantity: i32,
+}
+
+impl From<FfiCartToppingInput> for CartToppingInput {
+    fn from(value: FfiCartToppingInput) -> Self {
+        Self {
+            topping_id: value.topping_id,
+            placement: value.placement.into(),
+            quantity: value.quantity,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCartItemInput {
+    pub id: Option<String>,
+    pub product_id: String,
+    pub variant_id: String,
+    pub crust_id: String,
+    pub topping_ids: Vec<String>,
+    pub quantity: i32,
+    pub cheese_id: Option<String>,
+    pub extra_cheese: bool,
+    pub sauce_id: Option<String>,
+    pub extra_sauce: bool,
+    pub is_half_and_half: bool,
+    pub right_product_id: Option<String>,
+    pub right_variant_id: Option<String>,
+    pub right_sauce_id: Option<String>,
+    pub removed_included_topping_ids: Vec<String>,
+    pub topping_selections: Vec<FfiCartToppingInput>,
+}
+
+impl From<FfiCartItemInput> for CartItemInput {
+    fn from(value: FfiCartItemInput) -> Self {
+        Self {
+            id: value.id,
+            product_id: value.product_id,
+            variant_id: value.variant_id,
+            crust_id: value.crust_id,
+            topping_ids: value.topping_ids,
+            quantity: value.quantity,
+            cheese_id: value.cheese_id,
+            extra_cheese: value.extra_cheese,
+            sauce_id: value.sauce_id,
+            extra_sauce: value.extra_sauce,
+            is_half_and_half: value.is_half_and_half,
+            right_product_id: value.right_product_id,
+            right_variant_id: value.right_variant_id,
+            right_sauce_id: value.right_sauce_id,
+            removed_included_topping_ids: value.removed_included_topping_ids,
+            topping_selections: value
+                .topping_selections
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogSizeRuleRef {
+    pub size_code: FfiSizeCode,
+    pub display_name: String,
+    pub max_toppings: i32,
+    pub max_extra_toppings: i32,
+    pub supports_half_and_half: bool,
+    pub ingredient_multiplier_bps: i32,
+    pub is_active: bool,
+}
+
+impl From<FfiCatalogSizeRuleRef> for CatalogSizeRuleRef {
+    fn from(value: FfiCatalogSizeRuleRef) -> Self {
+        Self {
+            size_code: value.size_code.into(),
+            display_name: value.display_name,
+            max_toppings: value.max_toppings,
+            max_extra_toppings: value.max_extra_toppings,
+            supports_half_and_half: value.supports_half_and_half,
+            ingredient_multiplier_bps: value.ingredient_multiplier_bps,
+            is_active: value.is_active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogCheeseRef {
+    pub id: String,
+    pub name: String,
+    pub extra_price_paise: i64,
+    pub extra_cheese_price_paise: i64,
+    pub supports_extra: bool,
+    pub is_vegan: bool,
+    pub is_active: bool,
+}
+
+impl From<FfiCatalogCheeseRef> for RawCatalogCheeseRef {
+    fn from(value: FfiCatalogCheeseRef) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            extra_price_paise: value.extra_price_paise,
+            extra_cheese_price_paise: value.extra_cheese_price_paise,
+            supports_extra: value.supports_extra,
+            is_vegan: value.is_vegan,
+            is_active: value.is_active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogSauceRef {
+    pub id: String,
+    pub name: String,
+    pub extra_price_paise: i64,
+    pub extra_sauce_price_paise: i64,
+    pub supports_extra: bool,
+    pub is_vegan: bool,
+    pub is_active: bool,
+}
+
+impl From<FfiCatalogSauceRef> for RawCatalogSauceRef {
+    fn from(value: FfiCatalogSauceRef) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            extra_price_paise: value.extra_price_paise,
+            extra_sauce_price_paise: value.extra_sauce_price_paise,
+            supports_extra: value.supports_extra,
+            is_vegan: value.is_vegan,
+            is_active: value.is_active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogProductRef {
+    pub id: String,
+    pub name: String,
+    pub is_veg: bool,
+    pub is_taxable: bool,
+    pub is_effective_active: bool,
+    pub image_url: Option<String>,
+    pub is_customizable: bool,
+    pub supports_half_and_half: bool,
+    pub default_cheese_id: Option<String>,
+    pub default_sauce_id: Option<String>,
+    pub included_topping_ids: Vec<String>,
+    pub max_toppings_override: Option<i32>,
+}
+
+impl From<FfiCatalogProductRef> for RawCatalogProductRef {
+    fn from(value: FfiCatalogProductRef) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            is_veg: value.is_veg,
+            is_taxable: value.is_taxable,
+            is_effective_active: value.is_effective_active,
+            image_url: value.image_url,
+            is_customizable: value.is_customizable,
+            supports_half_and_half: value.supports_half_and_half,
+            default_cheese_id: value.default_cheese_id,
+            default_sauce_id: value.default_sauce_id,
+            included_topping_ids: value.included_topping_ids,
+            max_toppings_override: value.max_toppings_override,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogVariantRef {
+    pub id: String,
+    pub product_id: String,
+    pub size_code: FfiSizeCode,
+    pub price_paise: i64,
+    pub is_active: bool,
+}
+
+impl From<FfiCatalogVariantRef> for RawCatalogVariantRef {
+    fn from(value: FfiCatalogVariantRef) -> Self {
+        Self {
+            id: value.id,
+            product_id: value.product_id,
+            size_code: value.size_code.into(),
+            price_paise: value.price_paise,
+            is_active: value.is_active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogCrustRef {
+    pub id: String,
+    pub name: String,
+    pub extra_price_paise: i64,
+    pub is_active: bool,
+    pub supports_half_and_half: bool,
+}
+
+impl From<FfiCatalogCrustRef> for RawCatalogCrustRef {
+    fn from(value: FfiCatalogCrustRef) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            extra_price_paise: value.extra_price_paise,
+            is_active: value.is_active,
+            supports_half_and_half: value.supports_half_and_half,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogToppingRef {
+    pub id: String,
+    pub name: String,
+    pub is_veg: bool,
+    pub extra_price_paise: i64,
+    pub is_active: bool,
+    pub max_quantity: i32,
+    pub supports_half_and_half: bool,
+}
+
+impl From<FfiCatalogToppingRef> for RawCatalogToppingRef {
+    fn from(value: FfiCatalogToppingRef) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            is_veg: value.is_veg,
+            extra_price_paise: value.extra_price_paise,
+            is_active: value.is_active,
+            max_quantity: value.max_quantity,
+            supports_half_and_half: value.supports_half_and_half,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCatalogLookupInput {
+    pub products: Vec<FfiCatalogProductRef>,
+    pub variants: Vec<FfiCatalogVariantRef>,
+    pub crusts: Vec<FfiCatalogCrustRef>,
+    pub toppings: Vec<FfiCatalogToppingRef>,
+    pub size_rules: Vec<FfiCatalogSizeRuleRef>,
+    pub cheeses: Vec<FfiCatalogCheeseRef>,
+    pub sauces: Vec<FfiCatalogSauceRef>,
+}
+
+impl From<FfiCatalogLookupInput> for RawCatalogLookupInput {
+    fn from(value: FfiCatalogLookupInput) -> Self {
+        Self {
+            products: value.products.into_iter().map(Into::into).collect(),
+            variants: value.variants.into_iter().map(Into::into).collect(),
+            crusts: value.crusts.into_iter().map(Into::into).collect(),
+            toppings: value.toppings.into_iter().map(Into::into).collect(),
+            size_rules: value.size_rules.into_iter().map(Into::into).collect(),
+            cheeses: value.cheeses.into_iter().map(Into::into).collect(),
+            sauces: value.sauces.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiEvaluatedToppingView {
+    pub topping_id: String,
+    pub name: String,
+    pub is_veg: bool,
+    pub extra_price_paise: i64,
+    pub is_available: bool,
+    pub placement: FfiToppingPlacement,
+    pub quantity: i32,
+    pub is_included: bool,
+    pub unit_price_paise: i64,
+    pub total_price_paise: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiPizzaPriceBreakdown {
+    pub base_price_paise: i64,
+    pub half_and_half_surcharge_paise: i64,
+    pub crust_price_paise: i64,
+    pub cheese_price_paise: i64,
+    pub extra_cheese_price_paise: i64,
+    pub sauce_price_paise: i64,
+    pub extra_sauce_price_paise: i64,
+    pub toppings_price_paise: i64,
+    pub unit_price_paise: i64,
+    pub line_total_paise: i64,
+}
+
+impl From<PizzaPriceBreakdown> for FfiPizzaPriceBreakdown {
+    fn from(value: PizzaPriceBreakdown) -> Self {
+        Self {
+            base_price_paise: value.base_price_paise,
+            half_and_half_surcharge_paise: value.half_and_half_surcharge_paise,
+            crust_price_paise: value.crust_price_paise,
+            cheese_price_paise: value.cheese_price_paise,
+            extra_cheese_price_paise: value.extra_cheese_price_paise,
+            sauce_price_paise: value.sauce_price_paise,
+            extra_sauce_price_paise: value.extra_sauce_price_paise,
+            toppings_price_paise: value.toppings_price_paise,
+            unit_price_paise: value.unit_price_paise,
+            line_total_paise: value.line_total_paise,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiCartItemCustomizationSummary {
+    pub is_half_and_half: bool,
+    pub right_product_id: Option<String>,
+    pub right_product_name: Option<String>,
+    pub right_variant_id: Option<String>,
+    pub cheese_id: Option<String>,
+    pub cheese_name: Option<String>,
+    pub extra_cheese: bool,
+    pub sauce_id: Option<String>,
+    pub sauce_name: Option<String>,
+    pub right_sauce_id: Option<String>,
+    pub right_sauce_name: Option<String>,
+    pub extra_sauce: bool,
+    pub removed_included_toppings: Vec<String>,
+    pub configuration_signature: String,
+}
+
+impl From<CartItemCustomizationSummary> for FfiCartItemCustomizationSummary {
+    fn from(value: CartItemCustomizationSummary) -> Self {
+        Self {
+            is_half_and_half: value.is_half_and_half,
+            right_product_id: value.right_product_id,
+            right_product_name: value.right_product_name,
+            right_variant_id: value.right_variant_id,
+            cheese_id: value.cheese_id,
+            cheese_name: value.cheese_name,
+            extra_cheese: value.extra_cheese,
+            sauce_id: value.sauce_id,
+            sauce_name: value.sauce_name,
+            right_sauce_id: value.right_sauce_id,
+            right_sauce_name: value.right_sauce_name,
+            extra_sauce: value.extra_sauce,
+            removed_included_toppings: value.removed_included_toppings,
+            configuration_signature: value.configuration_signature,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FfiPizzaBuilderEvaluation {
+    pub is_valid: bool,
+    pub issues: Vec<FfiCartValidationIssue>,
+    pub price_breakdown: FfiPizzaPriceBreakdown,
+    pub unit_price_paise: i64,
+    pub line_total_paise: i64,
+    pub toppings: Vec<FfiEvaluatedToppingView>,
+    pub customization: FfiCartItemCustomizationSummary,
+    pub configuration_signature: String,
+    pub effective_size_code: Option<FfiSizeCode>,
+    pub effective_cheese_id: Option<String>,
+    pub effective_sauce_id: Option<String>,
+    pub effective_right_sauce_id: Option<String>,
+}
+
 #[derive(uniffi::Object)]
 pub struct FfiOrderCausalTracker {
     inner: Mutex<OrderCausalTracker>,
@@ -559,6 +1048,52 @@ pub fn storage_validate_object_key(raw_key: String) -> Result<String, UniffiDoma
         .map_err(Into::into)
 }
 
+#[uniffi::export]
+pub fn pizza_builder_compute_signature(
+    input: FfiCartItemInput,
+    lookup: Option<FfiCatalogLookupInput>,
+) -> Result<String, UniffiDomainError> {
+    compute_item_signature_from_input(input.into(), lookup.map(Into::into)).map_err(Into::into)
+}
+
+#[uniffi::export]
+pub fn pizza_builder_evaluate(
+    input: FfiCartItemInput,
+    lookup: FfiCatalogLookupInput,
+) -> Result<FfiPizzaBuilderEvaluation, UniffiDomainError> {
+    let evaluated = evaluate_item_from_input(input.into(), lookup.into())?;
+    let configuration_signature = evaluated.customization.configuration_signature.clone();
+    Ok(FfiPizzaBuilderEvaluation {
+        is_valid: evaluated.is_available,
+        issues: evaluated.issues.into_iter().map(Into::into).collect(),
+        price_breakdown: evaluated.price_breakdown.into(),
+        unit_price_paise: evaluated.unit_price_paise,
+        line_total_paise: evaluated.line_total_paise,
+        toppings: evaluated
+            .toppings
+            .into_iter()
+            .map(|t| FfiEvaluatedToppingView {
+                topping_id: t.topping_id,
+                name: t.name,
+                is_veg: t.is_veg,
+                extra_price_paise: t.extra_price_paise,
+                is_available: t.is_available,
+                placement: t.placement.into(),
+                quantity: t.quantity,
+                is_included: t.is_included,
+                unit_price_paise: t.unit_price_paise,
+                total_price_paise: t.total_price_paise,
+            })
+            .collect(),
+        customization: evaluated.customization.into(),
+        configuration_signature,
+        effective_size_code: evaluated.size_code.map(Into::into),
+        effective_cheese_id: evaluated.effective_cheese_id.map(|u| u.to_string()),
+        effective_sauce_id: evaluated.effective_sauce_id.map(|u| u.to_string()),
+        effective_right_sauce_id: evaluated.effective_right_sauce_id.map(|u| u.to_string()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -609,5 +1144,29 @@ mod tests {
             "products/1/pizza.jpg"
         );
         assert!(storage_validate_object_key("../etc/passwd".to_owned()).is_err());
+
+        let sig = pizza_builder_compute_signature(
+            FfiCartItemInput {
+                id: None,
+                product_id: "00000000-0000-0000-0000-000000000001".to_owned(),
+                variant_id: "00000000-0000-0000-0000-000000000011".to_owned(),
+                crust_id: "00000000-0000-0000-0000-000000000021".to_owned(),
+                topping_ids: vec![],
+                quantity: 1,
+                cheese_id: None,
+                extra_cheese: false,
+                sauce_id: None,
+                extra_sauce: false,
+                is_half_and_half: false,
+                right_product_id: None,
+                right_variant_id: None,
+                right_sauce_id: None,
+                removed_included_topping_ids: vec![],
+                topping_selections: vec![],
+            },
+            None,
+        )
+        .unwrap();
+        assert!(sig.starts_with("00000000-0000-0000-0000-000000000001|"));
     }
 }

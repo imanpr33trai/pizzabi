@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use pizzora_core::{
-    FulfillmentType, OrderStateMachine, OrderStatus, PaymentAttemptStatus, PaymentMethod,
-    PaymentStatus, ScheduleType, UserRole,
+    FulfillmentType, OrderItemCustomizationSnapshot, OrderStateMachine, OrderStatus,
+    PaymentAttemptStatus, PaymentMethod, PaymentStatus, PizzaPriceBreakdown, ScheduleType,
+    UserRole,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool, Row as _};
@@ -62,6 +63,10 @@ pub struct OrderItemDto {
     pub unit_price_paise: i64,
     pub quantity: i32,
     pub line_total_paise: i64,
+    #[serde(default)]
+    pub customization_snapshot: Option<OrderItemCustomizationSnapshot>,
+    #[serde(default)]
+    pub price_breakdown: Option<PizzaPriceBreakdown>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -638,7 +643,8 @@ impl OrderService {
         let item_rows = sqlx::query(
             r#"
             SELECT id, product_id, product_name_snapshot, variant_size_snapshot, crust_name_snapshot,
-                   toppings_snapshot, unit_price_paise, quantity, line_total_paise
+                   toppings_snapshot, unit_price_paise, quantity, line_total_paise,
+                   customization_snapshot, price_breakdown_snapshot
             FROM order_items
             WHERE order_id = $1
             ORDER BY id ASC
@@ -652,6 +658,13 @@ impl OrderService {
         for r in item_rows {
             let toppings_json: serde_json::Value = r.try_get("toppings_snapshot")?;
             let toppings = serde_json::from_value::<Vec<String>>(toppings_json).unwrap_or_default();
+            let custom_json: Option<serde_json::Value> = r.try_get("customization_snapshot")?;
+            let customization_snapshot = custom_json
+                .and_then(|v| serde_json::from_value::<OrderItemCustomizationSnapshot>(v).ok());
+            let breakdown_json: Option<serde_json::Value> =
+                r.try_get("price_breakdown_snapshot")?;
+            let price_breakdown =
+                breakdown_json.and_then(|v| serde_json::from_value::<PizzaPriceBreakdown>(v).ok());
             items.push(OrderItemDto {
                 id: r.try_get::<Uuid, _>("id")?.to_string(),
                 product_id: r.try_get::<Uuid, _>("product_id")?.to_string(),
@@ -662,6 +675,8 @@ impl OrderService {
                 unit_price_paise: r.try_get("unit_price_paise")?,
                 quantity: r.try_get("quantity")?,
                 line_total_paise: r.try_get("line_total_paise")?,
+                customization_snapshot,
+                price_breakdown,
             });
         }
 

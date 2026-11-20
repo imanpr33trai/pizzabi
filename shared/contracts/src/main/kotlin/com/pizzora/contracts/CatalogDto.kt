@@ -13,6 +13,9 @@ enum class SizeCode {
 
   @SerialName("LARGE")
   LARGE,
+
+  @SerialName("EXTRA_LARGE")
+  EXTRA_LARGE,
 }
 
 @Serializable
@@ -26,6 +29,79 @@ enum class ProductImageStatus {
   @SerialName("DELETED")
   DELETED,
 }
+
+@Serializable
+data class PizzaSizeRuleDto(
+  @SerialName("size_code") val sizeCode: SizeCode,
+  @SerialName("display_name") val displayName: String,
+  @SerialName("max_toppings") val maxToppings: Int = 8,
+  @SerialName("max_extra_toppings") val maxExtraToppings: Int = 4,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean = true,
+  @SerialName("ingredient_multiplier_bps") val ingredientMultiplierBps: Int = 10_000,
+  @SerialName("is_active") val isActive: Boolean = true,
+)
+
+@Serializable
+data class CheeseOptionDto(
+  val id: String,
+  val name: String,
+  @SerialName("extra_price_paise") val extraPricePaise: Long = 0L,
+  @SerialName("extra_cheese_price_paise") val extraCheesePricePaise: Long = 0L,
+  @SerialName("supports_extra") val supportsExtra: Boolean = true,
+  @SerialName("is_vegan") val isVegan: Boolean = false,
+  @SerialName("is_active") val isActive: Boolean = true,
+)
+
+@Serializable
+data class CreateCheeseRequest(
+  val name: String,
+  @SerialName("extra_price_paise") val extraPricePaise: Long = 0L,
+  @SerialName("extra_cheese_price_paise") val extraCheesePricePaise: Long = 0L,
+  @SerialName("supports_extra") val supportsExtra: Boolean = true,
+  @SerialName("is_vegan") val isVegan: Boolean = false,
+  @SerialName("is_active") val isActive: Boolean = true,
+)
+
+@Serializable
+data class UpdateCheeseRequest(
+  val name: String? = null,
+  @SerialName("extra_price_paise") val extraPricePaise: Long? = null,
+  @SerialName("extra_cheese_price_paise") val extraCheesePricePaise: Long? = null,
+  @SerialName("supports_extra") val supportsExtra: Boolean? = null,
+  @SerialName("is_vegan") val isVegan: Boolean? = null,
+  @SerialName("is_active") val isActive: Boolean? = null,
+)
+
+@Serializable
+data class SauceOptionDto(
+  val id: String,
+  val name: String,
+  @SerialName("extra_price_paise") val extraPricePaise: Long = 0L,
+  @SerialName("extra_sauce_price_paise") val extraSaucePricePaise: Long = 0L,
+  @SerialName("supports_extra") val supportsExtra: Boolean = true,
+  @SerialName("is_vegan") val isVegan: Boolean = true,
+  @SerialName("is_active") val isActive: Boolean = true,
+)
+
+@Serializable
+data class CreateSauceRequest(
+  val name: String,
+  @SerialName("extra_price_paise") val extraPricePaise: Long = 0L,
+  @SerialName("extra_sauce_price_paise") val extraSaucePricePaise: Long = 0L,
+  @SerialName("supports_extra") val supportsExtra: Boolean = true,
+  @SerialName("is_vegan") val isVegan: Boolean = true,
+  @SerialName("is_active") val isActive: Boolean = true,
+)
+
+@Serializable
+data class UpdateSauceRequest(
+  val name: String? = null,
+  @SerialName("extra_price_paise") val extraPricePaise: Long? = null,
+  @SerialName("extra_sauce_price_paise") val extraSaucePricePaise: Long? = null,
+  @SerialName("supports_extra") val supportsExtra: Boolean? = null,
+  @SerialName("is_vegan") val isVegan: Boolean? = null,
+  @SerialName("is_active") val isActive: Boolean? = null,
+)
 
 @Serializable
 data class CategoryDto(
@@ -78,6 +154,7 @@ data class CrustOptionDto(
   val name: String,
   @SerialName("extra_price_paise") val extraPricePaise: Long,
   @SerialName("is_active") val isActive: Boolean,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean = true,
 )
 
 @Serializable
@@ -85,6 +162,7 @@ data class CreateCrustRequest(
   val name: String,
   @SerialName("extra_price_paise") val extraPricePaise: Long,
   @SerialName("is_active") val isActive: Boolean = true,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean = true,
 )
 
 @Serializable
@@ -92,6 +170,7 @@ data class UpdateCrustRequest(
   val name: String? = null,
   @SerialName("extra_price_paise") val extraPricePaise: Long? = null,
   @SerialName("is_active") val isActive: Boolean? = null,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean? = null,
 )
 
 @Serializable
@@ -101,6 +180,8 @@ data class ToppingDto(
   @SerialName("is_veg") val isVeg: Boolean,
   @SerialName("extra_price_paise") val extraPricePaise: Long,
   @SerialName("is_active") val isActive: Boolean,
+  @SerialName("max_quantity") val maxQuantity: Int = 2,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean = true,
 )
 
 @Serializable
@@ -109,6 +190,8 @@ data class CreateToppingRequest(
   @SerialName("is_veg") val isVeg: Boolean = true,
   @SerialName("extra_price_paise") val extraPricePaise: Long,
   @SerialName("is_active") val isActive: Boolean = true,
+  @SerialName("max_quantity") val maxQuantity: Int = 2,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean = true,
 )
 
 @Serializable
@@ -117,6 +200,8 @@ data class UpdateToppingRequest(
   @SerialName("is_veg") val isVeg: Boolean? = null,
   @SerialName("extra_price_paise") val extraPricePaise: Long? = null,
   @SerialName("is_active") val isActive: Boolean? = null,
+  @SerialName("max_quantity") val maxQuantity: Int? = null,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean? = null,
 )
 
 @Serializable
@@ -144,6 +229,12 @@ data class ProductDto(
   @SerialName("is_taxable") val isTaxable: Boolean,
   val variants: List<ProductVariantDto> = emptyList(),
   val images: List<ProductImageDto> = emptyList(),
+  @SerialName("is_customizable") val isCustomizable: Boolean = true,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean = true,
+  @SerialName("default_cheese_id") val defaultCheeseId: String? = null,
+  @SerialName("default_sauce_id") val defaultSauceId: String? = null,
+  @SerialName("included_topping_ids") val includedToppingIds: List<String> = emptyList(),
+  @SerialName("max_toppings_override") val maxToppingsOverride: Int? = null,
 )
 
 @Serializable
@@ -155,6 +246,12 @@ data class CreateProductRequest(
   @SerialName("is_active") val isActive: Boolean = true,
   @SerialName("is_taxable") val isTaxable: Boolean = true,
   val variants: List<CreateVariantRequest>,
+  @SerialName("is_customizable") val isCustomizable: Boolean = true,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean = true,
+  @SerialName("default_cheese_id") val defaultCheeseId: String? = null,
+  @SerialName("default_sauce_id") val defaultSauceId: String? = null,
+  @SerialName("included_topping_ids") val includedToppingIds: List<String> = emptyList(),
+  @SerialName("max_toppings_override") val maxToppingsOverride: Int? = null,
 )
 
 @Serializable
@@ -165,6 +262,12 @@ data class UpdateProductRequest(
   @SerialName("is_veg") val isVeg: Boolean? = null,
   @SerialName("is_active") val isActive: Boolean? = null,
   @SerialName("is_taxable") val isTaxable: Boolean? = null,
+  @SerialName("is_customizable") val isCustomizable: Boolean? = null,
+  @SerialName("supports_half_and_half") val supportsHalfAndHalf: Boolean? = null,
+  @SerialName("default_cheese_id") val defaultCheeseId: String? = null,
+  @SerialName("default_sauce_id") val defaultSauceId: String? = null,
+  @SerialName("included_topping_ids") val includedToppingIds: List<String>? = null,
+  @SerialName("max_toppings_override") val maxToppingsOverride: Int? = null,
 )
 
 @Serializable
@@ -176,6 +279,9 @@ data class PublicMenuResponse(
   @SerialName("gst_bps") val gstBps: Int,
   @SerialName("store_name") val storeName: String,
   @SerialName("is_accepting_orders") val isAcceptingOrders: Boolean,
+  @SerialName("size_rules") val sizeRules: List<PizzaSizeRuleDto> = emptyList(),
+  val cheeses: List<CheeseOptionDto> = emptyList(),
+  val sauces: List<SauceOptionDto> = emptyList(),
 )
 
 @Serializable

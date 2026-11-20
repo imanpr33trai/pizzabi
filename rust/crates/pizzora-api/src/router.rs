@@ -103,6 +103,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/v1/cart/validate", post(commerce::validate_cart))
         .route(
+            "/api/v1/pizza-builder/quote",
+            post(commerce::quote_custom_pizza),
+        )
+        .route(
             "/api/v1/coupons/available",
             get(commerce::list_available_coupons),
         )
@@ -243,6 +247,24 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/owner/toppings/{id}",
             patch(catalog::update_topping),
         )
+        .route(
+            "/api/v1/owner/size-rules",
+            get(catalog::list_owner_size_rules),
+        )
+        .route(
+            "/api/v1/owner/size-rules/{sizeCode}",
+            patch(catalog::update_size_rule),
+        )
+        .route(
+            "/api/v1/owner/cheeses",
+            get(catalog::list_owner_cheeses).post(catalog::create_cheese),
+        )
+        .route("/api/v1/owner/cheeses/{id}", patch(catalog::update_cheese))
+        .route(
+            "/api/v1/owner/sauces",
+            get(catalog::list_owner_sauces).post(catalog::create_sauce),
+        )
+        .route("/api/v1/owner/sauces/{id}", patch(catalog::update_sauce))
         .route(
             "/api/v1/owner/coupons",
             get(commerce::list_owner_coupons).post(commerce::create_coupon),

@@ -1,0 +1,332 @@
+name: Promote Nightly to Main
+
+# Manual, exact-SHA promotion of a validated nightly commit into main.
+#
+# SECURITY MODEL
+# - workflow_dispatch only, and only from refs/heads/main: the verification
+#   logic below is then loaded from the protected main branch, never from a
+#   (possibly modified) nightly commit. The first step hard-fails otherwise.
+# - No checkout and no execution of branch code: every fact is read through
+#   the Git Data, Actions and Checks REST APIs with a minimal GITHUB_TOKEN.
+# - Creates or updates a single nightly -> main PR and stops. This workflow
+#   never merges, never pushes, never approves, never tags, never deploys,
+#   never publishes releases and never touches Railway resources.
+#
+# Promotion evidence required before any PR write:
+#   1. expected_sha == current refs/heads/nightly tip
+#   2. main is an ancestor of nightly, and nightly is strictly ahead
+#   3. the LATEST push run of the CI workflow on branch nightly is completed
+#      with conclusion "success", head_branch "nightly", head_sha ==
+#      expected_sha (stale, cancelled, failed, incomplete or superseded runs
+#      are rejected)
+#   4. that run's check suite contains the terminal check
+#      "Nightly Validation — Complete" with conclusion "success" for the
+#      same head_sha (a PR run or a reporting-only summary is not evidence)
+#   5. the nightly tip is re-read immediately before the PR write and must
+#      still equal expected_sha (race protection)
+#
+# NOTE: this workflow file must exist on refs/heads/main before it can be
+# dispatched from main (see infra/RUNBOOK.md, "Phase 4 — Manual
+# nightly-to-main promotion").
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "Exact refs/heads/nightly commit SHA that passed 'Nightly Validation — Complete' on a push run (40 lowercase hex chars)"
+        required: true
+        type: string
+
+permissions:
+  contents: read        # git refs + compare API (read-only)
+  actions: read         # workflow runs API (read-only)
+  checks: read          # check suites / check runs API (read-only)
+  pull-requests: write  # create/update/comment the promotion PR only
+
+concurrency:
+  group: pizzora-promote-nightly-to-main
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Verify exact-SHA nightly validation, then create/update promotion PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      # The Actions API addresses a workflow by file name; this is
+      # .github/workflows/security-and-ci.yml (the CI workflow that owns the
+      # "Nightly Validation — Complete" terminal gate).
+      CI_WORKFLOW_FILE: security-and-ci.yml
+      GATE_CHECK_NAME: "Nightly Validation — Complete"
+      PR_TITLE: "release: promote validated nightly to main"
+      SOURCE_BRANCH: nightly
+      TARGET_BRANCH: main
+    steps:
+      - name: Refuse anything but a manual dispatch from main
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
+            echo "ERROR: this workflow only runs via workflow_dispatch, got event '$GITHUB_EVENT_NAME'." >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "ERROR: dispatch this workflow from refs/heads/main so the verification logic is loaded from protected main, not from '$GITHUB_REF'." >&2
+            exit 1
+          fi
+          echo "OK: workflow_dispatch from $GITHUB_REF"
+
+      - name: Validate expected_sha input format
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$EXPECTED_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "ERROR: expected_sha must be a 40-character lowercase hex SHA, got '$EXPECTED_SHA'." >&2
+            exit 1
+          fi
+          echo "OK: expected_sha format valid ($EXPECTED_SHA)"
+
+      - name: Verify expected_sha is the current nightly tip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TIP="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/nightly" --jq '.object.sha')"
+          echo "refs/heads/nightly tip: $TIP"
+          echo "expected_sha:           $EXPECTED_SHA"
+          if [ "$TIP" != "$EXPECTED_SHA" ]; then
+            echo "ERROR: expected_sha does not equal the current nightly tip ($TIP)." >&2
+            echo "Only the current tip may be promoted. A previous SHA (even one with a successful run) is rejected; wait for nightly validation of the new tip and dispatch again with that SHA." >&2
+            exit 1
+          fi
+          echo "NIGHTLY_TIP=$TIP" >> "$GITHUB_ENV"
+          echo "OK: expected_sha is the current nightly tip"
+
+      - name: Verify main is an ancestor of nightly
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          CMP="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...nightly")"
+          STATUS="$(jq -r '.status' <<<"$CMP")"
+          BEHIND="$(jq -r '.behind_by' <<<"$CMP")"
+          AHEAD="$(jq -r '.ahead_by' <<<"$CMP")"
+          echo "compare main...nightly: status=$STATUS ahead_by=$AHEAD behind_by=$BEHIND"
+          if [ "$BEHIND" != "0" ]; then
+            echo "ERROR: main has $BEHIND commit(s) not in nightly; main is NOT an ancestor of nightly." >&2
+            echo "Merge main into nightly, wait for a successful nightly push validation, then retry." >&2
+            exit 1
+          fi
+          if [ "$STATUS" != "ahead" ]; then
+            echo "ERROR: nightly is not strictly ahead of main (status=$STATUS); there is nothing to promote." >&2
+            exit 1
+          fi
+          echo "ANCESTRY=ok" >> "$GITHUB_ENV"
+          echo "AHEAD_BY=$AHEAD" >> "$GITHUB_ENV"
+          echo "OK: main is an ancestor of nightly; nightly is $AHEAD commit(s) ahead"
+
+      - name: Find the latest nightly push run and verify it matches expected_sha
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Latest run of the CI workflow with event=push on branch nightly.
+          # Taking the latest run (not the latest successful one) is what makes
+          # superseded runs fail closed: if nightly moved, the latest run has a
+          # different head_sha and the check below rejects it.
+          LATEST="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$CI_WORKFLOW_FILE/runs?branch=nightly&event=push&per_page=100" \
+            --jq '[.workflow_runs[] | select(.head_branch == "nightly" and .event == "push")] | sort_by(.created_at, .run_started_at) | .[-1] // empty')"
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "ERROR: no push run of $CI_WORKFLOW_FILE found on branch nightly." >&2
+            exit 1
+          fi
+          RUN_ID="$(jq -r '.id' <<<"$LATEST")"
+          RUN_EVENT="$(jq -r '.event' <<<"$LATEST")"
+          RUN_BRANCH="$(jq -r '.head_branch' <<<"$LATEST")"
+          RUN_SHA="$(jq -r '.head_sha' <<<"$LATEST")"
+          RUN_STATUS="$(jq -r '.status' <<<"$LATEST")"
+          RUN_CONCLUSION="$(jq -r '.conclusion // "null"' <<<"$LATEST")"
+          RUN_URL="$(jq -r '.html_url' <<<"$LATEST")"
+          echo "latest nightly push run: id=$RUN_ID event=$RUN_EVENT branch=$RUN_BRANCH sha=$RUN_SHA status=$RUN_STATUS conclusion=$RUN_CONCLUSION"
+          echo "  url: $RUN_URL"
+          if [ "$RUN_EVENT" != "push" ]; then
+            echo "ERROR: latest run is event '$RUN_EVENT', not 'push'. A pull_request or dispatch run is not post-merge nightly evidence." >&2
+            exit 1
+          fi
+          if [ "$RUN_BRANCH" != "nightly" ]; then
+            echo "ERROR: latest run head_branch is '$RUN_BRANCH', not 'nightly'." >&2
+            exit 1
+          fi
+          if [ "$RUN_SHA" != "$EXPECTED_SHA" ]; then
+            echo "ERROR: latest nightly push run validated $RUN_SHA, not expected_sha $EXPECTED_SHA." >&2
+            echo "The successful run is stale or superseded; only the run for the current tip counts." >&2
+            exit 1
+          fi
+          if [ "$RUN_STATUS" != "completed" ]; then
+            echo "ERROR: latest nightly push run is '$RUN_STATUS', not completed (in-progress, queued or incomplete runs are rejected)." >&2
+            exit 1
+          fi
+          if [ "$RUN_CONCLUSION" != "success" ]; then
+            echo "ERROR: latest nightly push run concluded '$RUN_CONCLUSION', not success (failed/cancelled/superseded runs are rejected)." >&2
+            exit 1
+          fi
+          # Run detail reflects the latest attempt; verify it too.
+          DETAIL="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          RUN_ATTEMPT="$(jq -r '.run_attempt' <<<"$DETAIL")"
+          DETAIL_STATUS="$(jq -r '.status' <<<"$DETAIL")"
+          DETAIL_CONCLUSION="$(jq -r '.conclusion' <<<"$DETAIL")"
+          COMPLETED_AT="$(jq -r '.updated_at' <<<"$DETAIL")"
+          if [ "$DETAIL_STATUS" != "completed" ] || [ "$DETAIL_CONCLUSION" != "success" ]; then
+            echo "ERROR: latest attempt $RUN_ATTEMPT of run $RUN_ID is $DETAIL_STATUS/$DETAIL_CONCLUSION, not completed/success." >&2
+            exit 1
+          fi
+          echo "NIGHTLY_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+          echo "NIGHTLY_RUN_URL=$RUN_URL" >> "$GITHUB_ENV"
+          echo "NIGHTLY_RUN_ATTEMPT=$RUN_ATTEMPT" >> "$GITHUB_ENV"
+          echo "NIGHTLY_RUN_COMPLETED_AT=$COMPLETED_AT" >> "$GITHUB_ENV"
+          echo "OK: run $RUN_ID (attempt $RUN_ATTEMPT) is a completed successful push run on nightly for $EXPECTED_SHA, completed at $COMPLETED_AT"
+
+      - name: Verify terminal gate "Nightly Validation — Complete" succeeded for this exact SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SUITE_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$NIGHTLY_RUN_ID" --jq '.check_suite_id')"
+          GATE="$(gh api "repos/$GITHUB_REPOSITORY/check-suites/$SUITE_ID/check-runs?per_page=100&filter=latest" \
+            | jq --arg g "$GATE_CHECK_NAME" '[.check_runs[] | select(.name == $g)] | .[0] // empty')"
+          if [ -z "$GATE" ] || [ "$GATE" = "null" ]; then
+            echo "ERROR: terminal gate '$GATE_CHECK_NAME' is MISSING in check suite $SUITE_ID of run $NIGHTLY_RUN_ID." >&2
+            echo "A workflow run without the terminal gate is not promotion evidence (the reporting-only CI Summary never substitutes for it)." >&2
+            exit 1
+          fi
+          GATE_CONCLUSION="$(jq -r '.conclusion' <<<"$GATE")"
+          GATE_STATUS="$(jq -r '.status' <<<"$GATE")"
+          GATE_SHA="$(jq -r '.head_sha' <<<"$GATE")"
+          GATE_URL="$(jq -r '.html_url' <<<"$GATE")"
+          echo "gate '$GATE_CHECK_NAME': status=$GATE_STATUS conclusion=$GATE_CONCLUSION head_sha=$GATE_SHA"
+          echo "  url: $GATE_URL"
+          if [ "$GATE_STATUS" != "completed" ] || [ "$GATE_CONCLUSION" != "success" ]; then
+            echo "ERROR: terminal gate concluded '$GATE_CONCLUSION' ($GATE_STATUS), not success." >&2
+            exit 1
+          fi
+          if [ "$GATE_SHA" != "$EXPECTED_SHA" ]; then
+            echo "ERROR: terminal gate head_sha $GATE_SHA != expected_sha $EXPECTED_SHA." >&2
+            exit 1
+          fi
+          echo "GATE_CONCLUSION=success" >> "$GITHUB_ENV"
+          echo "GATE_URL=$GATE_URL" >> "$GITHUB_ENV"
+          echo "OK: terminal gate '$GATE_CHECK_NAME' succeeded for $EXPECTED_SHA"
+
+      - name: Recheck nightly tip immediately before the PR write (race protection)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TIP2="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/nightly" --jq '.object.sha')"
+          if [ "$TIP2" != "$EXPECTED_SHA" ]; then
+            echo "ERROR: nightly moved during promotion: tip is now $TIP2, expected $EXPECTED_SHA." >&2
+            echo "Aborting without touching any PR; a new nightly validation of $TIP2 is required before promoting." >&2
+            exit 1
+          fi
+          echo "OK: nightly tip still $TIP2 == expected_sha"
+
+      - name: Build the promotion PR body with full evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          CMP="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...nightly")"
+          COMMIT_SUMMARY="$(jq -r '[.commits[] | "- `\(.sha[0:7])` \(.commit.message | split("\n")[0])"] | join("\n")' <<<"$CMP")"
+          BODY_FILE="$RUNNER_TEMP/promotion-pr-body.md"
+          {
+            echo "## Promotion of validated nightly to main"
+            echo ""
+            echo "Created by the manual **Promote Nightly to Main** workflow (\`workflow_dispatch\` from \`refs/heads/main\`) after exact-SHA verification. This workflow never merges, pushes, approves, tags, deploys or publishes."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Validated commit SHA | \`$EXPECTED_SHA\` |"
+            echo "| Nightly tip at verification | \`$NIGHTLY_TIP\` |"
+            echo "| Nightly push run | [run $NIGHTLY_RUN_ID]($NIGHTLY_RUN_URL) — attempt $NIGHTLY_RUN_ATTEMPT, completed $NIGHTLY_RUN_COMPLETED_AT, conclusion \`success\` |"
+            echo "| Run event / branch | \`push\` on \`refs/heads/nightly\` (\`head_branch=nightly\`, \`head_sha=$EXPECTED_SHA\`) |"
+            echo "| Terminal gate | \`$GATE_CHECK_NAME\` → \`$GATE_CONCLUSION\` ([check]($GATE_URL)) |"
+            echo "| Ancestry | \`main\` is an ancestor of \`nightly\`; nightly is $AHEAD_BY commit(s) ahead |"
+            echo ""
+            echo "### Commits promoted (main..nightly)"
+            echo "$COMMIT_SUMMARY"
+            echo ""
+            echo "### Human merge instructions"
+            echo "- Re-verify that the PR head SHA still equals the current \`refs/heads/nightly\` tip immediately before merging; if nightly moved, do not merge — revalidate and re-promote."
+            echo "- Merge with a **merge commit** only (the \`main-branch-protection\` ruleset rejects squash and rebase)."
+            echo "- After merge, the existing \`main\` push tier runs post-merge validation and preview publishing; production release still requires a manually created \`v*\` tag."
+          } > "$BODY_FILE"
+          echo "PR_BODY_FILE=$BODY_FILE" >> "$GITHUB_ENV"
+          echo "OK: PR body written to $BODY_FILE"
+
+      - name: Create or update the promotion PR (never merge)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          EXISTING="$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=$OWNER:$SOURCE_BRANCH&base=$TARGET_BRANCH" --jq '.[0].number // empty')"
+          if [ -z "$EXISTING" ]; then
+            echo "No open $SOURCE_BRANCH -> $TARGET_BRANCH PR; creating one."
+            if ! PR_JSON="$(jq -n --arg title "$PR_TITLE" --rawfile body "$PR_BODY_FILE" \
+                '{title: $title, head: $ENV.SOURCE_BRANCH, base: $ENV.TARGET_BRANCH, body: $body}' \
+                | gh api -X POST "repos/$GITHUB_REPOSITORY/pulls" --input - --jq '{number, html_url}' 2>"$RUNNER_TEMP/pr-create-err.txt")"; then
+              echo "ERROR: PR creation failed:" >&2
+              cat "$RUNNER_TEMP/pr-create-err.txt" >&2
+              echo "" >&2
+              echo "If the error says GitHub Actions is not allowed to create pull requests, enable the repository setting:" >&2
+              echo "  Settings -> Actions -> General -> Workflow permissions -> 'Allow GitHub Actions to create and approve pull requests'." >&2
+              echo "Do not substitute a PAT or GitHub App token without explicit approval." >&2
+              exit 1
+            fi
+            PR_NUMBER="$(jq -r '.number' <<<"$PR_JSON")"
+            PR_URL="$(jq -r '.html_url' <<<"$PR_JSON")"
+            echo "OK: created PR #$PR_NUMBER: $PR_URL"
+          else
+            PR_NUMBER="$EXISTING"
+            PR_URL="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.html_url')"
+            PR_HEAD_SHA="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.head.sha')"
+            echo "Open $SOURCE_BRANCH -> $TARGET_BRANCH PR #$PR_NUMBER exists (head sha $PR_HEAD_SHA); updating its description instead of creating a duplicate."
+            jq -n --arg title "$PR_TITLE" --rawfile body "$PR_BODY_FILE" \
+              '{title: $title, body: $body}' \
+              | gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --input - --jq '.number' > /dev/null
+            if [ "$PR_HEAD_SHA" != "$EXPECTED_SHA" ]; then
+              WARNING="⚠️ This PR's head SHA ($PR_HEAD_SHA) is not the validated SHA ($EXPECTED_SHA). The PR points at an outdated nightly commit: validation must be checked again against the current nightly tip before any merge."
+            else
+              WARNING="PR head SHA equals the validated nightly SHA ($EXPECTED_SHA)."
+            fi
+            COMMENT_FILE="$RUNNER_TEMP/promotion-comment.md"
+            {
+              echo "Promotion evidence updated by the manual **Promote Nightly to Main** workflow."
+              echo ""
+              echo "- Validated SHA: \`$EXPECTED_SHA\`"
+              echo "- Nightly push run: [run $NIGHTLY_RUN_ID]($NIGHTLY_RUN_URL) (attempt $NIGHTLY_RUN_ATTEMPT, conclusion \`success\`)"
+              echo "- Terminal gate: \`$GATE_CHECK_NAME\` → \`$GATE_CONCLUSION\`"
+              echo "- $WARNING"
+            } > "$COMMENT_FILE"
+            jq -n --rawfile body "$COMMENT_FILE" '{body: $body}' \
+              | gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --input - --jq '.html_url' > /dev/null
+            echo "OK: updated PR #$PR_NUMBER ($PR_URL) and added an evidence comment"
+          fi
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
+          # Hard rule: this workflow never merges, approves, pushes or tags.
+          # (Enforced by the absence of any merge/approve/push command above.)
+
+      - name: Write run summary
+        run: |
+          {
+            echo "## Promote Nightly to Main — result"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Validated SHA | \`$EXPECTED_SHA\` |"
+            echo "| Nightly push run | [run $NIGHTLY_RUN_ID]($NIGHTLY_RUN_URL) attempt $NIGHTLY_RUN_ATTEMPT, completed $NIGHTLY_RUN_COMPLETED_AT |"
+            echo "| Terminal gate | \`$GATE_CHECK_NAME\` → \`$GATE_CONCLUSION\` |"
+            echo "| Promotion PR | ${PR_URL:-none (verification failed before PR write)} |"
+            echo ""
+            echo "No merge, push, approval, tag, deployment or release was performed."
+          } >> "$GITHUB_STEP_SUMMARY"
