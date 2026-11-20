@@ -1,7 +1,12 @@
 package com.example.navigation
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -66,10 +71,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -88,6 +97,7 @@ import com.example.cart.CartViewModel
 import androidx.compose.runtime.mutableStateOf
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.CustomerMenuScreen
+import com.example.catalog.PizzaBuilderScreen
 import com.example.checkout.CheckoutQuoteViewModel
 import com.example.checkout.CheckoutScreen
 import com.example.checkout.CheckoutViewModel
@@ -396,11 +406,14 @@ fun CustomerRoleShell(
   var showFallbackSignOutConfirm by rememberSaveable { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
   val overlaySnackbarHostState = remember { SnackbarHostState() }
-  val hasActiveOverlay = isNotificationsOpen && notificationsViewModel != null
-  val currentSnackbarHostState by rememberUpdatedState(
-    if (hasActiveOverlay) overlaySnackbarHostState else snackbarHostState,
-  )
   val menuState = catalogViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+  val activeBuilderProduct = menuState?.customizingProduct
+  val isBuilderOverlayOpen = catalogViewModel != null && menuState != null && activeBuilderProduct != null
+  val isNotificationsOverlayOpen = isNotificationsOpen && notificationsViewModel != null
+  val hasActiveOverlay = isBuilderOverlayOpen || isNotificationsOverlayOpen
+  val currentSnackbarHostState by rememberUpdatedState(
+    if (isNotificationsOverlayOpen) overlaySnackbarHostState else snackbarHostState,
+  )
   val cartBadgeCount = if (cartViewModel != null) {
     cartViewModel.badgeCount.collectAsStateWithLifecycle().value
   } else {
@@ -474,72 +487,80 @@ fun CustomerRoleShell(
   }
 
   val semanticColors = LocalPizzoraSemanticColors.current
+  val reducedMotion = LocalReducedMotion.current
 
   Box(modifier = Modifier.fillMaxSize().testTag("customer_shell_root")) {
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+      modifier = Modifier
+        .fillMaxSize()
+        .focusProperties { canFocus = !hasActiveOverlay }
+        .let { base -> if (hasActiveOverlay) base.clearAndSetSemantics {} else base },
+    ) {
       val useRail = maxWidth >= 600.dp
       Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = if (hasActiveOverlay) WindowInsets(0) else WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-          TopAppBar(
-            title = {
-              when (selectedIndex) {
-                0 -> Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                  Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.testTag("customer_topbar_title"),
-                  )
-                  if (menuState != null && !menuState.isAcceptingOrders) {
-                    Surface(
-                      color = semanticColors.warningContainer,
-                      shape = MaterialTheme.shapes.small,
-                      modifier = Modifier.testTag("shell_kitchen_paused_badge"),
-                    ) {
-                      Text(
-                        text = stringResource(R.string.shell_kitchen_paused_badge),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = semanticColors.onWarningContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                      )
+          if (!hasActiveOverlay) {
+            TopAppBar(
+              title = {
+                when (selectedIndex) {
+                  0 -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  ) {
+                    Text(
+                      text = stringResource(R.string.app_name),
+                      style = MaterialTheme.typography.headlineSmall,
+                      modifier = Modifier.testTag("customer_topbar_title"),
+                    )
+                    if (menuState != null && !menuState.isAcceptingOrders) {
+                      Surface(
+                        color = semanticColors.warningContainer,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.testTag("shell_kitchen_paused_badge"),
+                      ) {
+                        Text(
+                          text = stringResource(R.string.shell_kitchen_paused_badge),
+                          style = MaterialTheme.typography.labelSmall,
+                          color = semanticColors.onWarningContainer,
+                          modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                      }
                     }
                   }
+                  1 -> Text(
+                    text = stringResource(R.string.shell_title_cart),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.testTag("customer_topbar_title"),
+                  )
+                  2 -> Text(
+                    text = stringResource(R.string.orders_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.testTag("customer_topbar_title"),
+                  )
+                  else -> Text(
+                    text = stringResource(R.string.shell_title_profile),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.testTag("customer_topbar_title"),
+                  )
                 }
-                1 -> Text(
-                  text = stringResource(R.string.shell_title_cart),
-                  style = MaterialTheme.typography.titleLarge,
-                  modifier = Modifier.testTag("customer_topbar_title"),
-                )
-                2 -> Text(
-                  text = stringResource(R.string.orders_title),
-                  style = MaterialTheme.typography.titleLarge,
-                  modifier = Modifier.testTag("customer_topbar_title"),
-                )
-                else -> Text(
-                  text = stringResource(R.string.shell_title_profile),
-                  style = MaterialTheme.typography.titleLarge,
-                  modifier = Modifier.testTag("customer_topbar_title"),
-                )
-              }
-            },
-            actions = {
-              if (notificationsViewModel != null) {
-                IconButton(
-                  onClick = { isNotificationsOpen = true },
-                  modifier = Modifier.minimumInteractiveComponentSize().testTag("customer_notifications_button"),
-                ) {
-                  NotificationBellIcon(unreadCount = unreadNotificationsCount)
+              },
+              actions = {
+                if (notificationsViewModel != null) {
+                  IconButton(
+                    onClick = { isNotificationsOpen = true },
+                    modifier = Modifier.minimumInteractiveComponentSize().testTag("customer_notifications_button"),
+                  ) {
+                    NotificationBellIcon(unreadCount = unreadNotificationsCount)
+                  }
                 }
-              }
-            },
-          )
+              },
+            )
+          }
         },
         bottomBar = {
-          if (!useRail) {
+          if (!useRail && !hasActiveOverlay) {
             NavigationBar {
               tabs.forEachIndexed { idx, (label, icon) ->
                 NavigationBarItem(
@@ -557,7 +578,7 @@ fun CustomerRoleShell(
         },
       ) { innerPadding ->
         Row(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-          if (useRail) {
+          if (useRail && !hasActiveOverlay) {
             NavigationRail {
               tabs.forEachIndexed { idx, (label, icon) ->
                 NavigationRailItem(
@@ -588,6 +609,7 @@ fun CustomerRoleShell(
                   cartViewModel?.addCustomizedPizza(prod, variant, crust, toppings, qty)
                 },
                 modifier = Modifier.weight(1f),
+                useStandaloneBuilderHost = false,
               )
             }
           selectedIndex == 1 && cartViewModel != null -> {
@@ -760,11 +782,69 @@ fun CustomerRoleShell(
     }
     }
 
-    // Unified shell-level full-screen overlay host (Notifications today; Builder & Checkout in Phases 3 & 5)
-    if (isNotificationsOpen && notificationsViewModel != null) {
+    // Unified shell-level full-screen overlay host (Builder, Notifications, and future Checkout)
+    AnimatedVisibility(
+      visible = isBuilderOverlayOpen,
+      enter = if (reducedMotion) fadeIn() else fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 12 },
+      exit = if (reducedMotion) fadeOut() else fadeOut(tween(180)),
+    ) {
+      val builderProduct = activeBuilderProduct
+      val currentMenuState = menuState
+      if (builderProduct != null && currentMenuState != null && catalogViewModel != null) {
+        Surface(
+          modifier = Modifier
+            .fillMaxSize()
+            .semantics { isTraversalGroup = true }
+            .focusGroup()
+            .testTag("customer_shell_overlay_host"),
+          color = MaterialTheme.colorScheme.background,
+          tonalElevation = 0.dp,
+        ) {
+          Box(modifier = Modifier.fillMaxSize()) {
+            PizzaBuilderScreen(
+              product = builderProduct,
+              crusts = currentMenuState.crusts,
+              toppings = currentMenuState.toppings,
+              isAcceptingOrders = currentMenuState.isAcceptingOrders,
+              isFromOfflineCache = currentMenuState.isFromOfflineCache,
+              onDismiss = catalogViewModel::dismissCustomizer,
+              onConfirmAdd = { variant, crust, selectedToppings, qty, onResult ->
+                val vm = cartViewModel
+                if (vm != null) {
+                  vm.addCustomizedPizza(
+                    product = builderProduct,
+                    variant = variant,
+                    crust = crust,
+                    toppings = selectedToppings,
+                    quantity = qty,
+                    onResult = onResult,
+                  )
+                } else {
+                  onResult(false, "Cart is unavailable right now.")
+                }
+              },
+              modifier = Modifier.fillMaxSize(),
+            )
+            SnackbarHost(
+              hostState = overlaySnackbarHostState,
+              modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 132.dp),
+            )
+          }
+        }
+      }
+    }
+
+    if (isNotificationsOverlayOpen && notificationsViewModel != null) {
       val notifState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
       Surface(
-        modifier = Modifier.fillMaxSize().testTag("customer_shell_overlay_host"),
+        modifier = Modifier
+          .fillMaxSize()
+          .semantics { isTraversalGroup = true }
+          .focusGroup()
+          .testTag("customer_shell_overlay_host"),
         color = MaterialTheme.colorScheme.background,
       ) {
         Box(modifier = Modifier.fillMaxSize()) {

@@ -7,6 +7,7 @@ import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductVariantDto
 import com.pizzora.contracts.ToppingDto
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -78,18 +79,42 @@ class CartViewModel(
     crust: CrustOptionDto,
     toppings: List<ToppingDto>,
     quantity: Int,
+    onResult: (success: Boolean, errorMessage: String?) -> Unit = { _, _ -> },
   ) {
     viewModelScope.launch {
       syncState.update { it.copy(isSyncing = true, statusMessage = null) }
-      val result = cartRepository.addCustomizedItem(product, variant, crust, toppings, quantity)
-      syncState.update {
-        it.copy(
-          isSyncing = false,
-          isOffline = result.isOffline,
-          statusMessage = if (result.isOffline) "Saved offline — will validate when back online." else null,
+      val result = try {
+        cartRepository.addCustomizedItem(product, variant, crust, toppings, quantity)
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (t: Throwable) {
+        CartSyncResult(
+          isOffline = false,
+          unavailableCount = 0,
+          errorMessage = t.message ?: "Unable to add item to cart.",
         )
       }
-      _events.tryEmit("${product.name} added to cart")
+      val isFatalFailure = result.errorMessage != null && !result.isOffline
+      if (isFatalFailure) {
+        syncState.update {
+          it.copy(
+            isSyncing = false,
+            isOffline = false,
+            statusMessage = result.errorMessage,
+          )
+        }
+        onResult(false, result.errorMessage)
+      } else {
+        syncState.update {
+          it.copy(
+            isSyncing = false,
+            isOffline = result.isOffline,
+            statusMessage = if (result.isOffline) "Saved offline — will validate when back online." else null,
+          )
+        }
+        onResult(true, null)
+        _events.tryEmit("${product.name} added to cart")
+      }
     }
   }
 

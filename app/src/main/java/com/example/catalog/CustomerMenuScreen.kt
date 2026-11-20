@@ -52,9 +52,19 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -97,9 +107,28 @@ fun CustomerMenuScreen(
   onDismissCustomizer: () -> Unit,
   onAddCustomizedToCart: (ProductDto, ProductVariantDto, CrustOptionDto, List<ToppingDto>, Int) -> Unit,
   modifier: Modifier = Modifier,
+  useStandaloneBuilderHost: Boolean = true,
 ) {
   val semantic = LocalPizzoraSemanticColors.current
   val focusManager = LocalFocusManager.current
+  val productFocusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
+  var lastOpenedProductId by rememberSaveable { mutableStateOf<String?>(null) }
+  var previouslyOpenProductId by remember { mutableStateOf<String?>(null) }
+
+  LaunchedEffect(uiState.customizingProduct?.id) {
+    val activeId = uiState.customizingProduct?.id
+    val previousId = previouslyOpenProductId
+    if (activeId != null) {
+      previouslyOpenProductId = activeId
+      lastOpenedProductId = activeId
+    } else if (previousId != null) {
+      previouslyOpenProductId = null
+      withFrameNanos { }
+      val targetId = lastOpenedProductId ?: previousId
+      runCatching { productFocusRequesters[targetId]?.requestFocus() }
+    }
+  }
+
   val hasActiveFilters = uiState.searchQuery.isNotBlank() ||
     uiState.selectedCategoryId != null ||
     uiState.vegOnly
@@ -364,12 +393,17 @@ fun CustomerMenuScreen(
                   horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                   rowProducts.forEach { product ->
+                    val cardRequester = productFocusRequesters.getOrPut(product.id) { FocusRequester() }
                     ProductMenuCard(
                       product = product,
                       isAcceptingOrders = uiState.isAcceptingOrders,
                       thumbnailSize = thumbnailSize,
                       stackVertically = false,
-                      onCustomizeClick = { onOpenCustomizer(product) },
+                      cardFocusRequester = cardRequester,
+                      onCustomizeClick = {
+                        lastOpenedProductId = product.id
+                        onOpenCustomizer(product)
+                      },
                       modifier = Modifier.weight(1f),
                     )
                   }
@@ -381,12 +415,17 @@ fun CustomerMenuScreen(
             }
             else -> {
               items(uiState.filteredProducts, key = { it.id }) { product ->
+                val cardRequester = productFocusRequesters.getOrPut(product.id) { FocusRequester() }
                 ProductMenuCard(
                   product = product,
                   isAcceptingOrders = uiState.isAcceptingOrders,
                   thumbnailSize = thumbnailSize,
                   stackVertically = stackVertically,
-                  onCustomizeClick = { onOpenCustomizer(product) },
+                  cardFocusRequester = cardRequester,
+                  onCustomizeClick = {
+                    lastOpenedProductId = product.id
+                    onOpenCustomizer(product)
+                  },
                 )
               }
             }
@@ -395,19 +434,23 @@ fun CustomerMenuScreen(
       }
     }
 
-    val activeProduct = uiState.customizingProduct
-    AnimatedVisibility(visible = activeProduct != null) {
-      if (activeProduct != null) {
-        PizzaCustomizerSheet(
-          product = activeProduct,
-          crusts = uiState.crusts,
-          toppings = uiState.toppings,
-          onDismiss = onDismissCustomizer,
-          onConfirmAdd = { variant, crust, selectedToppings, qty ->
-            onAddCustomizedToCart(activeProduct, variant, crust, selectedToppings, qty)
-            onDismissCustomizer()
-          },
-        )
+    if (useStandaloneBuilderHost) {
+      val activeProduct = uiState.customizingProduct
+      AnimatedVisibility(visible = activeProduct != null) {
+        if (activeProduct != null) {
+          PizzaBuilderScreen(
+            product = activeProduct,
+            crusts = uiState.crusts,
+            toppings = uiState.toppings,
+            isAcceptingOrders = uiState.isAcceptingOrders,
+            isFromOfflineCache = uiState.isFromOfflineCache,
+            onDismiss = onDismissCustomizer,
+            onConfirmAdd = { variant, crust, selectedToppings, qty, onResult ->
+              onAddCustomizedToCart(activeProduct, variant, crust, selectedToppings, qty)
+              onResult(true, null)
+            },
+          )
+        }
       }
     }
   }
@@ -503,6 +546,7 @@ private fun ProductMenuCard(
   stackVertically: Boolean,
   onCustomizeClick: () -> Unit,
   modifier: Modifier = Modifier,
+  cardFocusRequester: FocusRequester? = null,
 ) {
   val activeVariants = product.variants.filter { it.isActive }
   val minPricePaise = (activeVariants.ifEmpty { product.variants }).minOfOrNull { it.pricePaise } ?: 0L
@@ -517,6 +561,7 @@ private fun ProductMenuCard(
     modifier = modifier
       .fillMaxWidth()
       .semantics(mergeDescendants = false) {}
+      .let { base -> if (cardFocusRequester != null) base.focusRequester(cardFocusRequester) else base }
       .clickable(enabled = isAcceptingOrders, onClick = onCustomizeClick)
       .testTag("product_card_${product.id}"),
   ) {
