@@ -26,7 +26,12 @@ android {
     versionCode = resolvedVersionCode
     versionName = resolvedVersionName
 
-    buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080\"")
+    // Default is unchanged (http://10.0.2.2:8080); QA hosts that cannot bind host port 8080 can
+    // override via -PpizzoraDebugApiBaseUrl=... or PIZZORA_DEBUG_API_BASE_URL=... without edits.
+    val debugApiBaseUrl = providers.gradleProperty("pizzoraDebugApiBaseUrl").orNull?.takeIf { it.isNotBlank() }
+      ?: providers.environmentVariable("PIZZORA_DEBUG_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
+      ?: "http://10.0.2.2:8080"
+    buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
