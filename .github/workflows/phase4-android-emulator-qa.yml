@@ -367,10 +367,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK_FILE=$(ls preview-apks/pizzora-preview-*.apk 2>/dev/null | head -1 || true)
+          # actions/download-artifact may create a subdirectory with the artifact name
+          APK_FILE=$(find preview-apks -name 'pizzora-preview-*.apk' -type f 2>/dev/null | head -1 || true)
           if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
             echo "ERROR: Debug APK not found in downloaded artifacts." >&2
-            ls -la preview-apks/
+            find preview-apks -type f -name '*.apk' 2>/dev/null || ls -la preview-apks/
             exit 1
           fi
           echo "APK_FILE=$APK_FILE" >> "$GITHUB_OUTPUT"
@@ -520,9 +521,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK_FILE=$(ls preview-apks/pizzora-preview-*.apk 2>/dev/null | head -1 || true)
+          APK_FILE=$(find preview-apks -name 'pizzora-preview-*.apk' -type f 2>/dev/null | head -1 || true)
           if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
             echo "ERROR: Debug APK not found." >&2
+            find preview-apks -type f -name '*.apk' 2>/dev/null || ls -la preview-apks/
             exit 1
           fi
           echo "APK_FILE=$APK_FILE" >> "$GITHUB_OUTPUT"
