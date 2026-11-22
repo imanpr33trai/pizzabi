@@ -67,6 +67,7 @@ val PizzoraShapes = Shapes(
 )
 
 val LocalPizzoraSemanticColors = staticCompositionLocalOf { LightSemanticColors }
+val LocalPizzoraTokens = staticCompositionLocalOf { PizzoraTokens.Default }
 
 @Composable
 fun PizzoraTheme(
@@ -77,8 +78,12 @@ fun PizzoraTheme(
   val useDark = kdsMode || darkTheme
   val colorScheme = if (useDark) PizzoraDarkColorScheme else PizzoraLightColorScheme
   val semanticColors = if (useDark) DarkSemanticColors else LightSemanticColors
+  val tokens = PizzoraTokens.Default
 
-  CompositionLocalProvider(LocalPizzoraSemanticColors provides semanticColors) {
+  CompositionLocalProvider(
+    LocalPizzoraSemanticColors provides semanticColors,
+    LocalPizzoraTokens provides tokens
+  ) {
     MaterialTheme(
       colorScheme = colorScheme,
       typography = PizzoraTypography,
