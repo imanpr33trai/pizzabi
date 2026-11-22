@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 
 private val PizzoraLightColorScheme = lightColorScheme(
   primary = SanMarzanoTerracotta,
@@ -32,6 +31,7 @@ private val PizzoraLightColorScheme = lightColorScheme(
   surfaceVariant = OvenStoneSurfaceVariant,
   onSurfaceVariant = WarmTaupe,
   outline = DoughOutline,
+  outlineVariant = DoughOutline,
   error = CrimsonErrorLight,
   onError = Color.White,
 )
@@ -56,18 +56,21 @@ private val PizzoraDarkColorScheme = darkColorScheme(
   surfaceVariant = SmokedSlateSurfaceVariant,
   onSurfaceVariant = MutedStoneText,
   outline = DarkOutline,
+  outlineVariant = DarkOutline,
   error = OverdueCrimson,
   onError = Color(0xFF3B0909),
 )
 
 val PizzoraShapes = Shapes(
-  small = RoundedCornerShape(10.dp),
-  medium = RoundedCornerShape(16.dp),
-  large = RoundedCornerShape(22.dp),
+  small = RoundedCornerShape(PizzoraTokens.shape.radiusSmall),
+  medium = RoundedCornerShape(PizzoraTokens.shape.radiusMedium),
+  large = RoundedCornerShape(PizzoraTokens.shape.radiusLarge),
 )
 
 val LocalPizzoraSemanticColors = staticCompositionLocalOf { LightSemanticColors }
-val LocalPizzoraTokens = staticCompositionLocalOf { PizzoraTokens.Default }
+
+/** Provides the active design token set to PIZZORA primitives. */
+val LocalPizzoraTokens = staticCompositionLocalOf { PizzoraTokens }
 
 @Composable
 fun PizzoraTheme(
@@ -78,11 +81,10 @@ fun PizzoraTheme(
   val useDark = kdsMode || darkTheme
   val colorScheme = if (useDark) PizzoraDarkColorScheme else PizzoraLightColorScheme
   val semanticColors = if (useDark) DarkSemanticColors else LightSemanticColors
-  val tokens = PizzoraTokens.Default
 
   CompositionLocalProvider(
     LocalPizzoraSemanticColors provides semanticColors,
-    LocalPizzoraTokens provides tokens
+    LocalPizzoraTokens provides PizzoraTokens,
   ) {
     MaterialTheme(
       colorScheme = colorScheme,

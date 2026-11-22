@@ -1,134 +1,142 @@
 package com.example.ui.theme
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/**
+ * Motion tokens used by PIZZORA primitives.
+ *
+ * Durations are expressed in milliseconds so they can be passed directly to Compose animation
+ * specs. Easings are shared instances to avoid re-allocating them on every recomposition.
+ */
 @Immutable
-data class MotionTokens(
-    // Durations
-    val durationUltraFast: Int = 50,      // ms
-    val durationFast: Int = 100,          // ms
-    val durationMedium: Int = 200,        // ms
-    val durationSlow: Int = 300,          // ms
-    val durationUltraSlow: Int = 500,     // ms
-
-    // Easings (using standard Material 3 easing curves)
-    val easingStandard: String = "cubic-bezier(0.2, 0.0, 0.38, 0.9)",
-    val easingAccelerate: String = "cubic-bezier(0.4, 0.0, 1, 1)",
-    val easingDecelerate: String = "cubic-bezier(0.0, 0.0, 0.2, 1)",
-    val easingEmphasized: String = "cubic-bezier(0.05, 0.7, 0.1, 1.0)",
+data class PizzoraMotionTokens(
+  val durationInstant: Int = 80,
+  val durationFast: Int = 150,
+  val durationMedium: Int = 250,
+  val durationSlow: Int = 400,
+  val durationEmphasized: Int = 600,
+  val easingStandard: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f),
+  val easingEmphasized: Easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f),
+  val easingDecelerate: Easing = CubicBezierEasing(0f, 0f, 0f, 1f),
+  val easingAccelerate: Easing = CubicBezierEasing(0.3f, 0f, 1f, 1f),
+  val pressScale: Float = 0.98f,
+  val selectedScale: Float = 1.02f,
 )
 
+/** Elevation tokens, from flat surfaces to transient overlays. */
 @Immutable
-data class ElevationTokens(
-    val level0: Dp = 0.dp,
-    val level1: Dp = 1.dp,
-    val level2: Dp = 3.dp,
-    val level3: Dp = 6.dp,
-    val level4: Dp = 8.dp,
-    val level5: Dp = 12.dp,
-    // KDS-specific elevations
-    val kdsCard: Dp = 4.dp,
-    val kdsModal: Dp = 16.dp,
-    val kdsToast: Dp = 8.dp,
+data class PizzoraElevationTokens(
+  val level0: Dp = 0.dp,
+  val level1: Dp = 1.dp,
+  val level2: Dp = 2.dp,
+  val level3: Dp = 4.dp,
+  val level4: Dp = 8.dp,
+  val level5: Dp = 12.dp,
+  val cardRest: Dp = 1.dp,
+  val cardPressed: Dp = 4.dp,
+  val buttonPressed: Dp = 2.dp,
+  val modal: Dp = 8.dp,
 )
 
+/** 4dp-based spacing scale. */
 @Immutable
-data class SpacingTokens(
-    val space0: Dp = 0.dp,
-    val space1: Dp = 4.dp,
-    val space2: Dp = 8.dp,
-    val space3: Dp = 12.dp,
-    val space4: Dp = 16.dp,
-    val space5: Dp = 24.dp,
-    val space6: Dp = 32.dp,
-    val space7: Dp = 48.dp,
-    val space8: Dp = 64.dp,
-    // Semantic spacing aliases
-    val spacingXxs: Dp = 4.dp,
-    val spacingXs: Dp = 8.dp,
-    val spacingSm: Dp = 12.dp,
-    val spacingMd: Dp = 16.dp,
-    val spacingLg: Dp = 24.dp,
-    val spacingXl: Dp = 32.dp,
-    val spacingXxl: Dp = 48.dp,
+data class PizzoraSpacingTokens(
+  val none: Dp = 0.dp,
+  val space2: Dp = 2.dp,
+  val space4: Dp = 4.dp,
+  val space8: Dp = 8.dp,
+  val space12: Dp = 12.dp,
+  val space16: Dp = 16.dp,
+  val space20: Dp = 20.dp,
+  val space24: Dp = 24.dp,
+  val space32: Dp = 32.dp,
+  val space40: Dp = 40.dp,
+  val space48: Dp = 48.dp,
+  val space64: Dp = 64.dp,
 )
 
+/** Sizing tokens for controls, icons, and loading affordances. */
 @Immutable
-data class SizingTokens(
-    // Touch target minimums
-    val touchTargetMin: Dp = 48.dp,
-    val touchTargetComfortable: Dp = 56.dp,
-
-    // Icon sizes
-    val iconXs: Dp = 16.dp,
-    val iconSm: Dp = 20.dp,
-    val iconMd: Dp = 24.dp,
-    val iconLg: Dp = 32.dp,
-    val iconXl: Dp = 40.dp,
-
-    // Component heights
-    val heightXs: Dp = 28.dp,
-    val heightSm: Dp = 36.dp,
-    val heightMd: Dp = 44.dp,
-    val heightLg: Dp = 52.dp,
-    val heightXl: Dp = 60.dp,
-
-    // Width constraints
-    val widthMaxContent: Dp = 480.dp,
-    val widthMaxForm: Dp = 360.dp,
+data class PizzoraSizingTokens(
+  val touchTargetMin: Dp = 48.dp,
+  val buttonHeight: Dp = 48.dp,
+  val iconButtonSize: Dp = 48.dp,
+  val iconSmall: Dp = 16.dp,
+  val chipIcon: Dp = 18.dp,
+  val iconMedium: Dp = 20.dp,
+  val iconLarge: Dp = 24.dp,
+  val chipHeight: Dp = 32.dp,
+  val loadingIndicator: Dp = 18.dp,
 )
 
+/** Radius and border tokens. */
 @Immutable
-data class BorderTokens(
-    val widthHairline: Dp = 0.5.dp,
-    val widthThin: Dp = 1.dp,
-    val widthMedium: Dp = 2.dp,
-    val widthThick: Dp = 3.dp,
+data class PizzoraShapeTokens(
+  val radiusSmall: Dp = 10.dp,
+  val radiusMedium: Dp = 16.dp,
+  val radiusLarge: Dp = 22.dp,
+  val radiusPill: Dp = 999.dp,
+  val borderThin: Dp = 1.dp,
+  val borderThick: Dp = 2.dp,
+  val borderFocused: Dp = 2.dp,
 )
 
+/** Layering tokens, expressed as graphics-layer translation Z values. */
 @Immutable
-data class RadiusTokens(
-    val radiusNone: Dp = 0.dp,
-    val radiusXs: Dp = 4.dp,
-    val radiusSm: Dp = 8.dp,
-    val radiusMd: Dp = 12.dp,
-    val radiusLg: Dp = 16.dp,
-    val radiusXl: Dp = 24.dp,
-    val radiusFull: Dp = 9999.dp,
-    // Semantic radius aliases (matching PizzoraShapes)
-    val radiusSmall: Dp = 10.dp,
-    val radiusMedium: Dp = 16.dp,
-    val radiusLarge: Dp = 22.dp,
+data class PizzoraZIndexTokens(
+  val base: Float = 0f,
+  val raised: Float = 1f,
+  val sticky: Float = 4f,
+  val overlay: Float = 8f,
+  val modal: Float = 16f,
+  val toast: Float = 32f,
 )
 
+/** Type scale tokens consumed by [PizzoraTypography]. */
 @Immutable
-data class ZIndexTokens(
-    val base: Int = 0,
-    val dropdown: Int = 100,
-    val sticky: Int = 200,
-    val modal: Int = 300,
-    val popover: Int = 400,
-    val tooltip: Int = 500,
-    val toast: Int = 600,
-    // KDS-specific
-    val kdsOverlay: Int = 700,
-    val kdsBanner: Int = 800,
+data class PizzoraTypographyTokens(
+  val displaySmallSize: TextUnit = 32.sp,
+  val displaySmallLineHeight: TextUnit = 38.sp,
+  val headlineMediumSize: TextUnit = 26.sp,
+  val headlineMediumLineHeight: TextUnit = 32.sp,
+  val headlineSmallSize: TextUnit = 22.sp,
+  val headlineSmallLineHeight: TextUnit = 28.sp,
+  val titleLargeSize: TextUnit = 20.sp,
+  val titleLargeLineHeight: TextUnit = 26.sp,
+  val titleMediumSize: TextUnit = 16.sp,
+  val titleMediumLineHeight: TextUnit = 22.sp,
+  val bodyLargeSize: TextUnit = 16.sp,
+  val bodyLargeLineHeight: TextUnit = 24.sp,
+  val bodyMediumSize: TextUnit = 14.sp,
+  val bodyMediumLineHeight: TextUnit = 20.sp,
+  val labelLargeSize: TextUnit = 14.sp,
+  val labelLargeLineHeight: TextUnit = 20.sp,
+  val labelMediumSize: TextUnit = 12.sp,
+  val labelMediumLineHeight: TextUnit = 16.sp,
+  val monoBodySize: TextUnit = 14.sp,
+  val monoBodyLineHeight: TextUnit = 20.sp,
+  val monoTitleSize: TextUnit = 18.sp,
+  val monoTitleLineHeight: TextUnit = 24.sp,
 )
 
-@Immutable
-data class PizzoraTokens(
-    val motion: MotionTokens = MotionTokens(),
-    val elevation: ElevationTokens = ElevationTokens(),
-    val spacing: SpacingTokens = SpacingTokens(),
-    val sizing: SizingTokens = SizingTokens(),
-    val border: BorderTokens = BorderTokens(),
-    val radius: RadiusTokens = RadiusTokens(),
-    val zIndex: ZIndexTokens = ZIndexTokens(),
-) {
-    companion object {
-        val Default = PizzoraTokens()
-    }
+/**
+ * Canonical PIZZORA design tokens.
+ *
+ * Components read these through [LocalPizzoraTokens] so previews and tests can override the token
+ * set, while non-composable code can access the defaults directly.
+ */
+object PizzoraTokens {
+  val motion: PizzoraMotionTokens = PizzoraMotionTokens()
+  val elevation: PizzoraElevationTokens = PizzoraElevationTokens()
+  val spacing: PizzoraSpacingTokens = PizzoraSpacingTokens()
+  val sizing: PizzoraSizingTokens = PizzoraSizingTokens()
+  val shape: PizzoraShapeTokens = PizzoraShapeTokens()
+  val zIndex: PizzoraZIndexTokens = PizzoraZIndexTokens()
+  val typography: PizzoraTypographyTokens = PizzoraTypographyTokens()
 }
