@@ -1,0 +1,258 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-unlimited-proxy/deepseek-v4.1-flash-free",
+  "providers": {
+    "nvidia": {
+      "models": {
+        "Mistral 4 NVIDIA": {
+          "modelID": "mistralai/mistral-large-4-1t-a52b",
+          "name": "Mistral large 4 nvidia",
+          "limit": {
+            "context": 1000000,
+            "output": 384000,
+          },
+        },
+      },
+    },
+    "opencode-unlimited-proxy": {
+      "package": "@ai-sdk/openai-compatible",
+      "name": "opencode-unlimited-proxy",
+      "settings": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "sk-66d8da74611d1f94b84e6f87984345ec",
+      },
+      "models": {
+        "beam-free": {},
+        "big-pickle": {},
+        "deepseek-v4.1-flash-free": {
+          "name": "DEepseek v4.1 FLASH FREE OPENCODE-UNL-proxy",
+          "limit": {
+            "context": 1000000,
+            "output": 384000,
+          },
+          "capabilities": {
+            "input": ["text", "image", "video"],
+            "output": ["text"],
+            "reasoning": { "supported": true, "effort": ["max"] },
+          },
+        },
+        "flint-40b-free": {},
+        "glm-5.3-flash-free": {
+          "name": "GLM 5.3 FLASH FREE OPENCODE-UNL-proxy",
+          "limit": {
+            "context": 1000000,
+            "output": 384000,
+          },
+          "capabilities": {
+            "input": ["text", "image", "video"],
+            "output": ["text"],
+            "reasoning": { "supported": true, "effort": ["max"] },
+          },
+        },
+        "hy4-flash-free": {},
+        "iceman-free": {},
+        "inkling-2-small-free": {},
+        "longcat-2.5-free": {},
+        "mimo-v2.6-flash-free": {},
+        "nemotron-3.5-lightning-free": {},
+        "nemotron-3.5-super-vl-free": {},
+      },
+    },
+    //     "bp": {
+    //       "package": "@ai-sdk/openai-compatible",
+    //       "name": "OpenCode Go",
+    //       "settings": {
+    //         "baseURL": "https://opencode.ai/inference/openai/v1",
+    //         // "apiKey": "oc_sk_d4ab2ab80a35_CYH4zpSLjql9LLFwCiOaHB-NFh8iXMJn",
+    //         "apiKey": "oc_sk_2b9791ea0db9_6x3N6_iwwpEdZ3hBvnvAZRJ0zp3MpilM",
+    //         "setCacheKey": true,
+    //       },
+    //       "models": {
+    //         "glm-5.3-flash-free": {
+    //           "name": "glm-5.3-flash-free",
+    //           "limit": {
+    //             "context": 1000000,
+    //             "output": 384000,
+    //           },
+    //           "capabilities": {
+    //             "input": ["text", "image", "video"],
+    //             "output": ["text"],
+    //             "reasoning": { "supported": true, "effort": ["max"] },
+    //           },
+    //         },
+    //   },
+    //   // "plugins": ["opencode-warp-retry"],
+    //   // "providers": {
+    //   //   "bp": {
+    //   //     "package": "@ai-sdk/openai-compatible",
+    //   //     "name": "OpenCode Go",
+    //   //     "settings": {
+    //   //       "baseURL": "https://opencode.ai/inference/openai/v1",
+    //   //       // "apiKey": "oc_sk_d4ab2ab80a35_CYH4zpSLjql9LLFwCiOaHB-NFh8iXMJn",
+    //   //       "apiKey": "oc_sk_2b9791ea0db9_6x3N6_iwwpEdZ3hBvnvAZRJ0zp3MpilM",
+    //   //       "setCacheKey": true,
+    //   //     },
+    //   //     "models": {
+    //   //       "glm-5.3-flash-free": {
+    //   //         "name": "glm-5.3-flash-free",
+    //   //         "limit": {
+    //   //           "context": 1000000,
+    //   //           "output": 384000,
+    //   //         },
+    //   //         "capabilities": {
+    //   //           "input": ["text", "image", "video"],
+    //   //           "output": ["text"],
+    //   //           "reasoning": { "supported": true, "effort": ["max"] },
+    //   //         },
+    //   //       },
+    //         //       // "beam-free": {
+    //         //       //   "name": "beam-free",
+    //         //       //   "limit": {
+    //         //       //     "context": 1048576,
+    //         //       //     "output": 131072,
+    //         //       //   },
+    //         //       //   "modalities": {
+    //         //       //     "input": ["text"],
+    //         //       //     "output": ["text"],
+    //         //       //   },
+    //         //       //   "reasoning": true,
+    //         //       // },
+    //         //       // "big-pickle": {
+    //         //       //   "name": "big-pickle",
+    //         //       //   "limit": {
+    //         //       //     "context": 200000,
+    //         //       //     "output": 32000,
+    //         //       //   },
+    //         //       //   "modalities": {
+    //         //       //     "input": ["text"],
+    //         //       //     "output": ["text"],
+    //         //       //   },
+    //         //       //   "reasoning": true,
+    //         //       // },
+    //         //       // "deepseek-v4-pro": {
+    //         //       //   "name": "deepseek-v4-pro",
+    //         //       //   "limit": {
+    //         //       //     "context": 1000000,
+    //         //       //     "output": 384000,
+    //         //       //   },
+    //         //       //   "modalities": {
+    //         //       //     "input": ["text"],
+    //         //       //     "output": ["text"],
+    //         //       //   },
+    //         //       //   "reasoning": true,
+    //         //       // },
+    //         //       "deepseek-v4.1-flash-free": {
+    //         //         "name": "deepseek-v4.1-flash-free",
+    //         //         "limit": {
+    //         //           "context": 1000000,
+    //         //           "output": 384000,
+    //         //         },
+    //         //         "capabilities": {
+    //         //           "input": ["text", "image"],
+    //         //           "output": ["text"],
+    //         //           "reasoning": {
+    //         //             "supported": true,
+    //         //             "effort": ["max"],
+    //         //           },
+    //         //         },
+    //         //       },
+    //         //       //   "flint-40b-free": {
+    //         //       //     "name": "flint-40b-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 262144,
+    //         //       //       "output": 65536,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //         //       //   "iceman-free": {
+    //         //       //     "name": "iceman-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 262144,
+    //         //       //       "output": 131072,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //         //       //   "inkling-2-small-free": {
+    //         //       //     "name": "inkling-2-small-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 1048576,
+    //         //       //       "output": 131072,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text", "image"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //         //       //   "longcat-2.5-free": {
+    //         //       //     "name": "longcat-2.5-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 1000000,
+    //         //       //       "output": 262144,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text", "image"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //         //       //   "mimo-v2.6-flash-free": {
+    //         //       //     "name": "mimo-v2.6-flash-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 200000,
+    //         //       //       "output": 32000,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text", "image", "audio", "video"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //         //       //   "minimax-m3.1-flash-free": {
+    //         //       //     "name": "minimax-m3.1-flash-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 1000000,
+    //         //       //       "output": 512000,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text", "image", "video"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //         //       //   "nemotron-3.5-lightning-free": {
+    //         //       //     "name": "nemotron-3.5-lightning-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 262144,
+    //         //       //       "output": 262144,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //         //       //   "nemotron-3.5-super-vl-free": {
+    //         //       //     "name": "nemotron-3.5-super-vl-free",
+    //         //       //     "limit": {
+    //         //       //       "context": 1048576,
+    //         //       //       "output": 131072,
+    //         //       //     },
+    //         //       //     "modalities": {
+    //         //       //       "input": ["text", "image"],
+    //         //       //       "output": ["text"],
+    //         //       //     },
+    //         //       //     "reasoning": true,
+    //         //       //   },
+    //       },
+    //     },
+  },
+}
