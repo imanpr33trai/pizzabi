@@ -5,7 +5,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import com.example.R
 
 val FrauncesFamily = FontFamily(
@@ -27,75 +26,77 @@ val JetBrainsMonoFamily = FontFamily(
   Font(R.font.jetbrains_mono, FontWeight.Bold),
 )
 
+private val PizzoraTypeScale = PizzoraTokens.typography
+
 val PizzoraTypography = Typography(
   displaySmall = TextStyle(
     fontFamily = FrauncesFamily,
     fontWeight = FontWeight.Bold,
-    fontSize = 32.sp,
-    lineHeight = 38.sp,
+    fontSize = PizzoraTypeScale.displaySmallSize,
+    lineHeight = PizzoraTypeScale.displaySmallLineHeight,
   ),
   headlineMedium = TextStyle(
     fontFamily = FrauncesFamily,
     fontWeight = FontWeight.SemiBold,
-    fontSize = 26.sp,
-    lineHeight = 32.sp,
+    fontSize = PizzoraTypeScale.headlineMediumSize,
+    lineHeight = PizzoraTypeScale.headlineMediumLineHeight,
   ),
   headlineSmall = TextStyle(
     fontFamily = FrauncesFamily,
     fontWeight = FontWeight.SemiBold,
-    fontSize = 22.sp,
-    lineHeight = 28.sp,
+    fontSize = PizzoraTypeScale.headlineSmallSize,
+    lineHeight = PizzoraTypeScale.headlineSmallLineHeight,
   ),
   titleLarge = TextStyle(
     fontFamily = PlusJakartaSansFamily,
     fontWeight = FontWeight.Bold,
-    fontSize = 20.sp,
-    lineHeight = 26.sp,
+    fontSize = PizzoraTypeScale.titleLargeSize,
+    lineHeight = PizzoraTypeScale.titleLargeLineHeight,
   ),
   titleMedium = TextStyle(
     fontFamily = PlusJakartaSansFamily,
     fontWeight = FontWeight.SemiBold,
-    fontSize = 16.sp,
-    lineHeight = 22.sp,
+    fontSize = PizzoraTypeScale.titleMediumSize,
+    lineHeight = PizzoraTypeScale.titleMediumLineHeight,
   ),
   bodyLarge = TextStyle(
     fontFamily = PlusJakartaSansFamily,
     fontWeight = FontWeight.Normal,
-    fontSize = 16.sp,
-    lineHeight = 24.sp,
+    fontSize = PizzoraTypeScale.bodyLargeSize,
+    lineHeight = PizzoraTypeScale.bodyLargeLineHeight,
   ),
   bodyMedium = TextStyle(
     fontFamily = PlusJakartaSansFamily,
     fontWeight = FontWeight.Normal,
-    fontSize = 14.sp,
-    lineHeight = 20.sp,
+    fontSize = PizzoraTypeScale.bodyMediumSize,
+    lineHeight = PizzoraTypeScale.bodyMediumLineHeight,
   ),
   labelLarge = TextStyle(
     fontFamily = PlusJakartaSansFamily,
     fontWeight = FontWeight.SemiBold,
-    fontSize = 14.sp,
-    lineHeight = 20.sp,
+    fontSize = PizzoraTypeScale.labelLargeSize,
+    lineHeight = PizzoraTypeScale.labelLargeLineHeight,
   ),
   labelMedium = TextStyle(
     fontFamily = PlusJakartaSansFamily,
     fontWeight = FontWeight.Medium,
-    fontSize = 12.sp,
-    lineHeight = 16.sp,
+    fontSize = PizzoraTypeScale.labelMediumSize,
+    lineHeight = PizzoraTypeScale.labelMediumLineHeight,
   ),
 )
 
 val PizzoraMonoBody = TextStyle(
   fontFamily = JetBrainsMonoFamily,
   fontWeight = FontWeight.Medium,
-  fontSize = 14.sp,
-  lineHeight = 20.sp,
+  fontSize = PizzoraTypeScale.monoBodySize,
+  lineHeight = PizzoraTypeScale.monoBodyLineHeight,
   fontFeatureSettings = "tnum",
 )
 
 val PizzoraMonoTitle = TextStyle(
   fontFamily = JetBrainsMonoFamily,
   fontWeight = FontWeight.Bold,
-  fontSize = 18.sp,
-  lineHeight = 24.sp,
+  fontSize = PizzoraTypeScale.monoTitleSize,
+  lineHeight = PizzoraTypeScale.monoTitleLineHeight,
   fontFeatureSettings = "tnum",
 )
