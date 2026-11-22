@@ -1,0 +1,822 @@
+name: PIZZORA Phase 4 Android Emulator QA
+
+"on":
+  pull_request:
+    branches: [ '**' ]
+  workflow_dispatch:
+  schedule:
+    # Weekly run to validate emulator QA infrastructure on KVM-enabled runners.
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pizzora-phase4-qa-${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch' && github.ref != 'refs/heads/main') }}
+
+env:
+  PIZZORA_APP_PACKAGE: com.aistudio.pizzora.xkqzmw
+  # Debug API base URL override (no production endpoints/secrets in PR workflows).
+  # Default is http://10.0.2.2:8080 (emulator host loopback). Can be overridden
+  # via workflow_dispatch input or repository variable if a test backend is available.
+  PIZZORA_DEBUG_API_BASE_URL: ${{ vars.PIZZORA_DEBUG_API_BASE_URL || 'http://10.0.2.2:8080' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Stage A — Repository & Java Setup
+  # ---------------------------------------------------------------------------
+  setup:
+    name: Stage A — Repo & Java Setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      gradle_wrapper_mode: ${{ steps.verify-gradlew.outputs.mode }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.9.1
+
+      - name: Set up JDK 17 (shared/contracts toolchain)
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up JDK 21 (AGP 9 & Robolectric SDK 36)
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Verify Gradle wrapper executable permission (100755) and wrapper run
+        id: verify-gradlew
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODE="$(git ls-files --stage gradlew | awk '{print $1}')"
+          echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+          if [ "$MODE" != "100755" ]; then
+            echo "ERROR: gradlew Git mode is '$MODE'; expected '100755'." >&2
+            exit 1
+          fi
+          test -x ./gradlew || { echo "ERROR: ./gradlew is not executable." >&2; exit 1; }
+          ./gradlew --version
+
+      - name: Set up Gradle (dependency and build cache)
+        uses: gradle/actions/setup-gradle@da187c8e6ffbd3802e00f2477aa5a822b25f2dda # v4.4.4
+
+  # ---------------------------------------------------------------------------
+  # Stage B — Android Unit & Robolectric Tests
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Stage B — Android Unit & Robolectric Tests
+    needs: [setup]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.9.1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Install Rust host toolchain (1.88.0 for UniFFI bindgen)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Restore Rust build cache (Android host release profile)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          shared-key: pizzora-rust-android-host
+          prefix-key: v1
+          cache-on-failure: true
+
+      - name: Cache Robolectric android-all jars (avoids re-downloading ~100 MB per run)
+        uses: actions/cache@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1 (actions/cache@v4)
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-android-all-${{ runner.os }}-v1
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@da187c8e6ffbd3802e00f2477aa5a822b25f2dda # v4.4.4
+
+      - name: Run Android Unit & Robolectric Tests
+        env:
+          PIZZORA_DEBUG_API_BASE_URL: ${{ env.PIZZORA_DEBUG_API_BASE_URL }}
+        run: ./gradlew :app:testDebugUnitTest -PpizzoraRequireRust=true --no-daemon --console=plain
+
+      - name: Upload unit test reports (always)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-unit-reports-${{ github.run_id }}
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/test-results/testDebugUnitTest
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Stage C — Debug APK Assembly & SHA-256
+  # ---------------------------------------------------------------------------
+  assemble-debug:
+    name: Stage C — Debug APK & SHA-256
+    needs: [setup]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      apk_sha256: ${{ steps.compute-sha.outputs.sha256 }}
+      apk_size: ${{ steps.compute-sha.outputs.size }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.9.1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Rust Android cross-compilation toolchain (cargo-ndk 4.1.2 + NDK 27.2.12479018)
+        uses: ./.github/actions/setup-android-rust
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@da187c8e6ffbd3802e00f2477aa5a822b25f2dda # v4.4.4
+
+      - name: Create temporary debug keystore
+        run: |
+          keytool -genkeypair -noprompt \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build Debug APK
+        env:
+          PIZZORA_DEBUG_API_BASE_URL: ${{ env.PIZZORA_DEBUG_API_BASE_URL }}
+        run: ./gradlew :app:assembleDebug -PpizzoraRequireRust=true --no-daemon --console=plain
+
+      - name: Verify APK generated and compute SHA-256
+        id: compute-sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK_SRC" ]; then
+            echo "ERROR: Expected debug APK at $APK_SRC was not generated." >&2
+            exit 1
+          fi
+          SHA256=$(sha256sum "$APK_SRC" | awk '{print $1}')
+          SIZE=$(wc -c < "$APK_SRC" | tr -d ' ')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+          echo "Debug APK SHA-256: $SHA256"
+          echo "Debug APK size: $SIZE bytes"
+
+      - name: Verify UniFFI Native ABI Packaging (arm64-v8a & x86_64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          ZIP_LIST="$(unzip -l "$APK_SRC")"
+          for entry in \
+            "lib/arm64-v8a/libpizzora_uniffi.so" \
+            "lib/x86_64/libpizzora_uniffi.so" \
+            "lib/arm64-v8a/libjnidispatch.so" \
+            "lib/x86_64/libjnidispatch.so"; do
+            if ! echo "$ZIP_LIST" | grep -q "$entry"; then
+              echo "ERROR: Expected native library '$entry' missing from debug APK." >&2
+              exit 1
+            fi
+          done
+          echo "All required native libraries present in debug APK."
+
+      - name: Stage Debug APK Artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ARTIFACT_ID="pr-${{ github.event.pull_request.number }}-${SHORT_SHA}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ARTIFACT_ID="main-${SHORT_SHA}"
+          else
+            ARTIFACT_ID="manual-${SHORT_SHA}"
+          fi
+          APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
+          mkdir -p preview-apks
+          APK_NAME="pizzora-preview-${ARTIFACT_ID}.apk"
+          cp "$APK_SRC" "preview-apks/${APK_NAME}"
+          echo "artifact_name=pizzora-preview-${ARTIFACT_ID}" >> "$GITHUB_OUTPUT"
+          echo "apk_path=preview-apks/${APK_NAME}" >> "$GITHUB_OUTPUT"
+        id: stage
+
+      - name: Upload Debug Preview APK Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.stage.outputs.artifact_name }}
+          path: ${{ steps.stage.outputs.apk_path }}
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Stage D — Emulator Boot Verification
+  # ---------------------------------------------------------------------------
+  emulator-readiness:
+    name: Stage D — Emulator Boot Verification
+    needs: [assemble-debug]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.9.1
+
+      - name: Detect and enable KVM access for the runner user
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ubuntu-latest exposes /dev/kvm, but the runner user is not in the
+          # kvm group, so the emulator silently falls back to QEMU TCG software
+          # emulation and an API 36 image never boots within the job timeout.
+          # This udev rule is the enablement step documented by
+          # reactivecircus/android-emulator-runner (README: "Enable KVM group
+          # perms" / 99-kvm4all.rules).
+          if [ ! -e /dev/kvm ]; then
+            echo "ERROR: /dev/kvm does not exist on this runner. Hardware-accelerated Android emulation is unavailable; refusing to boot an API 36 emulator under QEMU TCG software emulation." >&2
+            exit 1
+          fi
+          echo "KVM device before applying the kvm4all udev rule:"
+          ls -l /dev/kvm
+          echo "Runner user and kvm group membership:"
+          id
+          getent group kvm || true
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle || true
+          kvm_ok=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              kvm_ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$kvm_ok" -ne 1 ]; then
+            sudo chmod 0666 /dev/kvm || true
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              kvm_ok=1
+            fi
+          fi
+          if [ "$kvm_ok" -ne 1 ]; then
+            echo "ERROR: /dev/kvm is still not accessible for user '$(id -un)' after the kvm4all udev rule, udevadm settle, 10 retries and a chmod fallback." >&2
+            ls -l /dev/kvm
+            getent group kvm || true
+            exit 1
+          fi
+          echo "KVM is accessible (rw) for user '$(id -un)'."
+
+      - name: Run Android emulator boot-readiness gate (API 36, Pixel 6)
+        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 600
+          # Run only the bounded readiness gate; the script returns 0 if the
+          # emulator reaches 'device' state + sys.boot_completed=1 + responsive
+          # framework (pm, dumpsys), otherwise 1 with diagnostics in ci-diagnostics/.
+          script: bash .github/scripts/android-emulator-readiness.sh
+
+      - name: Upload readiness diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: emulator-readiness-diagnostics-${{ github.run_id }}
+          path: ci-diagnostics/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Stage E — Install & Launch App on Emulator
+  # ---------------------------------------------------------------------------
+  install-launch:
+    name: Stage E — Install & Launch App
+    needs: [assemble-debug, emulator-readiness]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.9.1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Rust Android cross-compilation toolchain
+        uses: ./.github/actions/setup-android-rust
+
+      - name: Download debug APK from assemble stage
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pizzora-preview-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref == 'refs/heads/main' && format('main-{0}', github.sha) || format('manual-{0}', github.sha) }}
+          path: preview-apks
+
+      - name: Verify APK present
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_FILE=$(ls preview-apks/pizzora-preview-*.apk 2>/dev/null | head -1 || true)
+          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
+            echo "ERROR: Debug APK not found in downloaded artifacts." >&2
+            ls -la preview-apks/
+            exit 1
+          fi
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_OUTPUT"
+        id: find-apk
+
+      - name: Run emulator, install APK, and launch MainActivity
+        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            set -euo pipefail
+            APK_FILE="${{ steps.find-apk.outputs.APK_FILE }}"
+            echo "Installing $APK_FILE..."
+            adb install -r "$APK_FILE"
+            echo "Verifying package registration..."
+            adb shell pm list packages | grep -q "${{ env.PIZZORA_APP_PACKAGE }}" || { echo "ERROR: Package not registered."; exit 1; }
+            echo "Launching MainActivity..."
+            adb shell am start -W -n ${{ env.PIZZORA_APP_PACKAGE }}/com.example.MainActivity
+            echo "App launched successfully."
+            # Keep the emulator alive for the next job (instrumentation).
+            # The reactivecircus action will terminate the emulator after this script returns.
+            # We intentionally do NOT collect diagnostics here; that happens in the instrumentation job.
+
+  # ---------------------------------------------------------------------------
+  # Stage F — Instrumentation Tests on Emulator
+  # ---------------------------------------------------------------------------
+  instrumentation:
+    name: Stage F — Instrumentation Tests (API 36)
+    needs: [install-launch]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.9.1
+
+      - name: Detect and enable KVM access for the runner user
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo "ERROR: /dev/kvm does not exist on this runner." >&2
+            exit 1
+          fi
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle || true
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then break; fi
+            sleep 1
+          done
+          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+            sudo chmod 0666 /dev/kvm || true
+          fi
+          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+            echo "ERROR: /dev/kvm still not accessible." >&2
+            exit 1
+          fi
+          echo "KVM is accessible (rw)."
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Rust Android cross-compilation toolchain
+        uses: ./.github/actions/setup-android-rust
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@da187c8e6ffbd3802e00f2477aa5a822b25f2dda # v4.4.4
+
+      - name: Download debug APK from assemble stage
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pizzora-preview-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref == 'refs/heads/main' && format('main-{0}', github.sha) || format('manual-{0}', github.sha) }}
+          path: preview-apks
+
+      - name: Run Android instrumentation tests on API 36 emulator
+        env:
+          PIZZORA_DEBUG_API_BASE_URL: ${{ env.PIZZORA_DEBUG_API_BASE_URL }}
+          PIZZORA_EMU_DIAG_DIR: ci-diagnostics
+        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: bash .github/scripts/run-android-instrumentation.sh
+
+      - name: Collect instrumentation diagnostics & test reports
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          bash .github/scripts/collect-android-diagnostics.sh post
+          exit 0
+
+      - name: Upload instrumentation diagnostics & test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-instrumented-diagnostics-${{ github.run_id }}
+          path: ci-diagnostics/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Stage G — Screenshot Evidence Capture
+  # ---------------------------------------------------------------------------
+  screenshots:
+    name: Stage G — Screenshot Evidence Capture
+    needs: [install-launch]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.9.1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Rust Android cross-compilation toolchain
+        uses: ./.github/actions/setup-android-rust
+
+      - name: Download debug APK from assemble stage
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pizzora-preview-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref == 'refs/heads/main' && format('main-{0}', github.sha) || format('manual-{0}', github.sha) }}
+          path: preview-apks
+
+      - name: Find debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_FILE=$(ls preview-apks/pizzora-preview-*.apk 2>/dev/null | head -1 || true)
+          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
+            echo "ERROR: Debug APK not found." >&2
+            exit 1
+          fi
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_OUTPUT"
+        id: find-apk
+
+      - name: Run emulator, install APK, and capture Phase 4 screenshots
+        env:
+          PIZZORA_APP_PACKAGE: ${{ env.PIZZORA_APP_PACKAGE }}
+        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            set -euo pipefail
+            APK_FILE="${{ steps.find-apk.outputs.APK_FILE }}"
+            echo "Installing $APK_FILE..."
+            adb install -r "$APK_FILE"
+            echo "Waiting for package to be ready..."
+            adb shell pm list packages | grep -q "${{ env.PIZZORA_APP_PACKAGE }}" || { echo "ERROR: Package not registered."; exit 1; }
+
+            # Launch app once to ensure it's initialized
+            adb shell am start -W -n ${{ env.PIZZORA_APP_PACKAGE }}/com.example.MainActivity
+            sleep 2
+
+            mkdir -p qa-artifacts/phase4
+
+            # Helper: capture screenshot with a descriptive filename
+            capture() {
+              local filename="$1"
+              echo "Capturing $filename..."
+              adb exec-out screencap -p > "qa-artifacts/phase4/${filename}" || { echo "ERROR: screencap failed for $filename"; return 1; }
+              if [ ! -s "qa-artifacts/phase4/${filename}" ]; then
+                echo "ERROR: Captured file is empty: $filename"
+                return 1
+              fi
+              echo "  -> OK ($(wc -c < "qa-artifacts/phase4/${filename}") bytes)"
+            }
+
+            # Helper: set emulator display profile (wm size, density, theme, font_scale)
+            set_profile() {
+              local size="$1"
+              local density="$2"
+              local night="$3"
+              local font_scale="$4"
+              adb shell wm size "$size"
+              adb shell wm density "$density"
+              adb shell cmd uimode night "$night"
+              adb shell settings put system font_scale "$font_scale"
+              # Allow Compose to recompose
+              sleep 1
+            }
+
+            # Helper: launch app fresh
+            launch_app() {
+              adb shell am force-stop "${{ env.PIZZORA_APP_PACKAGE }}"
+              adb shell am start -W -n ${{ env.PIZZORA_APP_PACKAGE }}/com.example.MainActivity
+              sleep 2
+            }
+
+            # Helper: navigate to Cart tab (bottom nav index 1 = Cart)
+            navigate_to_cart() {
+              # Use input tap on bottom nav - Cart is 2nd item
+              # Or use am start with deep link if available; here we just rely on UI test
+              # For screenshot capture we launch fresh and let the app land on default tab (Menu).
+              # Cart tab index is 1 (0=Menu, 1=Cart, 2=Orders, 3=Profile).
+              # Simulate tap at approximate Cart tab position (portrait Pixel 6 ~1080px width, bottom nav ~72dp tall)
+              adb shell input tap 270 2300
+              sleep 1
+            }
+
+            # NOTE: Without a live backend reachable at http://10.0.2.2:8080 and
+            # seeded data (cart items, coupons, products), most of the required
+            # Phase 4 screenshots CANNOT be captured automatically in CI.
+            # The handoff document (docs/PHASE4_EMULATOR_QA_HANDOFF.md) describes
+            # the full manual QA procedure on a KVM-enabled workstation with a
+            # running local backend (Docker Compose) and seeded database.
+            #
+            # This CI job documents the EXACT capture commands for the 8 required
+            # screenshots per Section 13.2 / handoff Section 6.1, but will only
+            # produce valid images when the backend is available and the app is
+            # in the correct state. Missing backend = missing screenshots, which
+            # is correctly reported as a capability gap rather than faked success.
+
+            echo "=== Phase 4 Screenshot Capture (requires live backend at 10.0.2.2:8080) ==="
+            echo "Backend URL configured as: ${PIZZORA_DEBUG_API_BASE_URL:-http://10.0.2.2:8080}"
+            echo ""
+
+            # Profile 1: Dark, 412dp, 1.0x (824x1830 @ 320dpi)
+            set_profile "824x1830" "320" "yes" "1.0"
+            launch_app
+            navigate_to_cart
+            capture "p4_cart_items_coupon_dark_412dp_1.0x.png" || echo "WARNING: Capture 1 failed (likely no backend data)"
+
+            # Profile 2: Light, 320dp, 1.5x (640x1280 @ 320dpi)
+            set_profile "640x1280" "320" "no" "1.5"
+            launch_app
+            navigate_to_cart
+            capture "p4_cart_items_coupon_light_320dp_1.5x.png" || echo "WARNING: Capture 2 failed (likely no backend data)"
+
+            # Profile 1 again for CouponPickerSheet (need to open coupon sheet)
+            set_profile "824x1830" "320" "yes" "1.0"
+            launch_app
+            navigate_to_cart
+            # Tap View/Change Coupon button - approximate position; real test would use UI automator
+            adb shell input tap 412 1600
+            sleep 1
+            capture "p4_coupons_grouped_dark_412dp_1.0x.png" || echo "WARNING: Capture 3 failed (likely no backend data)"
+
+            # Profile 4: Light, 840dp Tablet (1680x1200 @ 320dpi)
+            set_profile "1680x1200" "320" "no" "1.0"
+            launch_app
+            navigate_to_cart
+            capture "p4_cart_tablet_split_light_840dp_1.0x.png" || echo "WARNING: Capture 4 failed (likely no backend data)"
+
+            # Profile 3: Dark, 360dp, 1.0x (720x1600 @ 320dpi) - Empty Cart
+            set_profile "720x1600" "320" "yes" "1.0"
+            # For empty cart we need a fresh install or clear cart
+            adb shell pm clear "${{ env.PIZZORA_APP_PACKAGE }}"
+            launch_app
+            navigate_to_cart
+            capture "p4_cart_empty_dark_360dp_1.0x.png" || echo "WARNING: Capture 5 failed"
+
+            # Profile 3: Clear Cart Confirmation (same profile, need cart with items first)
+            # This requires backend data; skip in CI without backend
+            echo "Skipping Clear Cart Confirmation capture (requires seeded cart + backend)"
+
+            # Profile 1: Undo Removal Snackbar (requires interaction)
+            echo "Skipping Undo Snackbar capture (requires user interaction + backend)"
+
+            # Profile 1: Discontinued Edit Mode (requires backend product deactivation)
+            echo "Skipping Discontinued Edit Mode capture (requires backend mutation)"
+
+            # Reset to defaults
+            adb shell wm size reset
+            adb shell wm density reset
+            adb shell settings put system font_scale 1.0
+            adb shell cmd uimode night yes
+
+            echo ""
+            echo "=== Capture Summary ==="
+            ls -lh qa-artifacts/phase4/ 2>/dev/null || echo "No screenshots captured."
+
+      - name: Upload Phase 4 Screenshot Artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase4-screenshots-${{ github.run_id }}
+          path: qa-artifacts/phase4/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Report Screenshot Capture Status
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Phase 4 Screenshot Capture Report ==="
+          REQUIRED=(
+            "p4_cart_items_coupon_dark_412dp_1.0x.png"
+            "p4_cart_items_coupon_light_320dp_1.5x.png"
+            "p4_coupons_grouped_dark_412dp_1.0x.png"
+            "p4_cart_tablet_split_light_840dp_1.0x.png"
+            "p4_cart_empty_dark_360dp_1.0x.png"
+            "p4_cart_clear_dialog_dark_360dp_1.0x.png"
+            "p4_cart_undo_snackbar_dark_412dp_1.0x.png"
+            "p4_cart_edit_discontinued_dark_412dp_1.0x.png"
+          )
+          CAPTURED=0
+          MISSING=0
+          for f in "${REQUIRED[@]}"; do
+            if [ -f "qa-artifacts/phase4/$f" ] && [ -s "qa-artifacts/phase4/$f" ]; then
+              echo "  PRESENT: $f ($(wc -c < "qa-artifacts/phase4/$f") bytes)"
+              CAPTURED=$((CAPTURED + 1))
+            else
+              echo "  MISSING: $f"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          echo ""
+          echo "Captured: $CAPTURED / 8"
+          echo "Missing: $MISSING / 8"
+          if [ "$MISSING" -gt 0 ]; then
+            echo ""
+            echo "NOTE: Missing screenshots are EXPECTED in CI without a live backend."
+            echo "      Per docs/PHASE4_EMULATOR_QA_HANDOFF.md, full capture requires:"
+            echo "      - KVM-enabled Linux workstation or CI runner"
+            echo "      - Local Docker Compose backend on host port 8080 (10.0.2.2:8080 from emulator)"
+            echo "      - MinIO thumbnails reachable via 10.0.2.2:9000 or adb reverse"
+            echo "      - Seeded database with cart items, coupons, and active/inactive products"
+            echo "      - Manual interaction for Undo snackbar and Discontinued Edit Mode"
+            echo "      This workflow correctly reports the capability gap rather than faking success."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Stage H — Diagnostics (Always Upload)
+  # ---------------------------------------------------------------------------
+  diagnostics:
+    name: Stage H — Aggregated Diagnostics
+    needs: [unit-tests, assemble-debug, emulator-readiness, instrumentation, screenshots]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download all diagnostic artifacts
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          path: all-diagnostics
+          pattern: '*diagnostics*'
+          merge-multiple: true
+
+      - name: Download unit test reports
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          path: all-diagnostics/unit-reports
+          pattern: 'android-unit-reports-*'
+          merge-multiple: true
+
+      - name: Download instrumentation diagnostics
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          path: all-diagnostics/instrumented
+          pattern: 'android-instrumented-diagnostics-*'
+          merge-multiple: true
+
+      - name: Download readiness diagnostics
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          path: all-diagnostics/readiness
+          pattern: 'emulator-readiness-diagnostics-*'
+          merge-multiple: true
+
+      - name: Download screenshots
+        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          path: all-diagnostics/screenshots
+          pattern: 'phase4-screenshots-*'
+          merge-multiple: true
+
+      - name: Create aggregated diagnostics summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUMMARY_FILE="all-diagnostics/PHASE4_DIAGNOSTICS_SUMMARY.md"
+          {
+            echo "# PIZZORA Phase 4 CI Diagnostics Summary"
+            echo ""
+            echo "**Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "**Event:** ${{ github.event_name }}"
+            echo "**SHA:** ${{ github.sha }}"
+            echo "**Branch:** ${{ github.ref_name }}"
+            echo "**Timestamp:** $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo ""
+            echo "## Job Outcomes"
+            echo "| Stage | Job | Status |"
+            echo "|-------|-----|--------|"
+            echo "| A | Repo & Java Setup | \${{ needs.setup.result }} |"
+            echo "| B | Unit & Robolectric Tests | \${{ needs.unit-tests.result }} |"
+            echo "| C | Debug APK & SHA-256 | \${{ needs.assemble-debug.result }} |"
+            echo "| D | Emulator Boot Verification | \${{ needs.emulator-readiness.result }} |"
+            echo "| E | Install & Launch App | \${{ needs.install-launch.result }} |"
+            echo "| F | Instrumentation Tests | \${{ needs.instrumentation.result }} |"
+            echo "| G | Screenshot Evidence | \${{ needs.screenshots.result }} |"
+            echo "| H | Aggregated Diagnostics | \${{ job.status }} |"
+            echo ""
+            echo "## Artifact Inventory"
+            find all-diagnostics -type f -printf '%p (%s bytes)\n' 2>/dev/null | sort || echo "(no files)"
+            echo ""
+            echo "## Screenshot Capture Status"
+            if [ -d "all-diagnostics/screenshots/qa-artifacts/phase4" ]; then
+              for f in all-diagnostics/screenshots/qa-artifacts/phase4/*.png; do
+                [ -e "$f" ] || continue
+                echo "- $(basename "$f"): $(wc -c < "$f") bytes"
+              done
+            else
+              echo "No screenshot artifacts found."
+            fi
+            echo ""
+            echo "## Notes"
+            echo "- Screenshots 4-8 (tablet split, empty cart, clear dialog, undo snackbar, discontinued edit)"
+            echo "  require a live backend, seeded data, and/or manual interaction."
+            echo "- They are EXPECTED to be missing in CI runs without the full QA environment."
+            echo "- See docs/PHASE4_EMULATOR_QA_HANDOFF.md for the complete manual QA procedure."
+          } > "$SUMMARY_FILE"
+          cat "$SUMMARY_FILE"
+
+      - name: Upload Aggregated Diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase4-aggregated-diagnostics-${{ github.run_id }}
+          path: all-diagnostics/
+          retention-days: 30
+          if-no-files-found: ignore

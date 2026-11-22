@@ -3,6 +3,7 @@ package com.example.cart
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.os.Looper
 import android.view.View
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -40,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -124,6 +128,8 @@ class Phase4CartAndReEditRobolectricTest {
   val composeTestRule = createComposeRule()
 
   private lateinit var db: PizzoraDatabase
+  private val viewModelStore = ViewModelStore()
+  private val vmKeySequence = java.util.concurrent.atomic.AtomicInteger(0)
   private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
   private val customerSession = AuthSession(
@@ -482,11 +488,22 @@ class Phase4CartAndReEditRobolectricTest {
       db.cartDao().replaceAllItemsForUser("cust-1", initialCartItems)
     }
 
-    val catalogVm = CustomerCatalogViewModel(NetworkCatalogRepository(apiClient, db.catalogCacheDao()))
-    val cartVm = CartViewModel(NetworkCartRepository(apiClient, db.cartDao(), storage))
-    val quoteVm = CheckoutQuoteViewModel(NetworkPricingRepository(apiClient))
-    val checkoutVm = CheckoutViewModel(NetworkOrderRepository(apiClient))
+    val catalogVm = createVm { CustomerCatalogViewModel(NetworkCatalogRepository(apiClient, db.catalogCacheDao())) }
+    val cartVm = createVm { CartViewModel(NetworkCartRepository(apiClient, db.cartDao(), storage)) }
+    val quoteVm = createVm { CheckoutQuoteViewModel(NetworkPricingRepository(apiClient)) }
+    val checkoutVm = createVm { CheckoutViewModel(NetworkOrderRepository(apiClient)) }
     return FullTestShellHarness(catalogVm, cartVm, quoteVm, checkoutVm)
+  }
+
+  private inline fun <reified T : ViewModel> createVm(noinline creator: () -> T): T {
+    val factory = object : ViewModelProvider.Factory {
+      @Suppress("UNCHECKED_CAST")
+      override fun <VM : ViewModel> create(modelClass: Class<VM>): VM = creator() as VM
+    }
+    return ViewModelProvider(viewModelStore, factory)[
+      "vm_${T::class.java.simpleName}_${vmKeySequence.incrementAndGet()}",
+      T::class.java,
+    ]
   }
 
   private fun sampleItem(
@@ -565,7 +582,14 @@ class Phase4CartAndReEditRobolectricTest {
 
   @After
   fun tearDown() {
+    // Cancel every ViewModel-owned coroutine (e.g. CartViewModel's eagerly
+    // started observeCart() stateIn collection) and drain the main looper
+    // BEFORE closing the in-memory Room database. Closing the DB first lets a
+    // still-active Room flow emit into a closed SQLite connection, which
+    // surfaces as a flaky UncaughtExceptionsBeforeTest in a later test.
     Coil.reset()
+    viewModelStore.clear()
+    Shadows.shadowOf(Looper.getMainLooper()).idle()
     db.close()
   }
 

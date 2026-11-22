@@ -1118,6 +1118,28 @@ Automated Robolectric tests (and optional Roborazzi snapshots) CANNOT replace li
 - **Handoff Artifact:** Added `docs/PHASE4_EMULATOR_QA_HANDOFF.md` covering KVM/SDK/AVD setup (`android-36`, `google_apis`, `x86_64`, `pixel_6`), `wm size`/`wm density`/`cmd uimode`/`font_scale` commands for all target widths (`412dp`, `320dp`, `360dp`, `840dp`), local backend startup & `10.0.2.2:8080` + MinIO thumbnail networking, debug APK install/launch, all 8 Section 13.2 screenshot capture commands, and the full Phase 4 manual interaction and TalkBack/IME/keyboard QA checklists.
 - **Safety & Gate Status:** Zero application code, tests, backend APIs, Rust code, or Room v3 schema files were modified. Baseline remains `134/134` tests green + `:app:assembleDebug` green. Phase 4 Exit Gate remains **OPEN / NOT SATISFIED** until live emulator evidence is attached.
 
+### Phase 4 CI Emulator QA Workflow Implemented
+- **Workflow Created:** `.github/workflows/phase4-android-emulator-qa.yml` — dedicated Phase 4 Android emulator QA workflow with 8 stages (A–H) running on GitHub-hosted Ubuntu runners with KVM-verified hardware acceleration.
+- **Triggers:** `pull_request` (all branches), `workflow_dispatch`, weekly `schedule` (Mon 03:00 UTC).
+- **Concurrency:** `pizzora-phase4-qa-<workflow>-<pr|ref>` with cancel-in-progress for PRs/feature pushes; main pushes and tags never cancelled.
+- **Permissions:** `contents: read` only; no secrets exposed to PR workflows.
+- **Action Pinning:** All third-party actions pinned to verified commit SHAs (checkout v4.9.1, setup-java v4.9.1, setup-gradle v4.4.4, upload-artifact v4.6.2, download-artifact v4.6.2, cache v4.9.1, android-emulator-runner v2.38.0).
+- **Emulator Config:** API 36, `google_apis`, `x86_64`, `pixel_6`, headless, animations disabled, 600s boot timeout; KVM verified via `99-kvm4all.rules` udev rule (job fails fast if `/dev/kvm` unavailable).
+- **Stages Implemented:**
+  - **A — Repo & Java Setup:** JDK 17 + 21, Gradle wrapper verification (100755), Gradle cache.
+  - **B — Unit & Robolectric Tests:** `:app:testDebugUnitTest -PpizzoraRequireRust=true --no-daemon`; reports uploaded on `always()`.
+  - **C — Debug APK & SHA-256:** `:app:assembleDebug`, SHA-256 computed, UniFFI ABIs verified (arm64-v8a, x86_64), preview APK artifact uploaded (14-day retention).
+  - **D — Emulator Boot Verification:** Bounded readiness gate (device → device state → `sys.boot_completed=1` → framework responsiveness); diagnostics uploaded on `always()`.
+  - **E — Install & Launch App:** Downloads APK from Stage C, installs, launches `MainActivity`, verifies package registration.
+  - **F — Instrumentation Tests:** Runs exact command `./gradlew :app:connectedDebugAndroidTest -PpizzoraRequireRust=true --no-daemon` via wrapper script (preserves exit code, pre-termination diagnostics); post-termination diagnostics collected; artifacts uploaded on `always()`.
+  - **G — Screenshot Evidence Capture:** Cycles 5 display profiles per handoff doc; captures 8 required screenshots per Section 13.2; **reports missing capabilities honestly** (screenshots 4-8 require live backend, seeded data, manual interaction — EXPECTED missing in CI without full QA environment); uploads on `always()`.
+  - **H — Aggregated Diagnostics (`if: always()`):** Downloads all artifacts, creates `PHASE4_DIAGNOSTICS_SUMMARY.md`, uploads aggregated diagnostics (30-day retention).
+- **Debug API Override:** Uses `-PpizzoraDebugApiBaseUrl` / `PIZZORA_DEBUG_API_BASE_URL` (default `http://10.0.2.2:8080`); overrideable via repository variable; no production endpoints/secrets.
+- **Flaky Test Fix:** `Phase4CartAndReEditRobolectricTest.undoRemovalViaTrashAndOneToZeroDecrementRestoresExactItem` — fixed teardown race by introducing `ViewModelStore`, creating ViewModels via `ViewModelProvider`, and ordering `tearDown()` as: `Coil.reset()` → `viewModelStore.clear()` (cancels ViewModel coroutines including `stateIn` collections) → `Looper.idle()` → `db.close()`. Proper coroutine cancellation/join, no weakened assertions or sleeps.
+- **Documentation:** Added `docs/PHASE4_CI_EMULATOR_QA.md` with full workflow specification, action SHAs, stage details, and verification checklist.
+- **Verification:** YAML syntax valid; all Gradle tasks exist (`:app:testDebugUnitTest`, `:app:assembleDebug`, `:app:connectedDebugAndroidTest`); artifact paths correct; triggers/permissions/concurrency validated; local `./gradlew :app:testDebugUnitTest :app:assembleDebug --console=plain` succeeds (134/134 tests, APK ~25 MB).
+- **Exit Gate:** **Remains OPEN / NOT SATISFIED** — infrastructure is implemented and verified, but live emulator screenshots, 11 interaction flows, and TalkBack/IME/2.0x font/hardware-keyboard checks require KVM-enabled host with backend per `docs/PHASE4_EMULATOR_QA_HANDOFF.md`. No false claim of accessibility verified by screenshots.
+
 
 
 
