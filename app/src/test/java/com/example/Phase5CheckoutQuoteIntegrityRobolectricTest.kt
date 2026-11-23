@@ -1,22 +1,21 @@
 package com.example
 
 import android.os.Looper
-import android.view.View
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import com.example.checkout.AddAddressDialog
 import com.example.checkout.CheckoutQuoteUiState
 import com.example.checkout.CheckoutQuoteViewModel
@@ -147,54 +146,6 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
     error("Cannot locate $relativePath from ${System.getProperty("user.dir")}")
   }
 
-  /**
-   * Commits text through the field's SetText semantics action, the same state update an IME
-   * performs. Robolectric cannot drive the focus/IME path for a windowed dialog reliably.
-   */
-  private fun enterText(tag: String, text: String) {
-    composeTestRule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.SetText) {
-      it(AnnotatedString(text))
-    }
-  }
-
-  /**
-   * Robolectric never runs the draw pass for a dialog window, so Compose's idling resource keeps
-   * reporting a pending measure/layout pass forever. Marking the registered compose views GONE
-   * makes that check skip them while leaving the semantics tree available to the assertions.
-   */
-  private fun ignorePendingDialogLayout() {
-    fun fieldsOf(value: Any?): List<java.lang.reflect.Field> {
-      val fields = mutableListOf<java.lang.reflect.Field>()
-      var type: Class<*>? = value?.javaClass
-      while (type != null) {
-        fields.addAll(type.declaredFields)
-        type = type.superclass
-      }
-      return fields
-    }
-
-    // Give the dialog window's compose view a chance to register before marking it GONE.
-    repeat(3) {
-      composeTestRule.mainClock.advanceTimeByFrame()
-      Shadows.shadowOf(Looper.getMainLooper()).idle()
-    }
-
-    val environment = composeTestRule.javaClass.getDeclaredField("environment")
-      .apply { isAccessible = true }
-      .get(composeTestRule)
-    val registry = fieldsOf(environment).first { it.type.name.contains("ComposeRootRegistry") }
-      .apply { isAccessible = true }
-      .get(environment)
-    @Suppress("UNCHECKED_CAST")
-    val roots = registry.javaClass.methods.first { it.name == "getRegisteredComposeRoots" }
-      .invoke(registry) as Collection<Any>
-
-    composeTestRule.activity.runOnUiThread {
-      roots.filterIsInstance<View>().forEach { it.visibility = View.GONE }
-    }
-    composeTestRule.waitForIdle()
-  }
-
   /** Robolectric trace bookkeeping grows unbounded during Compose text layout; disable it for this test. */
   private fun withRobolectricTracingDisabled(block: () -> Unit) {
     val tagsField = ShadowTrace::class.java.getDeclaredField("tags")
@@ -303,11 +254,16 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
     var failQuoteCallNumber: Int? = null
     var delayFirstQuoteMs = 0L
     var delayQuoteCallNumber: Int? = null
+    var delayUncouponedQuoteMs = 0L
+    var delayZoneCheckMs = 0L
     var delayCheckoutCallNumber: Int? = null
     var serverUnitPricePaise = 50_000L
     var zoneMinOrderPaise = 30_000L
     var deliveryFeePaise = 4_000L
     var kotlin422Pins = setOf<String>()
+    // When true, a 422 pin only fails the uncouponed fallback, letting a coupled coupon
+    // rejection happen first (needed by the coupon-fallback regression test).
+    var zone422UncouponedOnly = false
     var failCheckoutWithMinOrder422 = false
     var checkoutMinOrderPaise: Long? = null
     var checkoutTotalOverride: Long? = null
@@ -335,7 +291,7 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
 
     fun MockRequestHandleScope.quoteResponse(req: PricingQuoteRequest) = run {
       val pin = req.pincode
-      if (pin != null && pin in kotlin422Pins) {
+      if (pin != null && pin in kotlin422Pins && (!zone422UncouponedOnly || req.couponCode == null)) {
         return@run errorResponse(
           status = HttpStatusCode.UnprocessableEntity,
           code = "DELIVERY_MIN_ORDER_NOT_MET",
@@ -505,6 +461,7 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
           quoteRequests.add(req)
           if (callNumber == 1 && delayFirstQuoteMs > 0L) delay(delayFirstQuoteMs)
           if (callNumber == delayQuoteCallNumber) delay(250L)
+          if (delayUncouponedQuoteMs > 0L && req.couponCode == null) delay(delayUncouponedQuoteMs)
           if (failQuoteCallNumber == callNumber) {
             throw IOException("Simulated network failure on quote #$callNumber")
           }
@@ -513,6 +470,7 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
         path == "/api/v1/delivery-zones/check" && request.method == HttpMethod.Get -> {
           zoneCalls.incrementAndGet()
           val pin = request.url.parameters["pincode"].orEmpty()
+          if (delayZoneCheckMs > 0L) delay(delayZoneCheckMs)
           respond(
             content = json.encodeToString(
               DeliveryZoneCheckResponse(
@@ -786,6 +744,36 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
   }
 
   @Test
+  fun cartChangeDuringDelayedZoneCheckClearsCheckingFlagAndStillQuotes() {
+    val server = Phase5Server()
+    server.delayZoneCheckMs = 2_000L
+    val quoteVm = server.quoteViewModel()
+    seedCart(quoteVm)
+    waitForFreshQuote(quoteVm)
+
+    quoteVm.syncCheckoutAddressPincode("560001")
+    val zoneDeadline = System.currentTimeMillis() + 5_000L
+    while (server.zoneCalls.get() == 0 && System.currentTimeMillis() < zoneDeadline) {
+      Thread.sleep(10L)
+    }
+    assertEquals(1, server.zoneCalls.get())
+    assertTrue(quoteVm.uiState.value.isCheckingZone)
+
+    val updated = cartItem(quantity = 2)
+    quoteVm.onCartChanged(listOf(updated), updated.item.unitPricePaise * updated.item.quantity)
+    settleAsyncWork(2_500L)
+    waitForFreshQuote(quoteVm)
+
+    val state = quoteVm.uiState.value
+    assertFalse(state.isCheckingZone)
+    assertTrue(state.isQuoteFresh)
+    assertEquals(2, state.quotedSignature?.itemsConfig?.first()?.quantity)
+    assertEquals("560001", state.quote?.deliveryZone?.pincode)
+    assertEquals(1, server.zoneCalls.get())
+    quoteVm.clearSessionState()
+  }
+
+  @Test
   fun samePincodeAddressSwitchReusesFreshQuote() {
     val server = Phase5Server()
     val quoteVm = server.quoteViewModel()
@@ -801,6 +789,29 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
     assertEquals(count, server.quoteCalls.get())
     assertEquals(signature, quoteVm.uiState.value.quotedSignature)
     assertTrue(quoteVm.uiState.value.isQuoteFresh)
+    quoteVm.clearSessionState()
+  }
+
+  @Test
+  fun invalidFiveDigitPincodeCheckClearsCurrentSignature() {
+    val server = Phase5Server()
+    val quoteVm = server.quoteViewModel()
+    seedCart(quoteVm)
+    waitForFreshQuote(quoteVm)
+    assertNotNull(quoteVm.uiState.value.currentSignature)
+
+    quoteVm.onPincodeInputChange("12345")
+    quoteVm.applyPincodeCheck()
+    settleAsyncWork(200L)
+
+    val state = quoteVm.uiState.value
+    assertNull(state.currentSignature)
+    assertNull(state.quote)
+    assertNull(state.quotedSignature)
+    assertNull(state.inFlightSignature)
+    assertFalse(state.isQuoteFresh)
+    assertEquals("Enter a valid 6-digit Indian pincode.", state.quoteError)
+    assertEquals(1, server.quoteCalls.get())
     quoteVm.clearSessionState()
   }
 
@@ -902,6 +913,66 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
   }
 
   @Test
+  fun unavailableOnlyCartCancelsInFlightQuoteAndCannotResurrectIt() {
+    val server = Phase5Server()
+    server.delayFirstQuoteMs = 500L
+    val quoteVm = server.quoteViewModel()
+    seedCart(quoteVm)
+    waitForState { server.quoteCalls.get() == 1 }
+
+    quoteVm.onCartChanged(listOf(cartItem(isAvailable = false)), 50_000L)
+    settleAsyncWork(700L)
+
+    val state = quoteVm.uiState.value
+    assertTrue(state.hasUnavailableItems)
+    assertNull(state.quote)
+    assertNull(state.quotedSignature)
+    assertNull(state.currentSignature)
+    assertNull(state.inFlightSignature)
+    assertFalse(state.isQuoteFresh)
+    assertEquals(1, server.quoteCalls.get())
+    quoteVm.clearSessionState()
+  }
+
+  @Test
+  fun unavailableOnlyCartCancelsInFlightCouponFallbackQuote() {
+    val server = Phase5Server()
+    val quoteVm = server.quoteViewModel()
+    seedCart(quoteVm)
+    waitForFreshQuote(quoteVm)
+    server.delayUncouponedQuoteMs = 2_000L
+
+    quoteVm.applyCouponCode("BAD_COUPON")
+
+    // Poll without Compose's idling wait: that wait can consume the delayed fallback itself.
+    val fallbackDeadline = System.currentTimeMillis() + 5_000L
+    while (true) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      val state = quoteVm.uiState.value
+      if (state.couponError != null && state.isLoadingQuote &&
+        state.inFlightSignature?.normalizedCouponCode == null
+      ) break
+      if (System.currentTimeMillis() > fallbackDeadline) {
+        throw AssertionError("Timed out waiting for coupon fallback: ${quoteVm.uiState.value}")
+      }
+      Thread.sleep(10L)
+    }
+
+    quoteVm.onCartChanged(listOf(cartItem(isAvailable = false)), 50_000L)
+    settleAsyncWork(2_500L)
+
+    val state = quoteVm.uiState.value
+    assertTrue(state.hasUnavailableItems)
+    assertNotNull(state.couponError)
+    assertNull(state.quote)
+    assertNull(state.quotedSignature)
+    assertNull(state.currentSignature)
+    assertNull(state.inFlightSignature)
+    assertFalse(state.isQuoteFresh)
+    quoteVm.clearSessionState()
+  }
+
+  @Test
   fun localEstimateOnlyDisablesSubmissionUntilFreshQuote() {
     val server = Phase5Server()
     server.delayFirstQuoteMs = 200L
@@ -959,6 +1030,40 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
     assertNull(state.inFlightSignature)
     assertFalse(state.isQuoteFresh)
     assertTrue(state.quoteError!!.contains("Add ₹100.00 more for delivery to 560038"))
+    quoteVm.clearSessionState()
+  }
+
+  @Test
+  fun couponFallbackZoneFailureClearsQuoteAndPincodeWithAuthoritativeShortfall() {
+    val server = Phase5Server()
+    server.kotlin422Pins = setOf("560001")
+    server.zoneMinOrderPaise = 60_000L
+    server.zone422UncouponedOnly = true
+    // Delay the coupon-only request so applyPincodeCheck supersedes it with a coupled
+    // request whose fallback carries clearPincodeOnZoneError = true.
+    server.delayQuoteCallNumber = 2
+    val quoteVm = server.quoteViewModel()
+    seedCart(quoteVm)
+    waitForFreshQuote(quoteVm)
+
+    quoteVm.onPincodeInputChange("560001")
+    quoteVm.applyCouponCode("BAD_COUPON")
+    quoteVm.applyPincodeCheck()
+
+    waitForState(debugMessage = { "calls=${server.quoteCalls.get()}, state=${quoteVm.uiState.value}" }) {
+      quoteVm.uiState.value.quoteError != null && !quoteVm.uiState.value.isLoadingQuote
+    }
+
+    val state = quoteVm.uiState.value
+    assertNull(state.quote)
+    assertNull(state.quotedSignature)
+    assertNull(state.inFlightSignature)
+    assertFalse(state.isQuoteFresh)
+    assertNull(state.checkedPincode)
+    assertTrue(state.couponError!!.contains("BAD_COUPON"))
+    assertEquals("Add ₹100.00 more for delivery to 560001.", state.quoteError)
+    assertNull(server.quoteRequests.last().couponCode)
+    assertEquals("560001", server.quoteRequests.last().pincode)
     quoteVm.clearSessionState()
   }
 
@@ -1234,38 +1339,42 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
   }
 
   @Test
+  // The class-wide w411dp-h915dp qualifier makes Robolectric's AlertDialog layout loop forever,
+  // leaving Compose non-idle. Use the default density for this dialog-only harness.
+  @Config(sdk = [36], qualifiers = "mdpi")
   fun addAddressDialogRetainsTypedValuesAcrossRotation() {
     withRobolectricTracingDisabled {
-      val restoreKey = mutableStateOf("before-restore")
+      val savedValues = mutableStateOf<Map<String, List<Any?>>>(emptyMap())
+      val registryGeneration = mutableStateOf(0)
+      lateinit var dialogRegistry: SaveableStateRegistry
 
-      composeTestRule.activity.setContent {
-        val holder = rememberSaveableStateHolder()
-        PizzoraTheme {
-          Box(Modifier.fillMaxSize()) {
-            holder.SaveableStateProvider(restoreKey.value) {
-              AddAddressDialog(
-                isSaving = false,
-                error = null,
-                onSave = { _, _, _, _, _, _, _ -> },
-                onDismiss = {},
-              )
-            }
+      composeTestRule.setContent {
+        val registry = remember(registryGeneration.value) {
+          SaveableStateRegistry(savedValues.value) { true }
+        }
+        dialogRegistry = registry
+        // Recreating the dialog with a fresh registry seeded from the saved values is the
+        // rememberSaveable contract that Activity rotation exercises.
+        CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
+          PizzoraTheme {
+            AddAddressDialog(
+              isSaving = false,
+              error = null,
+              onSave = { _, _, _, _, _, _, _ -> },
+              onDismiss = {},
+            )
           }
         }
       }
 
-      ignorePendingDialogLayout()
+      composeTestRule.onNodeWithTag("address_line1_input").performTextInput("12 MG Road")
+      composeTestRule.onNodeWithTag("address_pincode_input").performTextInput("560001")
+      composeTestRule.onNodeWithTag("address_city_input").performTextInput("Mysuru")
 
-      enterText("address_line1_input", "12 MG Road")
-      enterText("address_pincode_input", "560001")
-      enterText("address_city_input", "Mysuru")
-
-      // Disposing the provider first lets the holder save the field state, then composing with
-      // the same key again exercises the rememberSaveable restore contract of Activity rotation.
-      composeTestRule.activity.runOnUiThread { restoreKey.value = "disposed" }
-      ignorePendingDialogLayout()
-      composeTestRule.activity.runOnUiThread { restoreKey.value = "before-restore" }
-      ignorePendingDialogLayout()
+      composeTestRule.runOnIdle {
+        savedValues.value = dialogRegistry.performSave()
+        registryGeneration.value++
+      }
 
       composeTestRule.onNodeWithTag("address_line1_input").assertTextContains("12 MG Road", substring = true)
       composeTestRule.onNodeWithTag("address_pincode_input").assertTextContains("560001", substring = true)
@@ -1339,6 +1448,55 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
     composeTestRule.onNodeWithTag("checkout_readiness_notice").assertIsDisplayed()
     assertFalse(composeTestRule.onAllNodesWithTag("checkout_payable_total_text").fetchSemanticsNodes().isNotEmpty())
     quoteVm.clearSessionState()
+    checkoutVm.clearSessionState()
+  }
+
+  @Test
+  @Config(sdk = [36], qualifiers = "w320dp-h640dp")
+  fun quoteErrorRetryKeeps48dpTargetOnScreenAt320dpAnd15xFont() {
+    val server = Phase5Server()
+    val checkoutVm = deliveryCheckoutVm(server)
+    val failedState = CheckoutQuoteUiState(
+      quoteError = "Add ₹51.00 more for delivery to 560001.",
+    )
+    composeTestRule.setContent {
+      val baseDensity = LocalDensity.current
+      CompositionLocalProvider(
+        LocalDensity provides Density(baseDensity.density, fontScale = 1.5f),
+      ) {
+        PizzoraTheme {
+          CheckoutScreen(
+            uiState = checkoutVm.uiState.value,
+            quoteState = failedState,
+            cartItems = listOf(cartItem()),
+            cartSubtotalPaise = 24_900L,
+            onFulfillmentTypeChange = {},
+            onSelectAddress = {},
+            onOpenAddAddress = {},
+            onDismissAddAddress = {},
+            onSaveAddress = { _, _, _, _ -> },
+            onSelectPaymentMethod = {},
+            onPlaceOrder = {},
+            onBackToCart = {},
+          )
+        }
+      }
+    }
+    composeTestRule.waitForIdle()
+
+    val banner = composeTestRule.onNodeWithTag("checkout_quote_error_banner")
+      .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+    val retry = composeTestRule.onNodeWithTag("checkout_retry_quote_button")
+      .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+    val minTargetPx = with(composeTestRule.density) { 48.dp.toPx() }
+    assertTrue(
+      "Retry must keep a >=48dp touch target at 320dp + 1.5x font scale",
+      retry.width >= minTargetPx - 1f,
+    )
+    assertTrue(
+      "Retry must stay inside the banner instead of being squeezed off-screen",
+      retry.right <= banner.right + 1f && retry.left >= banner.left - 1f,
+    )
     checkoutVm.clearSessionState()
   }
 

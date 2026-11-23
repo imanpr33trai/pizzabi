@@ -142,7 +142,11 @@ fun CheckoutScreen(
   ) -> Unit)? = null,
   onRetryQuote: () -> Unit = {},
 ) {
-  BackHandler(onBack = onBackToCart)
+  // Keep the checkout open while an order request is in flight, and let the address dialog
+  // consume Back first (its own onDismissRequest) instead of closing the whole overlay.
+  BackHandler(enabled = !uiState.isPlacingOrder && !uiState.isAddAddressDialogOpen) {
+    onBackToCart()
+  }
 
   val fulfillmentType = quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY
   val payableTotalPaise = quoteState?.quote?.breakdown?.totalPaise
@@ -151,6 +155,7 @@ fun CheckoutScreen(
   val isQuoteFresh = quoteState?.isQuoteFresh == true
   val isLoadingQuote = quoteState?.isLoadingQuote == true
   val quoteError = quoteState?.quoteError
+  val couponError = quoteState?.couponError
   val priceDriftNotice = quoteState?.priceDriftNotice
   val postOrderPriceDrift = uiState.priceDriftNotice
   val hasUnavailableItems = quoteState?.hasUnavailableItems == true
@@ -328,6 +333,7 @@ fun CheckoutScreen(
               isQuoteFresh = isQuoteFresh,
               isLoadingQuote = isLoadingQuote,
               quoteError = quoteError,
+              couponError = couponError,
               priceDriftNotice = priceDriftNotice,
               postOrderPriceDrift = postOrderPriceDrift,
               hasUnavailableItems = hasUnavailableItems,
@@ -442,6 +448,7 @@ fun CheckoutScreen(
                 isQuoteFresh = isQuoteFresh,
                 isLoadingQuote = isLoadingQuote,
                 quoteError = quoteError,
+                couponError = couponError,
                 priceDriftNotice = priceDriftNotice,
                 postOrderPriceDrift = postOrderPriceDrift,
                 hasUnavailableItems = hasUnavailableItems,
@@ -538,6 +545,7 @@ fun CheckoutFormContent(
   isQuoteFresh: Boolean,
   isLoadingQuote: Boolean,
   quoteError: String?,
+  couponError: String?,
   priceDriftNotice: String?,
   postOrderPriceDrift: String?,
   hasUnavailableItems: Boolean,
@@ -595,6 +603,9 @@ fun CheckoutFormContent(
           text = quoteError,
           style = MaterialTheme.typography.bodyMedium,
           color = semanticColors.onWarningContainer,
+          // Weight the message so Retry keeps its intrinsic width at narrow widths /
+          // large font scales; otherwise the button collapses and inflates the banner.
+          modifier = Modifier.weight(1f),
         )
         TextButton(
           onClick = onRetryQuote,
@@ -605,6 +616,23 @@ fun CheckoutFormContent(
           Text(stringResource(R.string.action_retry_quote))
         }
       }
+    }
+  }
+
+  // Coupon rejection must stay visible in checkout too: the applied discount is gone.
+  if (!couponError.isNullOrBlank()) {
+    val semanticColors = LocalPizzoraSemanticColors.current
+    Surface(
+      color = semanticColors.warningContainer,
+      shape = MaterialTheme.shapes.medium,
+      modifier = Modifier.fillMaxWidth().testTag("checkout_coupon_error_banner"),
+    ) {
+      Text(
+        text = couponError,
+        style = MaterialTheme.typography.bodyMedium,
+        color = semanticColors.onWarningContainer,
+        modifier = Modifier.padding(14.dp),
+      )
     }
   }
 

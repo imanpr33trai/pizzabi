@@ -1,0 +1,20 @@
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote
+delaying quote response by 15.0s
+delaying quote response by 15.0s
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote
+delaying quote response by 5.0s
+delaying quote response by 5.0s
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote
+delaying quote response by 3.0s
+delaying quote response by 3.0s
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote
+delaying quote response by 8.0s
+POST /api/v1/pricing/quote
+POST /api/v1/pricing/quote

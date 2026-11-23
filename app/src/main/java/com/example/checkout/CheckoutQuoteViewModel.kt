@@ -179,6 +179,7 @@ class CheckoutQuoteViewModel(
           zoneCheckResult = null,
           quote = null,
           quotedSignature = null,
+          currentSignature = null,
           inFlightSignature = null,
           isCheckingZone = false,
           isLoadingQuote = false,
@@ -555,6 +556,9 @@ class CheckoutQuoteViewModel(
 
     val availableItems = latestCartItems.filter { it.item.isAvailable }
     if (availableItems.isEmpty()) {
+      // An unavailable-only cart must invalidate an in-flight quote too: otherwise an older
+      // response can republish a total for a cart state that no longer exists.
+      cancelPendingQuoteWork()
       _uiState.update {
         it.copy(
           quote = null,
@@ -570,14 +574,16 @@ class CheckoutQuoteViewModel(
 
     val req = buildQuoteRequest(availableItems, fulfillmentType, effectivePincode, effectiveCoupon)
 
-    quoteJob?.cancel()
-    quoteRequestGeneration++
+    // A new quote supersedes any zone check too; leaving it "in flight" would strand
+    // isCheckingZone = true when its generation-guarded response is dropped.
+    cancelPendingQuoteWork()
     val gen = quoteRequestGeneration
     _uiState.update {
       it.copy(
         currentSignature = sig,
         inFlightSignature = sig,
         isLoadingQuote = true,
+        isCheckingZone = false,
         quoteError = null,
       )
     }
@@ -599,23 +605,12 @@ class CheckoutQuoteViewModel(
           val apiEx = err as? PizzoraApiException
           when {
             apiEx?.code?.startsWith("COUPON_") == true -> {
-              startCouponFallback(apiEx, effectivePincode)
+              startCouponFallback(apiEx, effectivePincode, clearPincodeOnZoneError)
             }
             apiEx?.code == "ZONE_UNSERVICEABLE" ||
               apiEx?.code == "DELIVERY_MIN_ORDER_NOT_MET" ||
               apiEx?.code == "INVALID_PINCODE" -> {
-              val message = zoneFailureMessage(apiEx, effectivePincode)
-              _uiState.update {
-                it.copy(
-                  quote = null,
-                  quotedSignature = null,
-                  inFlightSignature = null,
-                  isLoadingQuote = false,
-                  checkedPincode = if (clearPincodeOnZoneError) null else it.checkedPincode,
-                  quoteError = message,
-                  priceDriftNotice = null,
-                )
-              }
+              clearQuoteForZoneFailure(apiEx, effectivePincode, clearPincodeOnZoneError)
             }
             else -> {
               // Network/5xx: keep the previous quote for dimming, but remove authority.
@@ -636,6 +631,7 @@ class CheckoutQuoteViewModel(
   private fun startCouponFallback(
     apiEx: PizzoraApiException,
     requestedPincode: String?,
+    clearPincodeOnZoneError: Boolean,
   ) {
     _uiState.update {
       it.copy(
@@ -702,13 +698,21 @@ class CheckoutQuoteViewModel(
         }
         .onFailure { fallbackErr ->
           if (!isCurrentGeneration(fallbackGen, coroutineContext[Job]?.isActive == true)) return@launch
-          _uiState.update {
-            it.copy(
-              inFlightSignature = null,
-              quotedSignature = null,
-              isLoadingQuote = false,
-              quoteError = fallbackErr.message ?: "Unable to fetch price quote.",
-            )
+          val fallbackApiEx = fallbackErr as? PizzoraApiException
+          if (fallbackApiEx?.code == "ZONE_UNSERVICEABLE" ||
+            fallbackApiEx?.code == "DELIVERY_MIN_ORDER_NOT_MET" ||
+            fallbackApiEx?.code == "INVALID_PINCODE"
+          ) {
+            clearQuoteForZoneFailure(fallbackApiEx, fallbackPincode, clearPincodeOnZoneError)
+          } else {
+            _uiState.update {
+              it.copy(
+                inFlightSignature = null,
+                quotedSignature = null,
+                isLoadingQuote = false,
+                quoteError = fallbackErr.message ?: "Unable to fetch price quote.",
+              )
+            }
           }
         }
     }
@@ -753,6 +757,24 @@ class CheckoutQuoteViewModel(
           it.checkedPincode
         },
         priceDriftNotice = driftNotice,
+      )
+    }
+  }
+
+  private fun clearQuoteForZoneFailure(
+    apiEx: PizzoraApiException,
+    pincode: String?,
+    clearPincode: Boolean,
+  ) {
+    _uiState.update {
+      it.copy(
+        quote = null,
+        quotedSignature = null,
+        inFlightSignature = null,
+        isLoadingQuote = false,
+        checkedPincode = if (clearPincode) null else it.checkedPincode,
+        quoteError = zoneFailureMessage(apiEx, pincode),
+        priceDriftNotice = null,
       )
     }
   }

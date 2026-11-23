@@ -1,0 +1,22 @@
+0 NO FOCUS
+1 android.view.View [16,126][112,222] 48.0x48.0dp clickable=true => Back @ (40, 150, 88, 198) | 1 items @ (128, 186, 205, 216) | Order Items Review (1) @ (60, 270, 391, 310)
+2 android.view.View [668,242][764,338] 48.0x48.0dp clickable=true => Expand or collapse order items review @ (692, 266, 740, 314) | Review & Place Order @ (128, 132, 577, 186) | Pickup @ (353, 639, 444, 674)
+3 android.view.View [60,608][265,704] 102.5x48.0dp clickable=true => Delivery @ (128, 639, 233, 674) | Fulfillment @ (60, 548, 216, 588) | Delivery Address @ (120, 788, 374, 828)
+4 android.view.View [285,608][476,704] 95.5x48.0dp clickable=true => Pickup @ (353, 639, 444, 674) | Delivery @ (128, 639, 233, 674) | Delivery Address @ (120, 788, 374, 828)
+5 android.view.View [502,760][764,856] 131.0x48.0dp clickable=true => Add Address @ (570, 788, 740, 828) | DEFAULT @ (397, 906, 493, 934) | Pickup @ (353, 639, 444, 674)
+6 android.view.View [60,876][764,994] 352.0x59.0dp clickable=false => DEFAULT @ (397, 906, 493, 934) | 12 MG Road, Flat 4B (Near Metro), Mysuru @ (152, 940, 608, 970) | Home • 560001 @ (152, 903, 365, 938)
+7 android.view.View [60,1014][377,1110] 158.5x48.0dp clickable=true => Check Delivery Zone @ (84, 1042, 353, 1082) | Home • 560001 @ (152, 903, 365, 938) | 12 MG Road, Flat 4B (Near Metro), Mysuru @ (152, 940, 608, 970)
+8 android.view.View [60,1324][413,1420] 176.5x48.0dp clickable=false => ASAP @ (227, 1352, 299, 1392) | Delivery / Pickup Time @ (120, 1260, 448, 1300) | Payment Method @ (60, 1476, 318, 1516)
+9 android.view.View [413,1324][764,1420] 175.5x48.0dp clickable=true => Schedule Slot (IST) @ (492, 1352, 736, 1392) | Pay in cash or UPI upon delivery or pickup. @ (220, 1591, 690, 1620) | Delivery available in MG Road (560001). @ (80, 1150, 744, 1180)
+10 android.view.View [60,1507][764,1620] 352.0x56.5dp clickable=false => Cash on Delivery (COD) @ (220, 1531, 526, 1566) | Pay in cash or UPI upon delivery or pickup. @ (220, 1566, 690, 1596) | Place Order · ₹824.35 @ (270, 1682, 555, 1722)
+11 android.view.View [60,1471][764,1620] 352.0x74.5dp clickable=true => Pay Online (Razorpay) @ (220, 1495, 504, 1530) | Reserves your ingredients and initiates an online payment attempt. @ (220, 1530, 740, 1596) | Pay in cash or UPI upon delivery or pickup. @ (220, 1401, 690, 1431)
+12 android.view.View [32,1654][792,1750] 380.0x48.0dp clickable=true => Place Order · ₹824.35 @ (270, 1682, 555, 1722) | Reserves your ingredients and initiates an online payment attempt. @ (220, 1530, 740, 1596) | Pay Online (Razorpay) @ (220, 1495, 504, 1530)
+13 NO FOCUS
+14 NO FOCUS
+15 NO FOCUS
+16 NO FOCUS
+17 NO FOCUS
+18 NO FOCUS
+19 NO FOCUS
+20 NO FOCUS
+21 NO FOCUS

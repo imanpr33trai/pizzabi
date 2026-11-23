@@ -1,0 +1,81 @@
+PIZZORA Phase 5 live QA verification summary (2026-11-23)
+=========================================================
+
+Environment
+- Emulator: emulator-5554, API 36, ADB connected.
+- Backend: standalone backend/build/install/backend/bin/backend on 127.0.0.1:8080
+  (S3_ENABLED=false, local Postgres/Redis/Mailpit); health 200.
+- Delayed QA proxy: /tmp/opencode/p5-delay-proxy.py on 127.0.0.1:8081 ->
+  127.0.0.1:8080, only POST /api/v1/pricing/quote responses delayed via
+  /tmp/opencode/p5-proxy-delay. No production code delay was added.
+- QA APK built with -PpizzoraDebugApiBaseUrl=http://10.0.2.2:8081 and installed
+  with `adb install -r`; install reported Success.
+- APK: app/build/outputs/apk/debug/app-debug.apk, 25 MB,
+  sha256 43e8948d4e0e707294a3b86fff5e019b6bae51f904bfe29374396693fb43625b.
+
+Automated gates (rerun after the two fixes)
+- :app:testDebugUnitTest --tests com.example.Phase5CheckoutQuoteIntegrityRobolectricTest
+  : 37 tests, 0 failures, 0 errors, 0 skipped (was 36 before the new regression test).
+- Full :app:testDebugUnitTest : 31 result XML files, 171 tests, 0 failures,
+  0 errors, 0 skipped.
+- :app:assembleDebug : BUILD SUCCESSFUL.
+- git diff --check : exit 0, empty output.
+- CheckoutScreen.kt / CheckoutViewModel.kt : no java.time imports.
+
+Live defects found and fixed during this QA
+1. Checkout overlay leaked the Cart header through the status-bar inset on every
+   checkout screenshot. Fix: overlay Surface fills the screen; statusBarsPadding()
+   is applied to the inner content Box (PizzoraNavHost.kt).
+2. At 320dp + 1.5x font scale, the quote-error Row let the message consume all
+   width, collapsing Retry off-screen and inflating the banner. Fix: message
+   Text uses Modifier.weight(1f) (CheckoutScreen.kt). New regression test
+   `quoteErrorRetryKeeps48dpTargetOnScreenAt320dpAnd15xFont` asserts Retry stays
+   inside the banner with a >=48dp target.
+
+Screenshot matrix (all recaptured after both fixes; old files preserved in superseded/)
+- p5_checkout_order_review_fresh_quote_dark_412dp_1.0x.png : dark, 824x1830,
+  density 320, font 1.0. UI showed Order Items Review (1), Qty: 2 · ₹498.00,
+  Delivery available, Place Order · ₹562.90. No Cart header nodes present.
+- p5_checkout_order_review_fresh_quote_light_412dp_1.0x.png : same config,
+  night mode off; same quote/CTA observations.
+- p5_checkout_below_min_dark_412dp_1.0x.png : qty 1 / ₹249, message
+  "Add ₹51.00 more for delivery to 560001.", Retry visible, CTA text "Place Order".
+- p5_checkout_below_min_light_320dp_1.5x.png : 640x1280, density 320, font 1.5;
+  same blocked state with Retry at [446,692][556,755] (110x63 px), inside the
+  banner and no longer squeezed off-screen.
+- p5_checkout_stale_quote_updating_total_dark_412dp_1.0x.png : captured during
+  an 8s delayed quote after fulfillment switch Delivery -> Pickup. UI showed
+  "Updating total...", stale breakdown (Delivery Fee ₹40.00, Total ₹824.35) and
+  "Waiting for the latest price quote."; CTA text "Place Order".
+- p5_checkout_stale_quote_resolved_dark_412dp_1.0x.png : after the delayed quote
+  arrived; "Updating total..." gone, Delivery Fee "Free", Total ₹784.35,
+  CTA "Place Order · ₹784.35".
+- p5_checkout_tablet_split_light_840dp_1.0x.png : 1680x1200, density 320;
+  left pane payment/schedule, right pane Bill Breakdown, CTA ₹562.90.
+- p5_add_address_dialog_inline_errors_light_360dp_1.5x.png : 720x1600,
+  density 320, font 1.5; dialog showed "Enter a valid 6-digit Indian pincode"
+  with City visible and Save/Close reachable.
+
+Dimming check (PIL mean RGB over the price-breakdown region)
+- stale: [29.8, 26.3, 25.1]
+- resolved: [36.4, 32.8, 30.4]
+- fresh: [36.8, 37.9, 33.3]
+The stale capture is visibly darker, consistent with alpha(0.6f).
+
+Access checks
+- TalkBack service enabled and permission granted; full delivery-mode traversal
+  with KEYCODE_TAB produced 12 stops, top-to-bottom, then wrapped:
+  Back, Order Review toggle, Delivery, Pickup, Add Address, address card,
+  Check Delivery Zone, ASAP, Schedule Slot, Cash on Delivery, Pay Online,
+  Place Order. Pickup-mode traversal produced 9 stops (address controls hidden
+  by design). All 12 delivery-mode stops had >=48dp in both dimensions:
+  48x48, 102.5x48, 95.5x48, 131x48, 352x59, 158.5x48, 176.5x48, 175.5x48,
+  352x56.5, 352x74.5, 380x48 dp. No focus trap or dead stop was observed.
+- Scaling: 1.5x checked at 320dp (below-min + Retry), 360dp (AddAddressDialog)
+  and 412dp; 1.0x checked at 412dp and 840dp tablet.
+- Keyboard: TAB moved focus through the same sequence; no keyboard-only
+  dead ends were observed. Hardware DPAD/Enter activation was not separately
+  scripted; this is recorded as a limitation.
+- Not exhaustively verified: every possible TalkBack utterance string (the
+  spoken text is not exposed by uiautomator XML), all 2.0x font-scale screens,
+  landscape 720x380dp, and physical-device behavior.

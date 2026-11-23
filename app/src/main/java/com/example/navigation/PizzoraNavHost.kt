@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
@@ -500,14 +501,14 @@ fun CustomerRoleShell(
 
   LaunchedEffect(cartViewModel) {
     cartViewModel?.events?.collect { message ->
-      snackbarHostState.showSnackbar(message)
+      currentSnackbarHostState.showSnackbar(message)
     }
   }
 
   LaunchedEffect(cartViewModel) {
     cartViewModel?.undoPrompts?.collectLatest { prompt ->
-      snackbarHostState.currentSnackbarData?.dismiss()
-      val snackbarResult = snackbarHostState.showSnackbar(
+      currentSnackbarHostState.currentSnackbarData?.dismiss()
+      val snackbarResult = currentSnackbarHostState.showSnackbar(
         message = context.getString(R.string.cart_item_removed_fmt, prompt.productName),
         actionLabel = context.getString(R.string.action_undo),
         duration = SnackbarDuration.Long,
@@ -960,6 +961,7 @@ fun CustomerRoleShell(
 
       LaunchedEffect(checkoutStateLocal.selectedAddressId, selectedAddress?.pincode) {
         val pin = selectedAddress?.pincode ?: return@LaunchedEffect
+        checkoutViewModel.ensureSelectedAddressServiceability()
         checkoutQuoteViewModel?.syncCheckoutAddressPincode(pin)
       }
 
@@ -975,7 +977,14 @@ fun CustomerRoleShell(
           .testTag("customer_shell_overlay_host"),
         color = MaterialTheme.colorScheme.background,
       ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        // Draw the overlay background edge-to-edge, then inset only the content. Applying
+        // statusBarsPadding to the Surface itself left the status-bar area transparent and
+        // exposed the Cart header underneath.
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+        ) {
           CheckoutScreen(
             uiState = checkoutStateLocal,
             quoteState = quoteStateLocal,
