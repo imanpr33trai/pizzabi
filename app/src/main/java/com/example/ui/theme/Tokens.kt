@@ -125,18 +125,55 @@ data class PizzoraTypographyTokens(
   val monoTitleLineHeight: TextUnit = 24.sp,
 )
 
+/** Durations and offsets for transient feedback surfaces. Durations are in milliseconds. */
+@Immutable
+data class PizzoraFeedbackTokens(
+  val snackbarShortMs: Int = 3_000,
+  val snackbarMediumMs: Int = 5_000,
+  val snackbarLongMs: Int = 10_000,
+  val toastDurationMs: Int = 2_000,
+  val toastVerticalOffset: Dp = 48.dp,
+)
+
+/** The token groups a PIZZORA component reads from [LocalPizzoraTokens]. */
+@Immutable
+interface PizzoraTokenSet {
+  val motion: PizzoraMotionTokens
+  val elevation: PizzoraElevationTokens
+  val spacing: PizzoraSpacingTokens
+  val sizing: PizzoraSizingTokens
+  val shape: PizzoraShapeTokens
+  val zIndex: PizzoraZIndexTokens
+  val typography: PizzoraTypographyTokens
+  val feedback: PizzoraFeedbackTokens
+}
+
+/** Copyable token set for previews and tests that need to override a single token group. */
+@Immutable
+data class PizzoraTokenValues(
+  override val motion: PizzoraMotionTokens = PizzoraTokens.motion,
+  override val elevation: PizzoraElevationTokens = PizzoraTokens.elevation,
+  override val spacing: PizzoraSpacingTokens = PizzoraTokens.spacing,
+  override val sizing: PizzoraSizingTokens = PizzoraTokens.sizing,
+  override val shape: PizzoraShapeTokens = PizzoraTokens.shape,
+  override val zIndex: PizzoraZIndexTokens = PizzoraTokens.zIndex,
+  override val typography: PizzoraTypographyTokens = PizzoraTokens.typography,
+  override val feedback: PizzoraFeedbackTokens = PizzoraTokens.feedback,
+) : PizzoraTokenSet
+
 /**
  * Canonical PIZZORA design tokens.
  *
  * Components read these through [LocalPizzoraTokens] so previews and tests can override the token
- * set, while non-composable code can access the defaults directly.
+ * set with [PizzoraTokenValues], while non-composable code can access the defaults directly.
  */
-object PizzoraTokens {
-  val motion: PizzoraMotionTokens = PizzoraMotionTokens()
-  val elevation: PizzoraElevationTokens = PizzoraElevationTokens()
-  val spacing: PizzoraSpacingTokens = PizzoraSpacingTokens()
-  val sizing: PizzoraSizingTokens = PizzoraSizingTokens()
-  val shape: PizzoraShapeTokens = PizzoraShapeTokens()
-  val zIndex: PizzoraZIndexTokens = PizzoraZIndexTokens()
-  val typography: PizzoraTypographyTokens = PizzoraTypographyTokens()
+object PizzoraTokens : PizzoraTokenSet {
+  override val motion: PizzoraMotionTokens = PizzoraMotionTokens()
+  override val elevation: PizzoraElevationTokens = PizzoraElevationTokens()
+  override val spacing: PizzoraSpacingTokens = PizzoraSpacingTokens()
+  override val sizing: PizzoraSizingTokens = PizzoraSizingTokens()
+  override val shape: PizzoraShapeTokens = PizzoraShapeTokens()
+  override val zIndex: PizzoraZIndexTokens = PizzoraZIndexTokens()
+  override val typography: PizzoraTypographyTokens = PizzoraTypographyTokens()
+  override val feedback: PizzoraFeedbackTokens = PizzoraFeedbackTokens()
 }

@@ -18,8 +18,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -58,7 +56,7 @@ fun PizzoraScreenScaffold(
   modifier: Modifier = Modifier,
   navigationIcon: @Composable (() -> Unit)? = null,
   actions: @Composable RowScope.() -> Unit = {},
-  snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+  snackbarHostState: PizzoraSnackbarHostState = rememberPizzoraSnackbarHostState(),
   navigationItems: List<PizzoraNavigationItem> = emptyList(),
   floatingActionButton: @Composable (() -> Unit)? = null,
   testTag: String = "pizzora_screen_scaffold",
@@ -72,9 +70,9 @@ fun PizzoraScreenScaffold(
       contentWindowInsets = WindowInsets.safeDrawing,
       containerColor = MaterialTheme.colorScheme.background,
       snackbarHost = {
-        SnackbarHost(
-          hostState = snackbarHostState,
-          modifier = Modifier.testTag("${testTag}_snackbar_host"),
+        PizzoraSnackbarHost(
+          state = snackbarHostState,
+          testTag = "${testTag}_snackbar_host",
         )
       },
       topBar = {

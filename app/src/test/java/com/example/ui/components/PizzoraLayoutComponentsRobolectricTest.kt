@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.LocalPizza
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -146,7 +145,6 @@ class PizzoraLayoutComponentsRobolectricTest {
         PizzoraTheme {
           PizzoraScreenScaffold(
             title = "Menu",
-            snackbarHostState = SnackbarHostState(),
             navigationItems = listOf(
               PizzoraNavigationItem(
                 label = "Orders",

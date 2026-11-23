@@ -70,7 +70,7 @@ val PizzoraShapes = Shapes(
 val LocalPizzoraSemanticColors = staticCompositionLocalOf { LightSemanticColors }
 
 /** Provides the active design token set to PIZZORA primitives. */
-val LocalPizzoraTokens = staticCompositionLocalOf { PizzoraTokens }
+val LocalPizzoraTokens = staticCompositionLocalOf<PizzoraTokenSet> { PizzoraTokens }
 
 @Composable
 fun PizzoraTheme(
