@@ -14,10 +14,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,19 +30,9 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,16 +42,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.ui.components.PizzoraButton
+import com.example.ui.components.PizzoraIconButton
+import com.example.ui.components.PizzoraOutlinedButton
+import com.example.ui.components.PizzoraSection
+import com.example.ui.components.PizzoraSurface
+import com.example.ui.components.PizzoraSurfaceTone
+import com.example.ui.components.PizzoraTextButton
+import com.example.ui.components.PizzoraTextField
+import com.example.ui.theme.CharredInk
+import com.example.ui.theme.LocalPizzoraSemanticColors
+import com.example.ui.theme.LocalPizzoraTokens
+import com.example.ui.theme.OvenStoneSurfaceVariant
+import com.example.ui.theme.PureWhiteSurface
 
 @Composable
 fun LoginScreen(
@@ -71,118 +71,81 @@ fun LoginScreen(
   onNavigateToForgotPassword: () -> Unit,
   onNavigateToVerifyEmail: (String) -> Unit,
 ) {
+  val tokens = LocalPizzoraTokens.current
   var email by rememberSaveable { mutableStateOf("") }
   var password by rememberSaveable { mutableStateOf("") }
-  var passwordVisible by rememberSaveable { mutableStateOf(false) }
 
-  AuthScaffoldLayout {
+  AuthScaffoldLayout(screenTag = "login_screen") {
     AuthHeroBanner()
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space20))
     Text(
       text = stringResource(R.string.auth_sign_in_title),
       style = MaterialTheme.typography.headlineMedium,
       color = MaterialTheme.colorScheme.onBackground,
     )
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space8))
     Text(
       text = stringResource(R.string.auth_sign_in_subtitle),
       style = MaterialTheme.typography.bodyMedium,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space16))
 
     AuthStatusBanner(uiState = uiState)
 
-    OutlinedTextField(
+    PizzoraTextField(
+      modifier = Modifier.fillMaxWidth(),
       value = email,
       onValueChange = { email = it },
-      label = { Text(stringResource(R.string.label_email)) },
-      leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
-      singleLine = true,
+      label = stringResource(R.string.label_email),
+      leadingIcon = Icons.Filled.Email,
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("login_email_input"),
+      testTag = "login_email_input",
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
 
-    OutlinedTextField(
+    AuthPasswordField(
       value = password,
       onValueChange = { password = it },
-      label = { Text(stringResource(R.string.label_password)) },
-      leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-      trailingIcon = {
-        IconButton(
-          onClick = { passwordVisible = !passwordVisible },
-          modifier = Modifier.minimumInteractiveComponentSize(),
-        ) {
-          Icon(
-            imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-            contentDescription = if (passwordVisible) "Hide password" else "Show password",
-          )
-        }
-      },
-      visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("login_password_input"),
+      label = stringResource(R.string.label_password),
+      testTag = "login_password_input",
     )
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space16))
 
-    Button(
+    PizzoraButton(
+      text = stringResource(R.string.action_sign_in),
       onClick = { onLoginClick(email, password) },
       enabled = !uiState.isLoading,
-      modifier = Modifier
-        .fillMaxWidth()
-        .minimumInteractiveComponentSize()
-        .testTag("login_submit_button"),
-    ) {
-      if (uiState.isLoading) {
-        CircularProgressIndicator(
-          modifier = Modifier.size(20.dp),
-          strokeWidth = 2.dp,
-          color = MaterialTheme.colorScheme.onPrimary,
-        )
-      } else {
-        Text(stringResource(R.string.action_sign_in))
-      }
-    }
+      loading = uiState.isLoading,
+      modifier = Modifier.fillMaxWidth(),
+      testTag = "login_submit_button",
+    )
 
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      TextButton(
+      PizzoraTextButton(
+        text = stringResource(R.string.action_forgot_password),
         onClick = onNavigateToForgotPassword,
-        modifier = Modifier
-          .minimumInteractiveComponentSize()
-          .testTag("login_forgot_password_button"),
-      ) {
-        Text("Forgot Password?")
-      }
-      TextButton(
+        testTag = "login_forgot_password_button",
+      )
+      PizzoraTextButton(
+        text = stringResource(R.string.action_verify_token),
         onClick = { onNavigateToVerifyEmail(email) },
-        modifier = Modifier
-          .minimumInteractiveComponentSize()
-          .testTag("login_verify_email_button"),
-      ) {
-        Text("Verify Token")
-      }
+        testTag = "login_verify_email_button",
+      )
     }
 
-    Spacer(modifier = Modifier.height(8.dp))
-    OutlinedButton(
+    Spacer(modifier = Modifier.height(tokens.spacing.space8))
+    PizzoraOutlinedButton(
+      text = stringResource(R.string.auth_create_account),
       onClick = onNavigateToRegister,
-      modifier = Modifier
-        .fillMaxWidth()
-        .minimumInteractiveComponentSize()
-        .testTag("login_go_register_button"),
-    ) {
-      Text(stringResource(R.string.auth_create_account))
-    }
+      modifier = Modifier.fillMaxWidth(),
+      testTag = "login_go_register_button",
+    )
   }
 }
 
@@ -192,79 +155,67 @@ fun RegisterScreen(
   onRegisterClick: (email: String, password: String, fullName: String, phone: String) -> Unit,
   onBackClick: () -> Unit,
 ) {
+  val tokens = LocalPizzoraTokens.current
   var fullName by rememberSaveable { mutableStateOf("") }
   var phone by rememberSaveable { mutableStateOf("") }
   var email by rememberSaveable { mutableStateOf("") }
   var password by rememberSaveable { mutableStateOf("") }
 
-  AuthScaffoldLayout {
+  AuthScaffoldLayout(screenTag = "register_screen") {
     AuthBackHeader(
       title = stringResource(R.string.auth_create_account),
       onBackClick = onBackClick,
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
     AuthStatusBanner(uiState = uiState)
 
-    OutlinedTextField(
-      value = fullName,
-      onValueChange = { fullName = it },
-      label = { Text(stringResource(R.string.label_full_name)) },
-      leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("register_name_input"),
-    )
-    Spacer(modifier = Modifier.height(12.dp))
-
-    OutlinedTextField(
-      value = phone,
-      onValueChange = { phone = it },
-      label = { Text(stringResource(R.string.label_phone)) },
-      leadingIcon = { Icon(Icons.Filled.Phone, contentDescription = null) },
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("register_phone_input"),
-    )
-    Spacer(modifier = Modifier.height(12.dp))
-
-    OutlinedTextField(
-      value = email,
-      onValueChange = { email = it },
-      label = { Text(stringResource(R.string.label_email)) },
-      leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("register_email_input"),
-    )
-    Spacer(modifier = Modifier.height(12.dp))
-
-    OutlinedTextField(
-      value = password,
-      onValueChange = { password = it },
-      label = { Text(stringResource(R.string.label_password)) },
-      leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-      visualTransformation = PasswordVisualTransformation(),
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("register_password_input"),
-    )
-    Spacer(modifier = Modifier.height(18.dp))
-
-    Button(
-      onClick = { onRegisterClick(email, password, fullName, phone) },
-      enabled = !uiState.isLoading,
-      modifier = Modifier
-        .fillMaxWidth()
-        .minimumInteractiveComponentSize()
-        .testTag("register_submit_button"),
+    PizzoraSection(
+      title = stringResource(R.string.auth_register_details_title),
+      testTag = "register_details_section",
     ) {
-      Text(stringResource(R.string.action_register))
+      PizzoraTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = fullName,
+        onValueChange = { fullName = it },
+        label = stringResource(R.string.label_full_name),
+        leadingIcon = Icons.Filled.Person,
+        testTag = "register_name_input",
+      )
+      PizzoraTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = phone,
+        onValueChange = { phone = it },
+        label = stringResource(R.string.label_phone),
+        leadingIcon = Icons.Filled.Phone,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+        testTag = "register_phone_input",
+      )
+      PizzoraTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = email,
+        onValueChange = { email = it },
+        label = stringResource(R.string.label_email),
+        leadingIcon = Icons.Filled.Email,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        testTag = "register_email_input",
+      )
+      PizzoraTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = password,
+        onValueChange = { password = it },
+        label = stringResource(R.string.label_password),
+        leadingIcon = Icons.Filled.Lock,
+        visualTransformation = PasswordVisualTransformation(),
+        testTag = "register_password_input",
+      )
+      PizzoraButton(
+        text = stringResource(R.string.action_register),
+        onClick = { onRegisterClick(email, password, fullName, phone) },
+        enabled = !uiState.isLoading,
+        loading = uiState.isLoading,
+        modifier = Modifier.fillMaxWidth(),
+        testTag = "register_submit_button",
+      )
     }
   }
 }
@@ -277,63 +228,56 @@ fun VerifyEmailScreen(
   onResendClick: (String) -> Unit,
   onBackClick: () -> Unit,
 ) {
+  val tokens = LocalPizzoraTokens.current
   var email by rememberSaveable { mutableStateOf(initialEmail) }
   var token by rememberSaveable { mutableStateOf("") }
 
-  AuthScaffoldLayout {
+  AuthScaffoldLayout(screenTag = "verify_email_screen") {
     AuthBackHeader(
       title = stringResource(R.string.auth_verify_email_title),
       onBackClick = onBackClick,
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
     AuthStatusBanner(uiState = uiState)
 
-    OutlinedTextField(
+    PizzoraTextField(
+      modifier = Modifier.fillMaxWidth(),
       value = email,
       onValueChange = { email = it },
-      label = { Text(stringResource(R.string.label_email)) },
-      leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("verify_email_input"),
+      label = stringResource(R.string.label_email),
+      leadingIcon = Icons.Filled.Email,
+      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+      testTag = "verify_email_input",
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
 
-    OutlinedTextField(
+    PizzoraTextField(
+      modifier = Modifier.fillMaxWidth(),
       value = token,
       onValueChange = { token = it },
-      label = { Text(stringResource(R.string.label_token)) },
-      leadingIcon = { Icon(Icons.Filled.VpnKey, contentDescription = null) },
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("verify_token_input"),
+      label = stringResource(R.string.label_token),
+      leadingIcon = Icons.Filled.VpnKey,
+      testTag = "verify_token_input",
     )
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space16))
 
-    Button(
+    PizzoraButton(
+      text = stringResource(R.string.action_verify),
       onClick = { onVerifyClick(token) },
       enabled = !uiState.isLoading,
-      modifier = Modifier
-        .fillMaxWidth()
-        .minimumInteractiveComponentSize()
-        .testTag("verify_submit_button"),
-    ) {
-      Text(stringResource(R.string.action_verify))
-    }
+      loading = uiState.isLoading,
+      modifier = Modifier.fillMaxWidth(),
+      testTag = "verify_submit_button",
+    )
 
-    Spacer(modifier = Modifier.height(10.dp))
-    OutlinedButton(
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
+    PizzoraOutlinedButton(
+      text = stringResource(R.string.action_resend_code),
       onClick = { onResendClick(email) },
       enabled = !uiState.isLoading,
-      modifier = Modifier
-        .fillMaxWidth()
-        .minimumInteractiveComponentSize()
-        .testTag("verify_resend_button"),
-    ) {
-      Text(stringResource(R.string.action_resend_code))
-    }
+      modifier = Modifier.fillMaxWidth(),
+      testTag = "verify_resend_button",
+    )
   }
 }
 
@@ -344,100 +288,94 @@ fun ForgotPasswordScreen(
   onResetPasswordClick: (token: String, newPassword: String) -> Unit,
   onBackClick: () -> Unit,
 ) {
+  val tokens = LocalPizzoraTokens.current
   var email by rememberSaveable { mutableStateOf("") }
   var resetToken by rememberSaveable { mutableStateOf("") }
   var newPassword by rememberSaveable { mutableStateOf("") }
 
-  AuthScaffoldLayout {
+  AuthScaffoldLayout(screenTag = "forgot_password_screen") {
     AuthBackHeader(
       title = stringResource(R.string.auth_forgot_password_title),
       onBackClick = onBackClick,
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
     AuthStatusBanner(uiState = uiState)
 
-    OutlinedTextField(
+    PizzoraTextField(
+      modifier = Modifier.fillMaxWidth(),
       value = email,
       onValueChange = { email = it },
-      label = { Text(stringResource(R.string.label_email)) },
-      leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("forgot_email_input"),
+      label = stringResource(R.string.label_email),
+      leadingIcon = Icons.Filled.Email,
+      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+      testTag = "forgot_email_input",
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
 
-    OutlinedButton(
+    PizzoraOutlinedButton(
+      text = stringResource(R.string.action_send_reset),
       onClick = { onSendResetClick(email) },
       enabled = !uiState.isLoading,
-      modifier = Modifier
-        .fillMaxWidth()
-        .minimumInteractiveComponentSize()
-        .testTag("forgot_send_button"),
-    ) {
-      Text(stringResource(R.string.action_send_reset))
-    }
+      modifier = Modifier.fillMaxWidth(),
+      testTag = "forgot_send_button",
+    )
 
-    Spacer(modifier = Modifier.height(20.dp))
-    OutlinedTextField(
+    Spacer(modifier = Modifier.height(tokens.spacing.space20))
+    PizzoraTextField(
+      modifier = Modifier.fillMaxWidth(),
       value = resetToken,
       onValueChange = { resetToken = it },
-      label = { Text(stringResource(R.string.label_token)) },
-      leadingIcon = { Icon(Icons.Filled.VpnKey, contentDescription = null) },
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("reset_token_input"),
+      label = stringResource(R.string.label_token),
+      leadingIcon = Icons.Filled.VpnKey,
+      testTag = "reset_token_input",
     )
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space12))
 
-    OutlinedTextField(
+    AuthPasswordField(
       value = newPassword,
       onValueChange = { newPassword = it },
-      label = { Text(stringResource(R.string.label_new_password)) },
-      leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-      visualTransformation = PasswordVisualTransformation(),
-      singleLine = true,
-      modifier = Modifier
-        .fillMaxWidth()
-        .testTag("reset_password_input"),
+      label = stringResource(R.string.label_new_password),
+      testTag = "reset_password_input",
     )
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(tokens.spacing.space16))
 
-    Button(
+    PizzoraButton(
+      text = stringResource(R.string.action_reset_password),
       onClick = { onResetPasswordClick(resetToken, newPassword) },
       enabled = !uiState.isLoading,
-      modifier = Modifier
-        .fillMaxWidth()
-        .minimumInteractiveComponentSize()
-        .testTag("reset_submit_button"),
-    ) {
-      Text(stringResource(R.string.action_reset_password))
-    }
+      loading = uiState.isLoading,
+      modifier = Modifier.fillMaxWidth(),
+      testTag = "reset_submit_button",
+    )
   }
 }
 
 @Composable
 private fun AuthScaffoldLayout(
+  screenTag: String,
   content: @Composable () -> Unit,
 ) {
-  Surface(
+  val tokens = LocalPizzoraTokens.current
+  PizzoraSurface(
     modifier = Modifier.fillMaxSize(),
-    color = MaterialTheme.colorScheme.background,
+    tone = PizzoraSurfaceTone.Background,
+    testTag = screenTag,
   ) {
     Box(
       modifier = Modifier
         .fillMaxSize()
         .windowInsetsPadding(WindowInsets.safeDrawing)
         .verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp, vertical = 16.dp),
+        .padding(
+          horizontal = tokens.spacing.space20,
+          vertical = tokens.spacing.space16,
+        ),
       contentAlignment = Alignment.TopCenter,
     ) {
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .widthIn(max = 520.dp),
+          .widthIn(max = tokens.sizing.contentMaxWidth),
       ) {
         content()
       }
@@ -447,11 +385,12 @@ private fun AuthScaffoldLayout(
 
 @Composable
 private fun AuthHeroBanner() {
+  val tokens = LocalPizzoraTokens.current
   Box(
     modifier = Modifier
       .fillMaxWidth()
-      .height(180.dp)
-      .clip(MaterialTheme.shapes.large),
+      .height(tokens.sizing.heroBannerHeight)
+      .clip(RoundedCornerShape(tokens.shape.radiusLarge)),
   ) {
     Image(
       painter = painterResource(id = R.drawable.img_pizzora_hero_oven_1794579613265),
@@ -464,31 +403,34 @@ private fun AuthHeroBanner() {
         .fillMaxSize()
         .background(
           Brush.verticalGradient(
-            colors = listOf(Color.Transparent, Color(0xCC1E1916)),
+            colors = listOf(
+              CharredInk.copy(alpha = 0f),
+              CharredInk.copy(alpha = 0.8f),
+            ),
           ),
         )
-        .padding(16.dp),
+        .padding(tokens.spacing.space16),
       contentAlignment = Alignment.BottomStart,
     ) {
       Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(tokens.spacing.space8),
       ) {
         Icon(
           imageVector = Icons.Filled.LocalPizza,
           contentDescription = null,
-          tint = Color(0xFFFBBF24),
+          tint = LocalPizzoraSemanticColors.current.kdsPendingAmber,
         )
         Column {
           Text(
             text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
+            color = PureWhiteSurface,
           )
           Text(
             text = stringResource(R.string.brand_tagline),
             style = MaterialTheme.typography.labelMedium,
-            color = Color(0xFFF5EBE0),
+            color = OvenStoneSurfaceVariant,
           )
         }
       }
@@ -505,17 +447,12 @@ private fun AuthBackHeader(
     verticalAlignment = Alignment.CenterVertically,
     modifier = Modifier.fillMaxWidth(),
   ) {
-    IconButton(
+    PizzoraIconButton(
+      icon = Icons.AutoMirrored.Filled.ArrowBack,
+      contentDescription = stringResource(R.string.action_back),
       onClick = onBackClick,
-      modifier = Modifier
-        .minimumInteractiveComponentSize()
-        .testTag("auth_back_button"),
-    ) {
-      Icon(
-        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-        contentDescription = stringResource(R.string.action_back),
-      )
-    }
+      testTag = "auth_back_button",
+    )
     Text(
       text = title,
       style = MaterialTheme.typography.headlineSmall,
@@ -524,24 +461,57 @@ private fun AuthBackHeader(
 }
 
 @Composable
+private fun AuthPasswordField(
+  value: String,
+  onValueChange: (String) -> Unit,
+  label: String,
+  testTag: String,
+) {
+  var visible by rememberSaveable { mutableStateOf(false) }
+  PizzoraTextField(
+    modifier = Modifier.fillMaxWidth(),
+    value = value,
+    onValueChange = onValueChange,
+    label = label,
+    leadingIcon = Icons.Filled.Lock,
+    trailingIcon = {
+      PizzoraIconButton(
+        icon = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+        contentDescription = stringResource(
+          if (visible) R.string.action_hide_password else R.string.action_show_password,
+        ),
+        onClick = { visible = !visible },
+        testTag = "${testTag}_toggle",
+      )
+    },
+    visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+    testTag = testTag,
+  )
+}
+
+@Composable
 private fun AuthStatusBanner(uiState: AuthUiState) {
+  val tokens = LocalPizzoraTokens.current
   AnimatedVisibility(visible = uiState.errorMessage != null || uiState.infoMessage != null) {
     val isError = uiState.errorMessage != null
-    val container = if (isError) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-    val contentColor = if (isError) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
     val message = uiState.errorMessage ?: uiState.infoMessage.orEmpty()
 
-    Card(
-      colors = CardDefaults.cardColors(containerColor = container, contentColor = contentColor),
+    PizzoraSurface(
+      tone = if (isError) {
+        PizzoraSurfaceTone.ErrorContainer
+      } else {
+        PizzoraSurfaceTone.SecondaryContainer
+      },
+      shape = RoundedCornerShape(tokens.shape.radiusMedium),
       modifier = Modifier
         .fillMaxWidth()
-        .padding(bottom = 14.dp)
-        .testTag("auth_status_banner"),
+        .padding(bottom = tokens.spacing.space16),
+      testTag = "auth_status_banner",
     ) {
       Text(
         text = message,
         style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(14.dp),
+        modifier = Modifier.padding(tokens.spacing.space16),
       )
     }
   }

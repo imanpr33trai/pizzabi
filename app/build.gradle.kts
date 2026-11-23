@@ -3,6 +3,7 @@ plugins {
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.google.devtools.ksp)
+  alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -350,6 +351,8 @@ dependencies {
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.ktor.client.mock)
   testImplementation(libs.robolectric)
+  testImplementation(libs.roborazzi.core)
+  testImplementation(libs.roborazzi.compose)
 
   androidTestImplementation(platform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
@@ -360,4 +363,9 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
+}
+
+roborazzi {
+  // Goldens live in source control so screenshot diffs are reviewable in PRs.
+  outputDir.set(file("src/test/screenshots"))
 }

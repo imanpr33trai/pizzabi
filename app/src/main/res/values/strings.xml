@@ -7,6 +7,11 @@
     <string name="auth_create_account">Create Account</string>
     <string name="auth_verify_email_title">Verify Your Email</string>
     <string name="auth_forgot_password_title">Reset Password</string>
+    <string name="auth_register_details_title">Account Details</string>
+    <string name="action_forgot_password">Forgot Password?</string>
+    <string name="action_verify_token">Verify Token</string>
+    <string name="action_show_password">Show password</string>
+    <string name="action_hide_password">Hide password</string>
     <string name="label_email">Email</string>
     <string name="label_password">Password</string>
     <string name="label_new_password">New Password</string>

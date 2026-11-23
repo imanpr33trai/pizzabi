@@ -6,16 +6,19 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -137,6 +140,68 @@ fun PizzoraButton(
         )
       }
     }
+  }
+}
+
+/**
+ * Outlined alias of [PizzoraButton] for secondary actions that must stay visually distinct from
+ * the primary action. All sizing, spacing, and feedback behavior is inherited.
+ */
+@Composable
+fun PizzoraOutlinedButton(
+  text: String,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+  enabled: Boolean = true,
+  loading: Boolean = false,
+  leadingIcon: ImageVector? = null,
+  trailingIcon: ImageVector? = null,
+  hapticFeedbackEnabled: Boolean = true,
+  testTag: String = "pizzora_outlined_button",
+) {
+  PizzoraButton(
+    text = text,
+    onClick = onClick,
+    modifier = modifier,
+    variant = PizzoraButtonVariant.Outlined,
+    enabled = enabled,
+    loading = loading,
+    leadingIcon = leadingIcon,
+    trailingIcon = trailingIcon,
+    hapticFeedbackEnabled = hapticFeedbackEnabled,
+    testTag = testTag,
+  )
+}
+
+/** Low-emphasis action for inline links, with the same token touch target as other buttons. */
+@Composable
+fun PizzoraTextButton(
+  text: String,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+  enabled: Boolean = true,
+  testTag: String = "pizzora_text_button",
+) {
+  val tokens = LocalPizzoraTokens.current
+  TextButton(
+    onClick = onClick,
+    modifier = modifier
+      .defaultMinSize(minHeight = tokens.sizing.touchTargetMin)
+      .testTag(testTag),
+    enabled = enabled,
+    shape = RoundedCornerShape(tokens.shape.radiusSmall),
+    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+    contentPadding = PaddingValues(
+      horizontal = tokens.spacing.space8,
+      vertical = tokens.spacing.space4,
+    ),
+  ) {
+    Text(
+      text = text,
+      modifier = Modifier.testTag("${testTag}_label"),
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+    )
   }
 }
 

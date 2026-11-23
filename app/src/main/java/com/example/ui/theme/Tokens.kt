@@ -61,12 +61,14 @@ data class PizzoraSpacingTokens(
   val space64: Dp = 64.dp,
 )
 
-/** Sizing tokens for controls, icons, and loading affordances. */
+/** Sizing tokens for controls, icons, loading affordances, and shared layout widths. */
 @Immutable
 data class PizzoraSizingTokens(
   val touchTargetMin: Dp = 48.dp,
   val buttonHeight: Dp = 48.dp,
   val iconButtonSize: Dp = 48.dp,
+  val contentMaxWidth: Dp = 520.dp,
+  val heroBannerHeight: Dp = 180.dp,
   val iconSmall: Dp = 16.dp,
   val chipIcon: Dp = 18.dp,
   val iconMedium: Dp = 20.dp,
