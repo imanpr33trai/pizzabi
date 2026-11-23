@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Looper
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -8,12 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.AnnotatedString
 import com.example.checkout.AddAddressDialog
 import com.example.checkout.CheckoutQuoteUiState
 import com.example.checkout.CheckoutQuoteViewModel
@@ -142,6 +145,54 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
       dir = dir.parentFile ?: return error("Cannot locate $relativePath from $dir")
     }
     error("Cannot locate $relativePath from ${System.getProperty("user.dir")}")
+  }
+
+  /**
+   * Commits text through the field's SetText semantics action, the same state update an IME
+   * performs. Robolectric cannot drive the focus/IME path for a windowed dialog reliably.
+   */
+  private fun enterText(tag: String, text: String) {
+    composeTestRule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.SetText) {
+      it(AnnotatedString(text))
+    }
+  }
+
+  /**
+   * Robolectric never runs the draw pass for a dialog window, so Compose's idling resource keeps
+   * reporting a pending measure/layout pass forever. Marking the registered compose views GONE
+   * makes that check skip them while leaving the semantics tree available to the assertions.
+   */
+  private fun ignorePendingDialogLayout() {
+    fun fieldsOf(value: Any?): List<java.lang.reflect.Field> {
+      val fields = mutableListOf<java.lang.reflect.Field>()
+      var type: Class<*>? = value?.javaClass
+      while (type != null) {
+        fields.addAll(type.declaredFields)
+        type = type.superclass
+      }
+      return fields
+    }
+
+    // Give the dialog window's compose view a chance to register before marking it GONE.
+    repeat(3) {
+      composeTestRule.mainClock.advanceTimeByFrame()
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    val environment = composeTestRule.javaClass.getDeclaredField("environment")
+      .apply { isAccessible = true }
+      .get(composeTestRule)
+    val registry = fieldsOf(environment).first { it.type.name.contains("ComposeRootRegistry") }
+      .apply { isAccessible = true }
+      .get(environment)
+    @Suppress("UNCHECKED_CAST")
+    val roots = registry.javaClass.methods.first { it.name == "getRegisteredComposeRoots" }
+      .invoke(registry) as Collection<Any>
+
+    composeTestRule.activity.runOnUiThread {
+      roots.filterIsInstance<View>().forEach { it.visibility = View.GONE }
+    }
+    composeTestRule.waitForIdle()
   }
 
   /** Robolectric trace bookkeeping grows unbounded during Compose text layout; disable it for this test. */
@@ -1185,7 +1236,6 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
   @Test
   fun addAddressDialogRetainsTypedValuesAcrossRotation() {
     withRobolectricTracingDisabled {
-      composeTestRule.mainClock.autoAdvance = false
       val restoreKey = mutableStateOf("before-restore")
 
       composeTestRule.activity.setContent {
@@ -1203,30 +1253,23 @@ class Phase5CheckoutQuoteIntegrityRobolectricTest {
           }
         }
       }
-      composeTestRule.mainClock.advanceTimeByFrame()
 
-      composeTestRule.mainClock.autoAdvance = true
-      try {
-        composeTestRule.onNodeWithTag("address_line1_input").performTextInput("12 MG Road")
-        composeTestRule.onNodeWithTag("address_pincode_input").performTextInput("560001")
-        composeTestRule.onNodeWithTag("address_city_input").performTextInput("Mysuru")
+      ignorePendingDialogLayout()
 
-        // Changing the provider key disposes this dialog and recreates it from the holder's
-        // saved state, which is the same rememberSaveable contract used by Activity rotation.
-        composeTestRule.runOnIdle { restoreKey.value = "after-restore" }
-      } finally {
-        composeTestRule.mainClock.autoAdvance = false
-      }
+      enterText("address_line1_input", "12 MG Road")
+      enterText("address_pincode_input", "560001")
+      enterText("address_city_input", "Mysuru")
 
-      composeTestRule.mainClock.advanceTimeByFrame()
-      composeTestRule.mainClock.autoAdvance = true
-      try {
-        composeTestRule.onNodeWithTag("address_line1_input").assertTextContains("12 MG Road", substring = true)
-        composeTestRule.onNodeWithTag("address_pincode_input").assertTextContains("560001", substring = true)
-        composeTestRule.onNodeWithTag("address_city_input").assertTextContains("Mysuru", substring = true)
-      } finally {
-        composeTestRule.mainClock.autoAdvance = true
-      }
+      // Disposing the provider first lets the holder save the field state, then composing with
+      // the same key again exercises the rememberSaveable restore contract of Activity rotation.
+      composeTestRule.activity.runOnUiThread { restoreKey.value = "disposed" }
+      ignorePendingDialogLayout()
+      composeTestRule.activity.runOnUiThread { restoreKey.value = "before-restore" }
+      ignorePendingDialogLayout()
+
+      composeTestRule.onNodeWithTag("address_line1_input").assertTextContains("12 MG Road", substring = true)
+      composeTestRule.onNodeWithTag("address_pincode_input").assertTextContains("560001", substring = true)
+      composeTestRule.onNodeWithTag("address_city_input").assertTextContains("Mysuru", substring = true)
     }
   }
 
