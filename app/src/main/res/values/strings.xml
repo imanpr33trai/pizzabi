@@ -164,6 +164,26 @@
     <string name="address_line2_hint">Apartment / Floor (optional)</string>
     <string name="address_landmark_hint">Landmark (optional)</string>
     <string name="address_set_default_label">Use as default delivery address</string>
+    <string name="profile_phone_fmt">Phone: %1$s</string>
+    <string name="profile_pincode_zone_fmt">Min %1$s • Fee %2$s • %3$d mins</string>
+    <string name="settings_store_title">Store &amp; GST Configuration</string>
+    <string name="settings_store_name_label">Store Name</string>
+    <string name="settings_gst_bps_label" formatted="false">GST (bps, 500=5%)</string>
+    <string name="settings_prep_mins_label">Prep SLA (mins)</string>
+    <string name="settings_accepting_orders_title">Accepting Orders</string>
+    <string name="settings_accepting_orders_open">Store is open for customer checkout</string>
+    <string name="settings_accepting_orders_paused">Checkout paused (STORE_CLOSED)</string>
+    <string name="settings_save_button">Save Store Settings</string>
+    <string name="settings_staff_title">Kitchen &amp; Owner Staff</string>
+    <string name="settings_add_staff">Add Staff</string>
+    <string name="settings_staff_empty_title">No staff accounts yet</string>
+    <string name="settings_staff_empty_subtitle">Provision KITCHEN_STAFF or OWNER accounts here.</string>
+    <string name="staff_dialog_title">Create Staff Account</string>
+    <string name="staff_create_button">Create</string>
+    <string name="staff_cancel_button">Cancel</string>
+    <string name="staff_phone_label">Phone</string>
+    <string name="staff_code_label">Employee Code (e.g. CHEF-02)</string>
+    <string name="staff_password_label">Temporary Password (8+ chars)</string>
     <string name="checkout_fulfillment_title">Fulfillment</string>
     <string name="checkout_verify_pincode_action">Check Delivery Zone</string>
     <string name="checkout_schedule_title">Delivery / Pickup Time</string>

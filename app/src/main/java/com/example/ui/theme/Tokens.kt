@@ -59,6 +59,7 @@ data class PizzoraSpacingTokens(
   val space40: Dp = 40.dp,
   val space48: Dp = 48.dp,
   val space64: Dp = 64.dp,
+  val space72: Dp = 72.dp,
 )
 
 /** Sizing tokens for controls, icons, loading affordances, and shared layout widths. */
@@ -68,7 +69,10 @@ data class PizzoraSizingTokens(
   val buttonHeight: Dp = 48.dp,
   val iconButtonSize: Dp = 48.dp,
   val contentMaxWidth: Dp = 520.dp,
+  val listMaxWidth: Dp = 720.dp,
   val heroBannerHeight: Dp = 180.dp,
+  val avatarSize: Dp = 44.dp,
+  val dialogContentMaxHeight: Dp = 380.dp,
   val iconSmall: Dp = 16.dp,
   val chipIcon: Dp = 18.dp,
   val iconMedium: Dp = 20.dp,
