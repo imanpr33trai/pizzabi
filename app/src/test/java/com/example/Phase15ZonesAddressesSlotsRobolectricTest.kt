@@ -714,6 +714,9 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
     composeTestRule.waitForIdle()
     assertEquals("slot-evening", checkoutVm.uiState.value.selectedSlotId)
 
+    waitUntilMainLooper {
+      quoteVm.uiState.value.isQuoteFresh
+    }
     composeTestRule.onNodeWithTag("place_order_button").performClick()
     waitUntilMainLooper(
       debugMessage = {

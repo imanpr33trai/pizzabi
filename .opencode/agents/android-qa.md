@@ -1,7 +1,7 @@
 ---
 description: Executes PIZZORA Android runtime QA using available Ubuntu, Android SDK, ADB, emulator, and screenshot tools.
 mode: subagent
-model: nvidia/llama-3.3-nemotron-super-49b-v1.5
+model: nvidia/nvidia/nemotron-3-ultra-550b-a55b
 temperature: 0.1
 ---
 

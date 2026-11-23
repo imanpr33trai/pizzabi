@@ -8,6 +8,7 @@ import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CustomerCouponDto
 import com.pizzora.contracts.DeliveryZoneCheckResponse
 import com.pizzora.contracts.FulfillmentType
+import com.pizzora.contracts.Money
 import com.pizzora.contracts.PricingQuoteRequest
 import com.pizzora.contracts.PricingQuoteResponse
 import kotlinx.coroutines.Job
@@ -16,6 +17,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+data class QuoteItemConfig(
+  val id: String,
+  val productId: String,
+  val variantId: String,
+  val crustId: String,
+  val toppingIds: List<String>,
+  val quantity: Int,
+)
+
+/**
+ * Canonical pricing-equivalence key (Section 4.3). Payment method, schedule type,
+ * slot id and clientUnitPricePaise are deliberately absent: /v1/pricing/quote
+ * never reads them, so they must never invalidate a quote.
+ */
+data class QuoteRequestSignature(
+  val itemsConfig: List<QuoteItemConfig>,
+  val hasUnavailableItems: Boolean,
+  val fulfillmentType: FulfillmentType,
+  val deliveryContext: String,
+  val normalizedCouponCode: String?,
+)
 
 data class CheckoutQuoteUiState(
   val fulfillmentType: FulfillmentType = FulfillmentType.DELIVERY,
@@ -33,7 +56,23 @@ data class CheckoutQuoteUiState(
   val couponError: String? = null,
   val quoteError: String? = null,
   val couponSheetError: String? = null,
-)
+  val currentSignature: QuoteRequestSignature? = null,
+  val quotedSignature: QuoteRequestSignature? = null,
+  val inFlightSignature: QuoteRequestSignature? = null,
+  val hasUnavailableItems: Boolean = false,
+  val priceDriftNotice: String? = null,
+) {
+  val isQuoteFresh: Boolean
+    get() = quote != null &&
+      quotedSignature != null &&
+      quotedSignature == currentSignature &&
+      !isLoadingQuote &&
+      quoteError == null &&
+      !hasUnavailableItems
+
+  val isQuoteStale: Boolean
+    get() = quote != null && !isQuoteFresh
+}
 
 class CheckoutQuoteViewModel(
   private val pricingRepository: PricingRepository,
@@ -45,21 +84,30 @@ class CheckoutQuoteViewModel(
   private var latestCartItems: List<CartItemWithToppings> = emptyList()
   private var latestSubtotalPaise: Long = 0L
   private var quoteJob: Job? = null
+  private var zoneCheckJob: Job? = null
+  private var quoteRequestGeneration: Long = 0L
 
   fun onCartChanged(items: List<CartItemWithToppings>, subtotalPaise: Long) {
     val previousSignature = latestCartItems.toSignature()
-    val newSignature = items.toSignature()
     latestCartItems = items
     latestSubtotalPaise = subtotalPaise
+    val newSignature = items.toSignature()
+
+    _uiState.update { it.copy(hasUnavailableItems = items.any { entry -> !entry.item.isAvailable }) }
 
     if (items.isEmpty()) {
-      quoteJob?.cancel()
+      cancelPendingQuoteWork()
       _uiState.update {
         it.copy(
           quote = null,
+          quotedSignature = null,
+          currentSignature = null,
+          inFlightSignature = null,
           isLoadingQuote = false,
+          isCheckingZone = false,
           couponError = null,
           quoteError = null,
+          priceDriftNotice = null,
         )
       }
       return
@@ -67,15 +115,20 @@ class CheckoutQuoteViewModel(
 
     if (previousSignature != newSignature || _uiState.value.quote == null) {
       requestQuote()
+    } else {
+      // Inputs are unchanged: keep freshness bookkeeping aligned without a new POST.
+      _uiState.update { it.copy(currentSignature = newSignature) }
     }
   }
 
   fun onFulfillmentTypeChange(type: FulfillmentType) {
     if (_uiState.value.fulfillmentType == type) return
+    cancelPendingQuoteWork()
     _uiState.update {
       it.copy(
         fulfillmentType = type,
         quoteError = null,
+        isCheckingZone = false,
       )
     }
     if (latestCartItems.isNotEmpty()) {
@@ -97,57 +150,121 @@ class CheckoutQuoteViewModel(
   fun applyPincodeCheck() {
     val pin = _uiState.value.pincodeInput.trim().takeIf { it.isNotEmpty() }
     if (pin == null) {
-      _uiState.update { it.copy(checkedPincode = null, zoneCheckResult = null, quoteError = null) }
+      cancelPendingQuoteWork()
+      _uiState.update {
+        it.copy(
+          checkedPincode = null,
+          zoneCheckResult = null,
+          quote = null,
+          quotedSignature = null,
+          currentSignature = null,
+          inFlightSignature = null,
+          quoteError = null,
+          isCheckingZone = false,
+          isLoadingQuote = false,
+          priceDriftNotice = null,
+        )
+      }
       if (latestCartItems.isNotEmpty()) {
         requestQuote(overridePincode = null, clearPincodeOnZoneError = true)
       }
       return
     }
     if (!pin.matches(Regex("^[1-9][0-9]{5}$"))) {
+      // Invalid pincode is authoritative: no previously quoted total may remain usable.
+      cancelPendingQuoteWork()
       _uiState.update {
         it.copy(
           checkedPincode = null,
           zoneCheckResult = null,
+          quote = null,
+          quotedSignature = null,
+          inFlightSignature = null,
+          isCheckingZone = false,
+          isLoadingQuote = false,
           quoteError = "Enter a valid 6-digit Indian pincode.",
+          priceDriftNotice = null,
         )
       }
       return
     }
 
-    viewModelScope.launch {
-      _uiState.update { it.copy(isCheckingZone = true, checkedPincode = pin, quoteError = null) }
+    // The checked pincode is quote-affecting: invalidate authority and cancel any
+    // previous quote before the zone check starts, not after it completes.
+    cancelPendingQuoteWork()
+    val newSignature = computeSignature(overridePincode = pin)
+    _uiState.update {
+      it.copy(
+        checkedPincode = pin,
+        currentSignature = newSignature,
+        inFlightSignature = null,
+        isCheckingZone = true,
+        isLoadingQuote = latestCartItems.isNotEmpty(),
+        quoteError = null,
+      )
+    }
+    val checkGen = quoteRequestGeneration
+    zoneCheckJob = viewModelScope.launch {
+      if (checkGen != quoteRequestGeneration || coroutineContext[Job]?.isActive != true) return@launch
       val zoneResult = pricingRepository.checkDeliveryZone(pin)
       zoneResult
         .onSuccess { check ->
+          if (checkGen != quoteRequestGeneration || coroutineContext[Job]?.isActive != true) return@launch
+          if (!check.isServiceable) {
+            _uiState.update {
+              it.copy(
+                isCheckingZone = false,
+                zoneCheckResult = check,
+                checkedPincode = null,
+                quote = null,
+                quotedSignature = null,
+                inFlightSignature = null,
+                isLoadingQuote = false,
+                quoteError = check.message,
+                priceDriftNotice = null,
+              )
+            }
+            return@launch
+          }
           _uiState.update {
             it.copy(
               isCheckingZone = false,
               zoneCheckResult = check,
-              checkedPincode = if (check.isServiceable) pin else null,
-              quoteError = if (!check.isServiceable) check.message else null,
+              checkedPincode = pin,
+              quoteError = null,
             )
           }
-          if (check.isServiceable && latestCartItems.isNotEmpty()) {
+          if (latestCartItems.isNotEmpty()) {
             requestQuote(overridePincode = pin, clearPincodeOnZoneError = true)
+          } else {
+            _uiState.update { it.copy(isLoadingQuote = false) }
           }
         }
         .onFailure { err ->
+          if (checkGen != quoteRequestGeneration || coroutineContext[Job]?.isActive != true) return@launch
           val apiEx = err as? PizzoraApiException
-          if (apiEx != null) {
+          if (apiEx != null && (apiEx.code == "ZONE_UNSERVICEABLE" || apiEx.code == "INVALID_PINCODE")) {
             _uiState.update {
               it.copy(
                 isCheckingZone = false,
                 zoneCheckResult = null,
                 checkedPincode = null,
-                quoteError = apiEx.message,
+                quote = null,
+                quotedSignature = null,
+                inFlightSignature = null,
+                isLoadingQuote = false,
+                quoteError = apiEx.message ?: "Delivery unavailable for selected pincode.",
+                priceDriftNotice = null,
               )
             }
+            return@launch
+          }
+          // Non-API fallback (offline or legacy quote-only MockEngine): defer to pricing quote.
+          _uiState.update { it.copy(isCheckingZone = false, zoneCheckResult = null) }
+          if (latestCartItems.isNotEmpty()) {
+            requestQuote(overridePincode = pin, clearPincodeOnZoneError = true)
           } else {
-            // Non-API fallback (e.g., offline or legacy quote-only MockEngine): defer to pricing quote
-            _uiState.update { it.copy(isCheckingZone = false, zoneCheckResult = null) }
-            if (latestCartItems.isNotEmpty()) {
-              requestQuote(overridePincode = pin, clearPincodeOnZoneError = true)
-            }
+            _uiState.update { it.copy(isLoadingQuote = false) }
           }
         }
     }
@@ -196,11 +313,12 @@ class CheckoutQuoteViewModel(
       it.copy(
         couponInput = normalized,
         isCouponSheetOpen = false,
+        appliedCouponCode = normalized,
         couponError = null,
       )
     }
     if (latestCartItems.isNotEmpty()) {
-      requestQuote(overrideCouponCode = normalized, commitCouponOnSuccess = true)
+      requestQuote(overrideCouponCode = normalized)
     }
   }
 
@@ -219,109 +337,457 @@ class CheckoutQuoteViewModel(
 
   fun refreshQuote() {
     if (latestCartItems.isNotEmpty()) {
+      // Normal dedup applies: an in-flight or already-fresh quote needs no retry.
+      // After a failure quotedSignature is cleared, so Retry always dispatches.
       requestQuote()
     }
   }
 
-  private fun requestQuote(
-    overrideCouponCode: String? = _uiState.value.appliedCouponCode,
-    forceClearCoupon: Boolean = false,
-    commitCouponOnSuccess: Boolean = false,
-    overridePincode: String? = _uiState.value.checkedPincode,
-    clearPincodeOnZoneError: Boolean = false,
-  ) {
-    val availableItems = latestCartItems.filter { it.item.isAvailable }
-    if (availableItems.isEmpty()) {
-      _uiState.update { it.copy(quote = null, isLoadingQuote = false) }
+  /**
+   * Forces one fresh authoritative quote after an order-time 422, when the last quote
+   * is still fresh and ordinary Retry dedup would otherwise suppress the POST.
+   */
+  fun forceRefreshQuote() {
+    if (latestCartItems.isNotEmpty()) {
+      requestQuote(forceRefresh = true)
+    }
+  }
+
+  /**
+   * Checkout address auto-sync. A different pincode triggers exactly one zone check
+   * followed by one signature-deduplicated quote; an unchanged, fresh quote is reused.
+   */
+  fun syncCheckoutAddressPincode(pincode: String) {
+    val pin = pincode.filter { it.isDigit() }.take(6).takeIf { it.isNotBlank() }
+    if (pin == null) {
+      cancelPendingQuoteWork()
+      _uiState.update {
+        it.copy(
+          pincodeInput = "",
+          checkedPincode = null,
+          zoneCheckResult = null,
+          isCheckingZone = false,
+          quote = null,
+          quotedSignature = null,
+          currentSignature = null,
+          inFlightSignature = null,
+          quoteError = null,
+          isLoadingQuote = false,
+          priceDriftNotice = null,
+        )
+      }
       return
     }
 
-    val state = _uiState.value
-    val effectiveCoupon = if (forceClearCoupon) null else overrideCouponCode
-    val effectivePincode = if (state.fulfillmentType == FulfillmentType.DELIVERY) overridePincode else null
+    val currentState = _uiState.value
+    val newSig = computeSignature(overridePincode = pin)
 
-    val req = PricingQuoteRequest(
-      items = availableItems.map { entry ->
-        CartItemInputDto(
-          id = entry.item.id,
-          productId = entry.item.productId,
-          variantId = entry.item.variantId,
-          crustId = entry.item.crustId,
-          toppingIds = entry.toppings.map { it.toppingId },
-          quantity = entry.item.quantity,
-          clientUnitPricePaise = entry.item.unitPricePaise,
-        )
-      },
-      fulfillmentType = state.fulfillmentType,
-      pincode = effectivePincode,
-      couponCode = effectiveCoupon,
-    )
+    if (currentState.inFlightSignature == newSig && currentState.isLoadingQuote) {
+      _uiState.update { it.copy(pincodeInput = pin, checkedPincode = pin) }
+      return
+    }
 
-    quoteJob?.cancel()
-    quoteJob = viewModelScope.launch {
-      _uiState.update { it.copy(isLoadingQuote = true, quoteError = null) }
-      pricingRepository.fetchPricingQuote(req)
-        .onSuccess { response ->
+    if (currentState.isQuoteFresh && currentState.quotedSignature == newSig) {
+      _uiState.update { it.copy(pincodeInput = pin, checkedPincode = pin) }
+      return
+    }
+
+    // Different pincode (or an invalidated quote): mark inputs current immediately so
+    // the previously quoted total is stale while the new zone/quote cycle runs.
+    cancelPendingQuoteWork()
+    _uiState.update {
+      it.copy(
+        pincodeInput = pin,
+        checkedPincode = pin,
+        zoneCheckResult = if (it.zoneCheckResult?.pincode == pin) it.zoneCheckResult else null,
+        currentSignature = newSig,
+        inFlightSignature = null,
+        isLoadingQuote = latestCartItems.isNotEmpty(),
+        isCheckingZone = true,
+        quoteError = null,
+      )
+    }
+
+    val syncGen = quoteRequestGeneration
+    zoneCheckJob = viewModelScope.launch {
+      if (syncGen != quoteRequestGeneration || coroutineContext[Job]?.isActive != true) return@launch
+      val zoneResult = pricingRepository.checkDeliveryZone(pin)
+      zoneResult
+        .onSuccess { check ->
+          if (syncGen != quoteRequestGeneration || coroutineContext[Job]?.isActive != true) return@launch
+          if (!check.isServiceable) {
+            _uiState.update {
+              it.copy(
+                isCheckingZone = false,
+                zoneCheckResult = check,
+                checkedPincode = null,
+                quote = null,
+                quotedSignature = null,
+                inFlightSignature = null,
+                isLoadingQuote = false,
+                quoteError = check.message,
+                priceDriftNotice = null,
+              )
+            }
+            return@launch
+          }
           _uiState.update {
             it.copy(
-              quote = response,
-              appliedCouponCode = response.appliedCoupon?.code ?: if (forceClearCoupon) null else it.appliedCouponCode,
-              checkedPincode = response.deliveryZone?.pincode ?: effectivePincode,
-              isLoadingQuote = false,
-              couponError = null,
+              isCheckingZone = false,
+              zoneCheckResult = check,
+              checkedPincode = pin,
               quoteError = null,
             )
           }
+          if (latestCartItems.isNotEmpty()) {
+            requestQuote(overridePincode = pin, clearPincodeOnZoneError = true, forceRefresh = true)
+          } else {
+            _uiState.update { it.copy(isLoadingQuote = false) }
+          }
         }
         .onFailure { err ->
+          if (syncGen != quoteRequestGeneration || coroutineContext[Job]?.isActive != true) return@launch
           val apiEx = err as? PizzoraApiException
-          val isCouponErr = apiEx?.code?.startsWith("COUPON_") == true
-          val isZoneErr = apiEx?.code == "ZONE_UNSERVICEABLE" || apiEx?.code == "DELIVERY_MIN_ORDER_NOT_MET"
-
-          if (isCouponErr) {
+          if (apiEx != null && (apiEx.code == "ZONE_UNSERVICEABLE" || apiEx.code == "INVALID_PINCODE")) {
             _uiState.update {
               it.copy(
+                isCheckingZone = false,
+                zoneCheckResult = null,
+                checkedPincode = null,
+                quote = null,
+                quotedSignature = null,
+                inFlightSignature = null,
                 isLoadingQuote = false,
-                appliedCouponCode = if (commitCouponOnSuccess) it.appliedCouponCode else null,
-                couponError = apiEx.message,
+                quoteError = apiEx.message ?: "Delivery unavailable for selected pincode.",
+                priceDriftNotice = null,
               )
             }
-            // Refresh base quote without the rejected coupon so user still sees itemized totals
-            val fallbackReq = req.copy(couponCode = null)
-            pricingRepository.fetchPricingQuote(fallbackReq).onSuccess { baseQuote ->
-              _uiState.update { it.copy(quote = baseQuote) }
-            }
-          } else if (isZoneErr) {
-            _uiState.update {
-              it.copy(
-                isLoadingQuote = false,
-                checkedPincode = if (clearPincodeOnZoneError) null else it.checkedPincode,
-                quoteError = apiEx?.message ?: "Delivery unavailable for selected pincode.",
-              )
-            }
+            return@launch
+          }
+          _uiState.update { it.copy(isCheckingZone = false, zoneCheckResult = null, quoteError = null) }
+          if (latestCartItems.isNotEmpty()) {
+            requestQuote(overridePincode = pin, clearPincodeOnZoneError = true, forceRefresh = true)
           } else {
-            _uiState.update {
-              it.copy(
-                isLoadingQuote = false,
-                quoteError = err.message ?: "Unable to fetch price quote.",
-              )
+            _uiState.update { it.copy(isLoadingQuote = false) }
+          }
+        }
+    }
+  }
+
+  private fun computeSignature(
+    items: List<CartItemWithToppings> = latestCartItems,
+    overrideCouponCode: String? = _uiState.value.appliedCouponCode,
+    overridePincode: String? = _uiState.value.checkedPincode,
+  ): QuoteRequestSignature {
+    val state = _uiState.value
+    val availableItems = items.filter { it.item.isAvailable }
+
+    val itemsConfig = availableItems.map { entry ->
+      QuoteItemConfig(
+        id = entry.item.id,
+        productId = entry.item.productId,
+        variantId = entry.item.variantId,
+        crustId = entry.item.crustId,
+        toppingIds = entry.toppings.map { it.toppingId }.distinct().sorted(),
+        quantity = entry.item.quantity,
+      )
+    }
+
+    val deliveryContext = if (state.fulfillmentType == FulfillmentType.PICKUP) {
+      "PICKUP"
+    } else {
+      "${(overridePincode ?: state.checkedPincode).orEmpty()}|"
+    }
+
+    return QuoteRequestSignature(
+      itemsConfig = itemsConfig,
+      hasUnavailableItems = items.any { !it.item.isAvailable },
+      fulfillmentType = state.fulfillmentType,
+      deliveryContext = deliveryContext,
+      normalizedCouponCode = overrideCouponCode?.trim()?.uppercase()?.takeIf { it.isNotBlank() },
+    )
+  }
+
+  private fun buildQuoteRequest(
+    availableItems: List<CartItemWithToppings>,
+    fulfillmentType: FulfillmentType,
+    pincode: String?,
+    couponCode: String?,
+  ): PricingQuoteRequest = PricingQuoteRequest(
+    items = availableItems.map { entry ->
+      CartItemInputDto(
+        id = entry.item.id,
+        productId = entry.item.productId,
+        variantId = entry.item.variantId,
+        crustId = entry.item.crustId,
+        toppingIds = entry.toppings.map { it.toppingId },
+        quantity = entry.item.quantity,
+        clientUnitPricePaise = entry.item.unitPricePaise,
+      )
+    },
+    fulfillmentType = fulfillmentType,
+    pincode = pincode,
+    couponCode = couponCode,
+  )
+
+  private fun requestQuote(
+    overrideCouponCode: String? = _uiState.value.appliedCouponCode,
+    forceClearCoupon: Boolean = false,
+    overridePincode: String? = _uiState.value.checkedPincode,
+    clearPincodeOnZoneError: Boolean = false,
+    forceRefresh: Boolean = false,
+  ) {
+    val fulfillmentType = _uiState.value.fulfillmentType
+    val effectiveCoupon = if (forceClearCoupon) null else overrideCouponCode
+    val effectivePincode = if (fulfillmentType == FulfillmentType.DELIVERY) overridePincode else null
+    val sig = computeSignature(overrideCouponCode = effectiveCoupon, overridePincode = effectivePincode)
+
+    // Freshness changes synchronously with the input, even when dedup skips a POST.
+    _uiState.update { it.copy(currentSignature = sig) }
+
+    if (!forceRefresh) {
+      val state = _uiState.value
+      if (state.inFlightSignature == sig) return
+      if (state.quotedSignature == sig && state.quote != null && state.quoteError == null && !state.isLoadingQuote) {
+        return
+      }
+    }
+
+    val availableItems = latestCartItems.filter { it.item.isAvailable }
+    if (availableItems.isEmpty()) {
+      _uiState.update {
+        it.copy(
+          quote = null,
+          quotedSignature = null,
+          currentSignature = null,
+          inFlightSignature = null,
+          isLoadingQuote = false,
+          priceDriftNotice = null,
+        )
+      }
+      return
+    }
+
+    val req = buildQuoteRequest(availableItems, fulfillmentType, effectivePincode, effectiveCoupon)
+
+    quoteJob?.cancel()
+    quoteRequestGeneration++
+    val gen = quoteRequestGeneration
+    _uiState.update {
+      it.copy(
+        currentSignature = sig,
+        inFlightSignature = sig,
+        isLoadingQuote = true,
+        quoteError = null,
+      )
+    }
+
+    quoteJob = viewModelScope.launch {
+      pricingRepository.fetchPricingQuote(req)
+        .onSuccess { response ->
+          if (!isCurrentGeneration(gen, coroutineContext[Job]?.isActive == true)) return@launch
+          publishQuote(
+            response = response,
+            requestSignature = sig,
+            requestedPincode = effectivePincode,
+            couponError = null,
+            forceClearCoupon = forceClearCoupon,
+          )
+        }
+        .onFailure { err ->
+          if (!isCurrentGeneration(gen, coroutineContext[Job]?.isActive == true)) return@launch
+          val apiEx = err as? PizzoraApiException
+          when {
+            apiEx?.code?.startsWith("COUPON_") == true -> {
+              startCouponFallback(apiEx, effectivePincode)
+            }
+            apiEx?.code == "ZONE_UNSERVICEABLE" ||
+              apiEx?.code == "DELIVERY_MIN_ORDER_NOT_MET" ||
+              apiEx?.code == "INVALID_PINCODE" -> {
+              val message = zoneFailureMessage(apiEx, effectivePincode)
+              _uiState.update {
+                it.copy(
+                  quote = null,
+                  quotedSignature = null,
+                  inFlightSignature = null,
+                  isLoadingQuote = false,
+                  checkedPincode = if (clearPincodeOnZoneError) null else it.checkedPincode,
+                  quoteError = message,
+                  priceDriftNotice = null,
+                )
+              }
+            }
+            else -> {
+              // Network/5xx: keep the previous quote for dimming, but remove authority.
+              _uiState.update {
+                it.copy(
+                  inFlightSignature = null,
+                  isLoadingQuote = false,
+                  quotedSignature = null,
+                  quoteError = err.message ?: "Unable to fetch price quote.",
+                )
+              }
             }
           }
         }
     }
   }
 
-  fun clearSessionState() {
+  private fun startCouponFallback(
+    apiEx: PizzoraApiException,
+    requestedPincode: String?,
+  ) {
+    _uiState.update {
+      it.copy(
+        isLoadingQuote = false,
+        appliedCouponCode = null,
+        couponError = apiEx.message,
+      )
+    }
+
     quoteJob?.cancel()
+    quoteRequestGeneration++
+    val fallbackGen = quoteRequestGeneration
+    val fallbackSig = computeSignature(overrideCouponCode = null, overridePincode = requestedPincode)
+    _uiState.update {
+      it.copy(
+        currentSignature = fallbackSig,
+        inFlightSignature = fallbackSig,
+        isLoadingQuote = true,
+        quoteError = null,
+      )
+    }
+
+    quoteJob = viewModelScope.launch {
+      if (!isCurrentGeneration(fallbackGen, coroutineContext[Job]?.isActive == true)) return@launch
+
+      // KNOWN DEFECT FIX: the cart may have changed between coupon rejection and
+      // fallback dispatch. Re-read the latest available items *inside* the retry.
+      val fallbackItems = latestCartItems.filter { it.item.isAvailable }
+      if (fallbackItems.isEmpty()) {
+        _uiState.update {
+          it.copy(
+            quote = null,
+            quotedSignature = null,
+            currentSignature = null,
+            inFlightSignature = null,
+            isLoadingQuote = false,
+            priceDriftNotice = null,
+          )
+        }
+        return@launch
+      }
+
+      val fulfillmentType = _uiState.value.fulfillmentType
+      val fallbackPincode = if (fulfillmentType == FulfillmentType.DELIVERY) requestedPincode else null
+      val fallbackReq = buildQuoteRequest(fallbackItems, fulfillmentType, fallbackPincode, null)
+      val freshestSig = computeSignature(overrideCouponCode = null, overridePincode = fallbackPincode)
+      _uiState.update {
+        it.copy(
+          currentSignature = freshestSig,
+          inFlightSignature = freshestSig,
+        )
+      }
+
+      pricingRepository.fetchPricingQuote(fallbackReq)
+        .onSuccess { baseQuote ->
+          if (!isCurrentGeneration(fallbackGen, coroutineContext[Job]?.isActive == true)) return@launch
+          publishQuote(
+            response = baseQuote,
+            requestSignature = freshestSig,
+            requestedPincode = fallbackPincode,
+            couponError = apiEx.message,
+            forceClearCoupon = true,
+          )
+        }
+        .onFailure { fallbackErr ->
+          if (!isCurrentGeneration(fallbackGen, coroutineContext[Job]?.isActive == true)) return@launch
+          _uiState.update {
+            it.copy(
+              inFlightSignature = null,
+              quotedSignature = null,
+              isLoadingQuote = false,
+              quoteError = fallbackErr.message ?: "Unable to fetch price quote.",
+            )
+          }
+        }
+    }
+  }
+
+  private fun publishQuote(
+    response: PricingQuoteResponse,
+    requestSignature: QuoteRequestSignature,
+    requestedPincode: String?,
+    couponError: String?,
+    forceClearCoupon: Boolean,
+  ) {
+    val appliedCouponCode = response.appliedCoupon?.code?.trim()?.uppercase()?.takeIf { it.isNotBlank() }
+    val deliveredPincode = response.deliveryZone?.pincode?.takeIf { it.isNotBlank() } ?: requestedPincode
+    val quotedSig = requestSignature.copy(
+      deliveryContext = if (requestSignature.fulfillmentType == FulfillmentType.PICKUP) {
+        "PICKUP"
+      } else {
+        "${deliveredPincode.orEmpty()}|"
+      },
+      normalizedCouponCode = appliedCouponCode,
+    )
+    val driftNotice = if (response.breakdown.subtotalPaise != latestSubtotalPaise) {
+      "Menu prices updated — your total has been refreshed to ${Money.formatInr(response.breakdown.totalPaise)}"
+    } else {
+      null
+    }
+
+    _uiState.update {
+      it.copy(
+        quote = response,
+        quotedSignature = quotedSig,
+        currentSignature = quotedSig,
+        inFlightSignature = null,
+        isLoadingQuote = false,
+        couponError = couponError,
+        quoteError = null,
+        appliedCouponCode = appliedCouponCode ?: if (forceClearCoupon) null else it.appliedCouponCode,
+        checkedPincode = if (requestSignature.fulfillmentType == FulfillmentType.DELIVERY) {
+          deliveredPincode ?: it.checkedPincode
+        } else {
+          it.checkedPincode
+        },
+        priceDriftNotice = driftNotice,
+      )
+    }
+  }
+
+  private fun zoneFailureMessage(apiEx: PizzoraApiException, pincode: String?): String {
+    if (apiEx.code == "INVALID_PINCODE") return "Invalid pincode."
+    if (apiEx.code == "DELIVERY_MIN_ORDER_NOT_MET") {
+      val minOrder = apiEx.details?.get("min_order_paise")?.toLongOrNull()
+      if (minOrder != null) {
+        val shortfall = minOrder - latestSubtotalPaise
+        if (shortfall > 0) {
+          return "Add ${Money.formatInr(shortfall)} more for delivery to ${pincode.orEmpty()}."
+        }
+      }
+    }
+    return apiEx.message ?: "Delivery unavailable for selected pincode."
+  }
+
+  private fun cancelPendingQuoteWork() {
+    quoteJob?.cancel()
+    zoneCheckJob?.cancel()
+    quoteRequestGeneration++
+  }
+
+  private fun isCurrentGeneration(gen: Long, isActive: Boolean): Boolean =
+    gen == quoteRequestGeneration && isActive
+
+  fun clearSessionState() {
+    cancelPendingQuoteWork()
     quoteJob = null
+    zoneCheckJob = null
     latestCartItems = emptyList()
     latestSubtotalPaise = 0L
     _uiState.value = CheckoutQuoteUiState()
   }
 
-  private fun List<CartItemWithToppings>.toSignature(): String =
-    joinToString("|") { entry ->
-      val toppings = entry.toppings.map { it.toppingId }.sorted().joinToString(",")
-      "${entry.item.id}:${entry.item.variantId}:${entry.item.crustId}:$toppings:${entry.item.quantity}:${entry.item.isAvailable}"
-    }
+  private fun List<CartItemWithToppings>.toSignature(): QuoteRequestSignature = computeSignature(items = this)
 }

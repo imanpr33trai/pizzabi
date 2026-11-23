@@ -1,8 +1,8 @@
-***
+---
 
 description: Coordinates PIZZORA Phase 4 QA recovery, delegates investigations, integrates verified findings, and owns approved fixes and publication.
 mode: primary
-model: nvidia/nemotron-3-ultra-550b-a55b
+model: nvidia/nvidia/nemotron-3-ultra-550b-a55b
 temperature: 0.1
 ---
 

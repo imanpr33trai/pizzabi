@@ -42,6 +42,8 @@ import com.pizzora.contracts.CheckoutRequest
 import com.pizzora.contracts.CheckoutResponse
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.DeliveryAddressSnapshotDto
+import com.pizzora.contracts.DeliveryZoneCheckResponse
+import com.pizzora.contracts.DeliveryZoneDto
 import com.pizzora.contracts.DeliveryZoneQuoteDto
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderDetailDto
@@ -291,6 +293,29 @@ class Phase10CheckoutAndOrdersRobolectricTest {
             headers = headersOf(HttpHeaders.ContentType, "application/json"),
           )
         }
+        path == "/api/v1/delivery-zones/check" && request.method == HttpMethod.Get -> {
+          val pin = request.url.parameters["pincode"].orEmpty()
+          respond(
+            content = json.encodeToString(
+              DeliveryZoneCheckResponse(
+                pincode = pin,
+                isServiceable = true,
+                zone = DeliveryZoneDto(
+                  id = "zone-p10",
+                  pincode = pin,
+                  areaName = "MG Road",
+                  minOrderPaise = 30_000L,
+                  deliveryFeePaise = 4_000L,
+                  estimatedMins = 30,
+                  isActive = true,
+                ),
+                message = "Delivers to $pin in ~30 mins.",
+              ),
+            ),
+            status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+          )
+        }
         path == "/api/v1/me/addresses" && request.method == HttpMethod.Get -> respond(
           content = json.encodeToString(addresses.toList()),
           status = HttpStatusCode.OK,
@@ -509,6 +534,9 @@ class Phase10CheckoutAndOrdersRobolectricTest {
     // Select COD payment method and place order
     composeTestRule.onNodeWithTag("checkout_lazy_column").performScrollToNode(hasTestTag("payment_method_cod"))
     composeTestRule.onNodeWithTag("payment_method_cod").performClick()
+    waitUntilMainLooper {
+      quoteVm.uiState.value.isQuoteFresh
+    }
     composeTestRule.onNodeWithTag("place_order_button").performClick()
 
     waitUntilMainLooper {

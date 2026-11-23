@@ -1,7 +1,7 @@
 ---
 description: Read-only investigation of PIZZORA Android Compose visual and interaction findings.
 mode: subagent
-model: nvidia/nemotron-3-super-120b-a12b
+model: nvidia/nvidia/nemotron-3-ultra-550b-a55b
 temperature: 0.1
 tools:
     write: false

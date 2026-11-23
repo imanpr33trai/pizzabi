@@ -60,6 +60,8 @@ import com.pizzora.contracts.CouponCalculationSpec
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.CustomerCouponDto
 import com.pizzora.contracts.DeliveryAddressSnapshotDto
+import com.pizzora.contracts.DeliveryZoneCheckResponse
+import com.pizzora.contracts.DeliveryZoneDto
 import com.pizzora.contracts.DeliveryZoneQuoteDto
 import com.pizzora.contracts.DiscountType
 import com.pizzora.contracts.FulfillmentType
@@ -476,6 +478,29 @@ class Phase19EndToEndRobolectricTest {
             headers,
           )
         }
+        path == "/api/v1/delivery-zones/check" && request.method == HttpMethod.Get -> {
+          val pin = request.url.parameters["pincode"].orEmpty()
+          respond(
+            json.encodeToString(
+              DeliveryZoneCheckResponse(
+                pincode = pin,
+                isServiceable = true,
+                zone = DeliveryZoneDto(
+                  id = "zone-p19",
+                  pincode = pin,
+                  areaName = "Indiranagar",
+                  minOrderPaise = 20_000L,
+                  deliveryFeePaise = 4_000L,
+                  estimatedMins = 30,
+                  isActive = true,
+                ),
+                message = "Delivers to $pin in ~30 mins.",
+              ),
+            ),
+            HttpStatusCode.OK,
+            headers,
+          )
+        }
         path == "/api/v1/me/addresses" && request.method == HttpMethod.Get -> {
           respond(json.encodeToString(savedAddresses.toList()), HttpStatusCode.OK, headers)
         }
@@ -816,6 +841,10 @@ class Phase19EndToEndRobolectricTest {
     // Select COD & place order -> auto-routes to Orders Detail
     composeTestRule.onNodeWithTag("checkout_lazy_column").performScrollToNode(hasTestTag("payment_method_cod"))
     composeTestRule.onNodeWithTag("payment_method_cod").performClick()
+    composeTestRule.waitUntil(timeoutMillis = 8_000) {
+      Shadows.shadowOf(Looper.getMainLooper()).idle()
+      quoteVm.uiState.value.isQuoteFresh
+    }
     composeTestRule.onNodeWithTag("place_order_button").performClick()
 
     composeTestRule.waitUntil(timeoutMillis = 5_000) {

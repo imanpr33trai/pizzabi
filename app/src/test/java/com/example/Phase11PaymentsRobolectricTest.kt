@@ -525,6 +525,9 @@ class Phase11PaymentsRobolectricTest {
     // Select Razorpay and place order -> transitions to OrderDetail and auto-polls until order_gw_1 arrives
     composeTestRule.onNodeWithTag("checkout_lazy_column").performScrollToNode(hasTestTag("payment_method_razorpay"))
     composeTestRule.onNodeWithTag("payment_method_razorpay").performClick()
+    waitUntilMainLooper(timeoutMs = 8_000) {
+      quoteVm.uiState.value.isQuoteFresh
+    }
     composeTestRule.onNodeWithTag("place_order_button").performClick()
 
     waitUntilMainLooper(timeoutMs = 8_000) {

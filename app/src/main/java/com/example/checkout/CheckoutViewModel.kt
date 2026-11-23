@@ -5,19 +5,21 @@ import androidx.lifecycle.viewModelScope
 import com.example.core.database.CartItemWithToppings
 import com.example.core.network.PizzoraApiException
 import com.example.orders.OrderRepository
+import com.example.ui.components.OrderDisplayFormatters
 import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CheckoutRequest
 import com.pizzora.contracts.DeliveryZoneCheckResponse
 import com.pizzora.contracts.FulfillmentType
+import com.pizzora.contracts.Money
 import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.PaymentMethod
+import com.pizzora.contracts.PricingQuoteResponse
 import com.pizzora.contracts.ScheduleType
 import com.pizzora.contracts.ScheduledSlotDto
 import com.pizzora.contracts.UpsertAddressRequest
-import java.time.LocalDate
-import java.time.ZoneId
 import java.util.UUID
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -35,7 +37,7 @@ data class CheckoutUiState(
   val isAddAddressDialogOpen: Boolean = false,
   val paymentMethod: PaymentMethod = PaymentMethod.COD,
   val scheduleType: ScheduleType = ScheduleType.ASAP,
-  val selectedSlotDate: String = LocalDate.now(ZoneId.of("Asia/Kolkata")).toString(),
+  val selectedSlotDate: String = OrderDisplayFormatters.istDateIso(0),
   val availableSlots: List<ScheduledSlotDto> = emptyList(),
   val selectedSlotId: String? = null,
   val isLoadingSlots: Boolean = false,
@@ -45,6 +47,7 @@ data class CheckoutUiState(
   val isPlacingOrder: Boolean = false,
   val checkoutError: String? = null,
   val addressError: String? = null,
+  val priceDriftNotice: String? = null,
 )
 
 class CheckoutViewModel(
@@ -59,6 +62,9 @@ class CheckoutViewModel(
 
   private var currentDraftSignature: String? = null
   private var currentIdempotencyKey: String = UUID.randomUUID().toString()
+  private var addressZoneJob: Job? = null
+  private var placeOrderJob: Job? = null
+  private val placeOrderLock = Any()
 
   fun loadAddresses() {
     viewModelScope.launch {
@@ -88,22 +94,66 @@ class CheckoutViewModel(
   }
 
   fun selectAddress(addressId: String) {
-    _uiState.update {
-      it.copy(
+    _uiState.update { state ->
+      val newAddress = state.addresses.firstOrNull { it.id == addressId }
+      val shouldClearZoneCheck = newAddress?.pincode != state.selectedAddressZoneCheck?.pincode
+      state.copy(
         selectedAddressId = addressId,
-        selectedAddressZoneCheck = null,
+        selectedAddressZoneCheck = if (shouldClearZoneCheck) null else state.selectedAddressZoneCheck,
         checkoutError = null,
       )
+    }
+  }
+
+  fun ensureSelectedAddressServiceability() {
+    val state = _uiState.value
+    val selected = state.addresses.firstOrNull { it.id == state.selectedAddressId } ?: return
+    if (state.selectedAddressZoneCheck?.pincode == selected.pincode && state.selectedAddressZoneCheck?.isServiceable == true) {
+      return
+    }
+    addressZoneJob?.cancel()
+    addressZoneJob = viewModelScope.launch {
+      _uiState.update { it.copy(isCheckingAddressZone = true) }
+      orderRepository.checkDeliveryZone(selected.pincode)
+        .onSuccess { response ->
+          if (coroutineContext[Job]?.isActive != true) return@launch
+          _uiState.update { current ->
+            if (current.selectedAddressZoneCheck?.isServiceable != true) {
+              current.copy(
+                isCheckingAddressZone = false,
+                selectedAddressZoneCheck = response,
+                checkoutError = if (!response.isServiceable) response.message else null,
+              )
+            } else {
+              current.copy(isCheckingAddressZone = false)
+            }
+          }
+        }
+        .onFailure { err ->
+          if (coroutineContext[Job]?.isActive != true) return@launch
+          _uiState.update { current ->
+            if (current.selectedAddressZoneCheck?.isServiceable != true) {
+              current.copy(
+                isCheckingAddressZone = false,
+                checkoutError = err.message ?: "Could not verify delivery zone.",
+              )
+            } else {
+              current.copy(isCheckingAddressZone = false)
+            }
+          }
+        }
     }
   }
 
   fun checkSelectedAddressServiceability() {
     val state = _uiState.value
     val selected = state.addresses.firstOrNull { it.id == state.selectedAddressId } ?: return
-    viewModelScope.launch {
+    addressZoneJob?.cancel()
+    addressZoneJob = viewModelScope.launch {
       _uiState.update { it.copy(isCheckingAddressZone = true, checkoutError = null) }
       orderRepository.checkDeliveryZone(selected.pincode)
         .onSuccess { response ->
+          if (coroutineContext[Job]?.isActive != true) return@launch
           _uiState.update {
             it.copy(
               isCheckingAddressZone = false,
@@ -113,6 +163,7 @@ class CheckoutViewModel(
           }
         }
         .onFailure { err ->
+          if (coroutineContext[Job]?.isActive != true) return@launch
           _uiState.update {
             it.copy(
               isCheckingAddressZone = false,
@@ -287,19 +338,50 @@ class CheckoutViewModel(
     fulfillmentType: FulfillmentType,
     couponCode: String?,
     onCartCleared: () -> Unit,
+    quoteState: CheckoutQuoteUiState? = null,
+    onQuoteRefreshNeeded: (() -> Unit)? = null,
   ) {
     if (_uiState.value.isPlacingOrder) return
-    val available = cartItems.filter { it.item.isAvailable }
-    if (available.isEmpty()) {
+
+    _uiState.update { it.copy(priceDriftNotice = null) }
+
+    val quote = quoteState?.quote
+    val isQuoteFresh = quoteState?.isQuoteFresh == true
+    val isAcceptingOrders = quote?.isAcceptingOrders == true
+    val hasAvailableItems = cartItems.isNotEmpty() && cartItems.all { it.item.isAvailable }
+    val isCheckingZone = _uiState.value.isCheckingAddressZone || quoteState?.isCheckingZone == true
+
+    if (!isQuoteFresh) {
+      _uiState.update { it.copy(checkoutError = "Price quote is not ready. Please wait for the total to update.") }
+      return
+    }
+    if (!isAcceptingOrders) {
+      _uiState.update { it.copy(checkoutError = "Store is not accepting orders right now.") }
+      return
+    }
+    if (!hasAvailableItems) {
       _uiState.update { it.copy(checkoutError = "No available items in cart to place order.") }
       return
     }
 
     val state = _uiState.value
     val selectedAddressId = if (fulfillmentType == FulfillmentType.DELIVERY) state.selectedAddressId else null
-    if (fulfillmentType == FulfillmentType.DELIVERY && selectedAddressId.isNullOrBlank()) {
-      _uiState.update { it.copy(checkoutError = "Please select or add a delivery address.") }
-      return
+    if (fulfillmentType == FulfillmentType.DELIVERY) {
+      if (selectedAddressId.isNullOrBlank()) {
+        _uiState.update { it.copy(checkoutError = "Please select or add a delivery address.") }
+        return
+      }
+      val selectedAddress = state.addresses.firstOrNull { it.id == selectedAddressId }
+      val zoneCheck = quote?.deliveryZone
+      if (selectedAddress == null || zoneCheck == null || selectedAddress.pincode != zoneCheck.pincode) {
+        _uiState.update { it.copy(checkoutError = "Delivery address does not match the quoted zone.") }
+        return
+      }
+      if (quote.breakdown.subtotalPaise < zoneCheck.minOrderPaise) {
+        val shortfall = zoneCheck.minOrderPaise - quote.breakdown.subtotalPaise
+        _uiState.update { it.copy(checkoutError = "Add ${Money.formatInr(shortfall)} more for delivery to ${zoneCheck.pincode}.") }
+        return
+      }
     }
 
     if (state.scheduleType == ScheduleType.SCHEDULED && state.selectedSlotId.isNullOrBlank()) {
@@ -307,9 +389,18 @@ class CheckoutViewModel(
       return
     }
 
+    if (state.isPlacingOrder || isCheckingZone) {
+      _uiState.update { it.copy(checkoutError = "Please wait while we verify your order details.") }
+      return
+    }
+
+    val availableItems = cartItems.filter { it.item.isAvailable }
+    // Echo back the server-quoted unit price (server remains authoritative and ignores
+    // clientUnitPricePaise); never let a stale Level 1 estimate leak into the request.
+    val quotedUnitPrices = quote?.items?.associate { it.id to it.unitPricePaise }.orEmpty()
     val effectiveSlotId = if (state.scheduleType == ScheduleType.SCHEDULED) state.selectedSlotId else null
     val req = CheckoutRequest(
-      items = available.map { entry ->
+      items = availableItems.map { entry ->
         CartItemInputDto(
           id = entry.item.id,
           productId = entry.item.productId,
@@ -317,7 +408,7 @@ class CheckoutViewModel(
           crustId = entry.item.crustId,
           toppingIds = entry.toppings.map { it.toppingId },
           quantity = entry.item.quantity,
-          clientUnitPricePaise = entry.item.unitPricePaise,
+          clientUnitPricePaise = quotedUnitPrices[entry.item.id] ?: entry.item.unitPricePaise,
         )
       },
       fulfillmentType = fulfillmentType,
@@ -334,26 +425,64 @@ class CheckoutViewModel(
       currentDraftSignature = signature
       currentIdempotencyKey = UUID.randomUUID().toString()
     }
+    val idempotencyKey = currentIdempotencyKey
 
-    viewModelScope.launch {
-      _uiState.update { it.copy(isPlacingOrder = true, checkoutError = null) }
-      orderRepository.placeOrder(currentIdempotencyKey, req)
+    // Set the guard synchronously under a lock: two rapid taps must never both reach
+    // the repository, even if callers arrive from different threads.
+    synchronized(placeOrderLock) {
+      if (placeOrderJob?.isActive == true || _uiState.value.isPlacingOrder) return
+      _uiState.update {
+        it.copy(isPlacingOrder = true, checkoutError = null, priceDriftNotice = null)
+      }
+    }
+
+    placeOrderJob = viewModelScope.launch {
+      orderRepository.placeOrder(idempotencyKey, req)
         .onSuccess { response ->
+          if (coroutineContext[Job]?.isActive != true) return@launch
           currentDraftSignature = null
           currentIdempotencyKey = UUID.randomUUID().toString()
+          // Server amount is authoritative; never substitute the local/cart estimate.
+          val driftNotice = if (response.order.totalPaise != quote?.breakdown?.totalPaise) {
+            "Final total differs from quote — ${Money.formatInr(response.order.totalPaise)} charged."
+          } else null
           _uiState.update {
             it.copy(
               isPlacingOrder = false,
               checkoutError = null,
               scheduleType = ScheduleType.ASAP,
               selectedSlotId = null,
+              priceDriftNotice = driftNotice,
             )
           }
           onCartCleared()
           _orderCreatedEvents.tryEmit(response.order)
         }
         .onFailure { err ->
-          val apiMsg = (err as? PizzoraApiException)?.message ?: err.message
+          if (coroutineContext[Job]?.isActive != true) return@launch
+          val apiEx = err as? PizzoraApiException
+          if (apiEx?.code == "DELIVERY_MIN_ORDER_NOT_MET") {
+            // Authoritative 422 at order placement (zone minimum changed mid-checkout).
+            val minOrder = apiEx.details?.get("min_order_paise")?.toLongOrNull()
+            val shortfall = if (minOrder != null) {
+              (minOrder - quote.breakdown.subtotalPaise).coerceAtLeast(0L)
+            } else {
+              0L
+            }
+            val message = if (shortfall > 0L) {
+              "${apiEx.message ?: "Minimum order not met."} Add ${Money.formatInr(shortfall)} more for delivery to ${quote?.deliveryZone?.pincode.orEmpty()}."
+            } else {
+              apiEx.message ?: "Delivery minimum not met. Please review your order."
+            }
+            currentDraftSignature = null
+            currentIdempotencyKey = UUID.randomUUID().toString()
+            _uiState.update {
+              it.copy(isPlacingOrder = false, checkoutError = message, priceDriftNotice = null)
+            }
+            onQuoteRefreshNeeded?.invoke()
+            return@launch
+          }
+          val apiMsg = apiEx?.message ?: err.message
           _uiState.update {
             it.copy(
               isPlacingOrder = false,
@@ -380,6 +509,8 @@ class CheckoutViewModel(
   fun clearSessionState() {
     currentDraftSignature = null
     currentIdempotencyKey = UUID.randomUUID().toString()
+    addressZoneJob?.cancel()
+    placeOrderJob?.cancel()
     _uiState.value = CheckoutUiState()
   }
 }

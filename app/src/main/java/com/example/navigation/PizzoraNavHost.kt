@@ -81,6 +81,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -253,116 +254,116 @@ fun PizzoraApp(
         navController = navController,
         startDestination = LoginRoute,
       ) {
-      composable<LoginRoute> {
-        LoginScreen(
-          uiState = uiState,
-          onLoginClick = authViewModel::login,
-          onNavigateToRegister = {
-            authViewModel.clearMessages()
-            navController.navigate(RegisterRoute)
-          },
-          onNavigateToForgotPassword = {
-            authViewModel.clearMessages()
-            navController.navigate(ForgotPasswordRoute)
-          },
-          onNavigateToVerifyEmail = { email ->
-            authViewModel.clearMessages()
-            navController.navigate(VerifyEmailRoute(email))
-          },
-        )
-      }
+        composable<LoginRoute> {
+          LoginScreen(
+            uiState = uiState,
+            onLoginClick = authViewModel::login,
+            onNavigateToRegister = {
+              authViewModel.clearMessages()
+              navController.navigate(RegisterRoute)
+            },
+            onNavigateToForgotPassword = {
+              authViewModel.clearMessages()
+              navController.navigate(ForgotPasswordRoute)
+            },
+            onNavigateToVerifyEmail = { email ->
+              authViewModel.clearMessages()
+              navController.navigate(VerifyEmailRoute(email))
+            },
+          )
+        }
 
-      composable<RegisterRoute> {
-        RegisterScreen(
-          uiState = uiState,
-          onRegisterClick = authViewModel::register,
-          onBackClick = { navController.popBackStack() },
-        )
-      }
+        composable<RegisterRoute> {
+          RegisterScreen(
+            uiState = uiState,
+            onRegisterClick = authViewModel::register,
+            onBackClick = { navController.popBackStack() },
+          )
+        }
 
-      composable<VerifyEmailRoute> { backStackEntry ->
-        val route = backStackEntry.toRoute<VerifyEmailRoute>()
-        VerifyEmailScreen(
-          initialEmail = route.initialEmail,
-          uiState = uiState,
-          onVerifyClick = authViewModel::verifyEmail,
-          onResendClick = authViewModel::resendVerification,
-          onBackClick = { navController.popBackStack() },
-        )
-      }
+        composable<VerifyEmailRoute> { backStackEntry ->
+          val route = backStackEntry.toRoute<VerifyEmailRoute>()
+          VerifyEmailScreen(
+            initialEmail = route.initialEmail,
+            uiState = uiState,
+            onVerifyClick = authViewModel::verifyEmail,
+            onResendClick = authViewModel::resendVerification,
+            onBackClick = { navController.popBackStack() },
+          )
+        }
 
-      composable<ForgotPasswordRoute> {
-        ForgotPasswordScreen(
-          uiState = uiState,
-          onSendResetClick = authViewModel::forgotPassword,
-          onResetPasswordClick = authViewModel::resetPassword,
-          onBackClick = { navController.popBackStack() },
-        )
-      }
+        composable<ForgotPasswordRoute> {
+          ForgotPasswordScreen(
+            uiState = uiState,
+            onSendResetClick = authViewModel::forgotPassword,
+            onResetPasswordClick = authViewModel::resetPassword,
+            onBackClick = { navController.popBackStack() },
+          )
+        }
 
-      composable<CustomerShellRoute> {
-        session?.let { active ->
-          key(active.user.id) {
-            CustomerRoleShell(
-              session = active,
-              catalogViewModel = catalogViewModel,
-              cartViewModel = cartViewModel,
-              checkoutQuoteViewModel = checkoutQuoteViewModel,
-              checkoutViewModel = checkoutViewModel,
-              ordersViewModel = ordersViewModel,
-              profileViewModel = profileViewModel,
-              notificationsViewModel = notificationsViewModel,
-              razorpayCheckoutLauncher = razorpayCheckoutLauncher,
-              openNotificationsRequested = openNotificationsRequested,
-              onNotificationsRequestHandled = onNotificationsRequestHandled,
-              onSignOut = authViewModel::logout,
-              updateUiState = updateUiState,
-              onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
-              onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
-              onRetryUpdate = { updateViewModel?.retryFailedAction() },
-            )
+        composable<CustomerShellRoute> {
+          session?.let { active ->
+            key(active.user.id) {
+              CustomerRoleShell(
+                session = active,
+                catalogViewModel = catalogViewModel,
+                cartViewModel = cartViewModel,
+                checkoutQuoteViewModel = checkoutQuoteViewModel,
+                checkoutViewModel = checkoutViewModel,
+                ordersViewModel = ordersViewModel,
+                profileViewModel = profileViewModel,
+                notificationsViewModel = notificationsViewModel,
+                razorpayCheckoutLauncher = razorpayCheckoutLauncher,
+                openNotificationsRequested = openNotificationsRequested,
+                onNotificationsRequestHandled = onNotificationsRequestHandled,
+                onSignOut = authViewModel::logout,
+                updateUiState = updateUiState,
+                onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
+                onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
+                onRetryUpdate = { updateViewModel?.retryFailedAction() },
+              )
+            }
+          }
+        }
+
+        composable<KdsShellRoute> {
+          session?.let { active ->
+            key(active.user.id) {
+              KdsRoleShell(
+                session = active,
+                kdsViewModel = kdsViewModel,
+                isMuted = kdsMuted,
+                onToggleMute = { authViewModel.setKdsSoundMuted(!kdsMuted) },
+                onSignOut = authViewModel::logout,
+                updateUiState = updateUiState,
+                onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
+                onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
+                onRetryUpdate = { updateViewModel?.retryFailedAction() },
+              )
+            }
+          }
+        }
+
+        composable<OwnerShellRoute> {
+          session?.let { active ->
+            key(active.user.id) {
+              OwnerRoleShell(
+                session = active,
+                kdsViewModel = kdsViewModel,
+                ownerViewModel = ownerViewModel,
+                notificationsViewModel = notificationsViewModel,
+                openNotificationsRequested = openNotificationsRequested,
+                onNotificationsRequestHandled = onNotificationsRequestHandled,
+                onSignOut = authViewModel::logout,
+                updateUiState = updateUiState,
+                onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
+                onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
+                onRetryUpdate = { updateViewModel?.retryFailedAction() },
+              )
+            }
           }
         }
       }
-
-      composable<KdsShellRoute> {
-        session?.let { active ->
-          key(active.user.id) {
-            KdsRoleShell(
-              session = active,
-              kdsViewModel = kdsViewModel,
-              isMuted = kdsMuted,
-              onToggleMute = { authViewModel.setKdsSoundMuted(!kdsMuted) },
-              onSignOut = authViewModel::logout,
-              updateUiState = updateUiState,
-              onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
-              onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
-              onRetryUpdate = { updateViewModel?.retryFailedAction() },
-            )
-          }
-        }
-      }
-
-      composable<OwnerShellRoute> {
-        session?.let { active ->
-          key(active.user.id) {
-            OwnerRoleShell(
-              session = active,
-              kdsViewModel = kdsViewModel,
-              ownerViewModel = ownerViewModel,
-              notificationsViewModel = notificationsViewModel,
-              openNotificationsRequested = openNotificationsRequested,
-              onNotificationsRequestHandled = onNotificationsRequestHandled,
-              onSignOut = authViewModel::logout,
-              updateUiState = updateUiState,
-              onCheckForUpdates = { updateViewModel?.checkForUpdatesManually() },
-              onOpenUpdateDialog = { updateViewModel?.openUpdateDialog() },
-              onRetryUpdate = { updateViewModel?.retryFailedAction() },
-            )
-          }
-        }
-      }
-    }
 
       if (updateViewModel != null && updateUiState != null) {
         UpdateHostOverlay(
@@ -418,6 +419,7 @@ fun CustomerRoleShell(
   val overlaySnackbarHostState = remember { SnackbarHostState() }
   val menuState = catalogViewModel?.uiState?.collectAsStateWithLifecycle()?.value
   val cartState = cartViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+  val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
 
   LaunchedEffect(savedEditingCartItemId, cartState?.items) {
     val targetId = savedEditingCartItemId
@@ -447,9 +449,10 @@ fun CustomerRoleShell(
   val isAddBuilderOverlayOpen = !isEditBuilderOverlayOpen && catalogViewModel != null && menuState != null && activeBuilderProduct != null
   val isBuilderOverlayOpen = isEditBuilderOverlayOpen || isAddBuilderOverlayOpen
   val isNotificationsOverlayOpen = isNotificationsOpen && notificationsViewModel != null
-  val hasActiveOverlay = isBuilderOverlayOpen || isNotificationsOverlayOpen
+  val isCheckoutOverlayOpen = isCheckoutOpen && checkoutViewModel != null
+  val hasActiveOverlay = isBuilderOverlayOpen || isNotificationsOverlayOpen || isCheckoutOverlayOpen
   val currentSnackbarHostState by rememberUpdatedState(
-    if (isNotificationsOverlayOpen) overlaySnackbarHostState else snackbarHostState,
+    if (isNotificationsOverlayOpen || isCheckoutOverlayOpen) overlaySnackbarHostState else snackbarHostState,
   )
   val cartBadgeCount = if (cartViewModel != null) {
     cartViewModel.badgeCount.collectAsStateWithLifecycle().value
@@ -537,10 +540,19 @@ fun CustomerRoleShell(
       ordersViewModel?.showCreatedOrder(createdOrder, openPaymentFlowIfPending = isPendingOnline)
       OrderSyncScheduler.triggerExpeditedSync(context)
       notificationsViewModel?.syncInbox()
+      val driftNotice = checkoutViewModel.uiState.value.priceDriftNotice
       snackbarHostState.showSnackbar(
-        if (isPendingOnline) "Order ${createdOrder.orderNumber} reserved — complete online payment."
+        if (driftNotice != null) driftNotice
+        else if (isPendingOnline) "Order ${createdOrder.orderNumber} reserved — complete online payment."
         else "Order ${createdOrder.orderNumber} placed!",
       )
+    }
+  }
+
+  // Cart-quote sync: runs when cart is visible OR checkout is open
+  LaunchedEffect(cartState?.items, cartState?.subtotalPaise, selectedIndex, isCheckoutOpen, checkoutQuoteViewModel) {
+    if ((selectedIndex == 1 || isCheckoutOpen) && checkoutQuoteViewModel != null) {
+      checkoutQuoteViewModel.onCartChanged(cartState?.items ?: emptyList(), cartState?.subtotalPaise ?: 0L)
     }
   }
 
@@ -672,80 +684,10 @@ fun CustomerRoleShell(
                 useStandaloneBuilderHost = false,
               )
             }
-          selectedIndex == 1 && cartViewModel != null -> {
-            val activeCartState = cartState ?: cartViewModel.uiState.collectAsStateWithLifecycle().value
-            val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+            selectedIndex == 1 && cartViewModel != null -> {
+              val activeCartState = cartState ?: cartViewModel.uiState.collectAsStateWithLifecycle().value
+              val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
 
-            LaunchedEffect(activeCartState.items, activeCartState.subtotalPaise, checkoutQuoteViewModel) {
-              checkoutQuoteViewModel?.onCartChanged(activeCartState.items, activeCartState.subtotalPaise)
-            }
-
-            if (isCheckoutOpen && checkoutViewModel != null) {
-              val checkoutState by checkoutViewModel.uiState.collectAsStateWithLifecycle()
-              LaunchedEffect(Unit) {
-                checkoutViewModel.loadAddresses()
-              }
-              CheckoutScreen(
-                uiState = checkoutState,
-                quoteState = quoteState,
-                itemCount = activeCartState.totalItemCount,
-                subtotalPaise = activeCartState.subtotalPaise,
-                onFulfillmentTypeChange = { type ->
-                  checkoutQuoteViewModel?.onFulfillmentTypeChange(type)
-                  checkoutViewModel.onFulfillmentChanged(type)
-                },
-                onSelectAddress = checkoutViewModel::selectAddress,
-                onOpenAddAddress = checkoutViewModel::openAddAddressDialog,
-                onDismissAddAddress = checkoutViewModel::dismissAddAddressDialog,
-                onSaveAddress = { label, line1, pincode, city ->
-                  checkoutViewModel.saveNewAddress(label, line1, pincode, city)
-                },
-                onSelectPaymentMethod = checkoutViewModel::selectPaymentMethod,
-                onPlaceOrder = {
-                  checkoutViewModel.placeOrder(
-                    cartItems = activeCartState.items,
-                    fulfillmentType = quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
-                    couponCode = quoteState?.appliedCouponCode,
-                    onCartCleared = {
-                      cartViewModel.clearCart()
-                      checkoutQuoteViewModel?.removeCoupon()
-                    },
-                  )
-                },
-                onBackToCart = { isCheckoutOpen = false },
-                modifier = Modifier.weight(1f),
-                onCheckAddressZone = checkoutViewModel::checkSelectedAddressServiceability,
-                onScheduleTypeChange = { scheduleType ->
-                  checkoutViewModel.onScheduleTypeChange(
-                    scheduleType,
-                    quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
-                  )
-                },
-                onSlotDateChange = { date ->
-                  checkoutViewModel.onSlotDateChange(
-                    date,
-                    quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
-                  )
-                },
-                onSelectSlot = checkoutViewModel::selectSlot,
-                onRefreshSlots = {
-                  checkoutViewModel.loadAvailableSlots(
-                    quoteState?.fulfillmentType ?: FulfillmentType.DELIVERY,
-                  )
-                },
-                onSaveAddressWithDetails = { label, line1, line2, landmark, pincode, city, isDefault ->
-                  checkoutViewModel.saveNewAddress(
-                    label = label,
-                    line1 = line1,
-                    pincode = pincode,
-                    city = city,
-                    line2 = line2,
-                    landmark = landmark,
-                    isDefault = isDefault,
-                  )
-                },
-              )
-            } else {
               CartScreen(
                 uiState = activeCartState,
                 onUpdateQuantity = cartViewModel::updateQuantity,
@@ -787,77 +729,76 @@ fun CustomerRoleShell(
                 shellWindowHeight = shellMaxHeight,
               )
             }
-          }
-          selectedIndex == 2 && ordersViewModel != null -> {
-            val ordersState by ordersViewModel.uiState.collectAsStateWithLifecycle()
-            LaunchedEffect(Unit) {
-              ordersViewModel.loadOrders()
+            selectedIndex == 2 && ordersViewModel != null -> {
+              val ordersState by ordersViewModel.uiState.collectAsStateWithLifecycle()
+              LaunchedEffect(Unit) {
+                ordersViewModel.loadOrders()
+              }
+              OrdersScreen(
+                uiState = ordersState,
+                onRefreshOrders = ordersViewModel::loadOrders,
+                onOpenOrder = ordersViewModel::openOrderDetail,
+                onBackToList = ordersViewModel::clearSelectedOrder,
+                onCancelOrder = ordersViewModel::cancelSelectedOrder,
+                onBrowseMenu = { selectedIndex = 0 },
+                onOpenPaymentSheet = ordersViewModel::openPaymentSheet,
+                onDismissPaymentSheet = ordersViewModel::dismissPaymentSheet,
+                onRetryPayment = { ordersViewModel.retryPayment() },
+                customerName = session.user.fullName,
+                customerEmail = session.user.email,
+                customerPhone = session.user.phone,
+                razorpayCheckoutLauncher = razorpayCheckoutLauncher,
+                onRazorpayLaunchStarted = ordersViewModel::markRazorpayLaunchStarted,
+                onRazorpaySdkError = { code, desc -> ordersViewModel.onRazorpaySdkError(code, desc, null) },
+                modifier = Modifier.weight(1f),
+              )
             }
-            OrdersScreen(
-              uiState = ordersState,
-              onRefreshOrders = ordersViewModel::loadOrders,
-              onOpenOrder = ordersViewModel::openOrderDetail,
-              onBackToList = ordersViewModel::clearSelectedOrder,
-              onCancelOrder = ordersViewModel::cancelSelectedOrder,
-              onBrowseMenu = { selectedIndex = 0 },
-              onOpenPaymentSheet = ordersViewModel::openPaymentSheet,
-              onDismissPaymentSheet = ordersViewModel::dismissPaymentSheet,
-              onRetryPayment = { ordersViewModel.retryPayment() },
-              customerName = session.user.fullName,
-              customerEmail = session.user.email,
-              customerPhone = session.user.phone,
-              razorpayCheckoutLauncher = razorpayCheckoutLauncher,
-              onRazorpayLaunchStarted = ordersViewModel::markRazorpayLaunchStarted,
-              onRazorpaySdkError = { code, desc -> ordersViewModel.onRazorpaySdkError(code, desc, null) },
-              modifier = Modifier.weight(1f),
-            )
-          }
-          selectedIndex == 3 && profileViewModel != null -> {
-            val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
-            LaunchedEffect(session.user.id, profileViewModel) {
-              profileViewModel.loadProfileAndAddresses(session.user)
+            selectedIndex == 3 && profileViewModel != null -> {
+              val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
+              LaunchedEffect(session.user.id, profileViewModel) {
+                profileViewModel.loadProfileAndAddresses(session.user)
+              }
+              CustomerProfileScreen(
+                uiState = profileState,
+                onRefresh = { profileViewModel.loadProfileAndAddresses(session.user) },
+                onOpenEditProfile = profileViewModel::openEditProfileDialog,
+                onDismissEditProfile = profileViewModel::dismissEditProfileDialog,
+                onSaveProfile = profileViewModel::saveProfile,
+                onOpenAddAddress = profileViewModel::openAddAddressDialog,
+                onOpenEditAddress = profileViewModel::openEditAddressDialog,
+                onDismissAddressDialog = profileViewModel::dismissAddressDialog,
+                onSaveAddress = profileViewModel::saveAddress,
+                onSetDefaultAddress = profileViewModel::setDefaultAddress,
+                onDeleteAddress = profileViewModel::deleteAddress,
+                onPincodeInputChange = profileViewModel::onPincodeCheckInputChange,
+                onCheckPincode = { profileViewModel.checkPincodeServiceability() },
+                onSignOut = onSignOut,
+                modifier = Modifier.weight(1f),
+                updateUiState = updateUiState,
+                onCheckForUpdates = onCheckForUpdates,
+                onOpenUpdateDialog = onOpenUpdateDialog,
+                onRetryUpdate = onRetryUpdate,
+              )
             }
-            CustomerProfileScreen(
-              uiState = profileState,
-              onRefresh = { profileViewModel.loadProfileAndAddresses(session.user) },
-              onOpenEditProfile = profileViewModel::openEditProfileDialog,
-              onDismissEditProfile = profileViewModel::dismissEditProfileDialog,
-              onSaveProfile = profileViewModel::saveProfile,
-              onOpenAddAddress = profileViewModel::openAddAddressDialog,
-              onOpenEditAddress = profileViewModel::openEditAddressDialog,
-              onDismissAddressDialog = profileViewModel::dismissAddressDialog,
-              onSaveAddress = profileViewModel::saveAddress,
-              onSetDefaultAddress = profileViewModel::setDefaultAddress,
-              onDeleteAddress = profileViewModel::deleteAddress,
-              onPincodeInputChange = profileViewModel::onPincodeCheckInputChange,
-              onCheckPincode = { profileViewModel.checkPincodeServiceability() },
-              onSignOut = onSignOut,
-              modifier = Modifier.weight(1f),
-              updateUiState = updateUiState,
-              onCheckForUpdates = onCheckForUpdates,
-              onOpenUpdateDialog = onOpenUpdateDialog,
-              onRetryUpdate = onRetryUpdate,
-            )
-          }
-          else -> {
-            RoleShellCard(
-              title = "${stringResource(R.string.role_customer_title)} • ${tabs[selectedIndex].first}",
-              subtitle = "Signed in as ${session.user.fullName} (${session.user.email})",
-              badge = "CUSTOMER",
-              onSignOut = if (selectedIndex == 3) {
-                { showFallbackSignOutConfirm = true }
-              } else {
-                null
-              },
-              modifier = Modifier.weight(1f),
-            )
+            else -> {
+              RoleShellCard(
+                title = "${stringResource(R.string.role_customer_title)} • ${tabs[selectedIndex].first}",
+                subtitle = "Signed in as ${session.user.fullName} (${session.user.email})",
+                badge = "CUSTOMER",
+                onSignOut = if (selectedIndex == 3) {
+                  { showFallbackSignOutConfirm = true }
+                } else {
+                  null
+                },
+                modifier = Modifier.weight(1f),
+              )
+            }
           }
         }
       }
     }
-    }
 
-    // Unified shell-level full-screen overlay host (Builder Add/Edit, Notifications, and future Checkout)
+    // Unified shell-level full-screen overlay host (Builder Add/Edit, Notifications, Checkout)
     AnimatedVisibility(
       visible = isBuilderOverlayOpen,
       enter = if (reducedMotion) fadeIn() else fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 12 },
@@ -1000,6 +941,103 @@ fun CustomerRoleShell(
             onBackClick = { isNotificationsOpen = false },
             onClearActionMessage = notificationsViewModel::clearActionMessage,
             modifier = Modifier.fillMaxSize(),
+          )
+          SnackbarHost(
+            hostState = overlaySnackbarHostState,
+            modifier = Modifier
+              .align(Alignment.BottomCenter)
+              .windowInsetsPadding(WindowInsets.navigationBars)
+              .padding(bottom = 12.dp),
+          )
+        }
+      }
+    }
+
+    if (isCheckoutOverlayOpen && checkoutViewModel != null) {
+      val checkoutStateLocal by checkoutViewModel.uiState.collectAsStateWithLifecycle()
+      val quoteStateLocal = quoteState
+      val selectedAddress = checkoutStateLocal.addresses.firstOrNull { it.id == checkoutStateLocal.selectedAddressId }
+
+      LaunchedEffect(checkoutStateLocal.selectedAddressId, selectedAddress?.pincode) {
+        val pin = selectedAddress?.pincode ?: return@LaunchedEffect
+        checkoutQuoteViewModel?.syncCheckoutAddressPincode(pin)
+      }
+
+      LaunchedEffect(Unit) {
+        checkoutViewModel.loadAddresses()
+      }
+
+      Surface(
+        modifier = Modifier
+          .fillMaxSize()
+          .semantics { isTraversalGroup = true }
+          .focusGroup()
+          .testTag("customer_shell_overlay_host"),
+        color = MaterialTheme.colorScheme.background,
+      ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+          CheckoutScreen(
+            uiState = checkoutStateLocal,
+            quoteState = quoteStateLocal,
+            cartItems = cartState?.items ?: emptyList(),
+            cartSubtotalPaise = cartState?.subtotalPaise ?: 0L,
+            onFulfillmentTypeChange = { type ->
+              checkoutQuoteViewModel?.onFulfillmentTypeChange(type)
+              checkoutViewModel.onFulfillmentChanged(type)
+            },
+            onSelectAddress = checkoutViewModel::selectAddress,
+            onOpenAddAddress = checkoutViewModel::openAddAddressDialog,
+            onDismissAddAddress = checkoutViewModel::dismissAddAddressDialog,
+            onSaveAddress = { label, line1, pincode, city ->
+              checkoutViewModel.saveNewAddress(label, line1, pincode, city)
+            },
+            onSelectPaymentMethod = checkoutViewModel::selectPaymentMethod,
+            onPlaceOrder = {
+              checkoutViewModel.placeOrder(
+                cartItems = cartState?.items ?: emptyList(),
+                fulfillmentType = quoteStateLocal?.fulfillmentType ?: FulfillmentType.DELIVERY,
+                couponCode = quoteStateLocal?.appliedCouponCode,
+                onCartCleared = {
+                  cartViewModel?.clearCart()
+                  checkoutQuoteViewModel?.onCartChanged(emptyList(), 0L)
+                  checkoutQuoteViewModel?.removeCoupon()
+                },
+                quoteState = quoteStateLocal,
+                onQuoteRefreshNeeded = { checkoutQuoteViewModel?.forceRefreshQuote() },
+              )
+            },
+            onBackToCart = { isCheckoutOpen = false },
+            onCheckAddressZone = checkoutViewModel::checkSelectedAddressServiceability,
+            onScheduleTypeChange = { scheduleType ->
+              checkoutViewModel.onScheduleTypeChange(
+                scheduleType,
+                quoteStateLocal?.fulfillmentType ?: FulfillmentType.DELIVERY,
+              )
+            },
+            onSlotDateChange = { date ->
+              checkoutViewModel.onSlotDateChange(
+                date,
+                quoteStateLocal?.fulfillmentType ?: FulfillmentType.DELIVERY,
+              )
+            },
+            onSelectSlot = checkoutViewModel::selectSlot,
+            onRefreshSlots = {
+              checkoutViewModel.loadAvailableSlots(
+                quoteStateLocal?.fulfillmentType ?: FulfillmentType.DELIVERY,
+              )
+            },
+            onSaveAddressWithDetails = { label, line1, line2, landmark, pincode, city, isDefault ->
+              checkoutViewModel.saveNewAddress(
+                label = label,
+                line1 = line1,
+                pincode = pincode,
+                city = city,
+                line2 = line2,
+                landmark = landmark,
+                isDefault = isDefault,
+              )
+            },
+            onRetryQuote = { checkoutQuoteViewModel?.refreshQuote() },
           )
           SnackbarHost(
             hostState = overlaySnackbarHostState,

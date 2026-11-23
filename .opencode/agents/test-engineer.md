@@ -1,8 +1,8 @@
-***
+---
 
 description: Reviews and executes PIZZORA Phase 4 regression tests, Gradle unit tests, and build verification.
 mode: subagent
-model: nvidia/nemotron-3-super-120b-a12b
+model: nvidia/nvidia/nemotron-3-ultra-550b-a55b
 temperature: 0.1
 ---
 
