@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" tests="37" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:19:26.309Z" hostname="ip-10-0-128-100" time="200.679">
+  <properties/>
+  <testcase name="localEstimateOnlyDisablesSubmissionUntilFreshQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="0.055"/>
+  <testcase name="kotlin422MinimumOrderClearsQuoteAndDisablesSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.071"/>
+  <testcase name="unavailableOnlyCartCancelsInFlightCouponFallbackQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.105"/>
+  <testcase name="samePincodeAddressSwitchReusesFreshQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.085"/>
+  <testcase name="unavailableCartItemBlocksSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.057"/>
+  <testcase name="unavailableOnlyCartCancelsInFlightQuoteAndCannotResurrectIt" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.063"/>
+  <testcase name="initialQuoteLoadProducesFreshAuthoritativeTotal" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.066"/>
+  <testcase name="couponFallbackZoneFailureClearsQuoteAndPincodeWithAuthoritativeShortfall" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.075"/>
+  <testcase name="duplicateInFlightQuoteRequestsAreSuppressed" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.065"/>
+  <testcase name="checkoutOrderTotalDriftFromQuoteSurfacesNotice" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.069"/>
+  <testcase name="addAddressDialogRetainsTypedValuesAcrossRotation" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="0.173"/>
+  <testcase name="priceDriftBetweenLocalCartAndQuoteSurfacesNoticeAndBanner" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.075"/>
+  <testcase name="identicalCartChangeReusesFreshQuoteWithoutNewRequest" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.066"/>
+  <testcase name="samePincodeAddressChangeRotatesCheckoutIdempotencyKey" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="10.069"/>
+  <testcase name="scheduledModeWithoutSlotBlocksSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.07"/>
+  <testcase name="cartChangeDuringDelayedZoneCheckClearsCheckingFlagAndStillQuotes" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.121"/>
+  <testcase name="checkoutReadinessNoticeAndRetryTagAppearAfterQuoteFailure" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="2.073"/>
+  <testcase name="istDateIsoIsApi24SafeAndUsesKolkataCalendar" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="0.046"/>
+  <testcase name="staleQuoteDisablesSubmissionUntilRefreshCompletes" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.043"/>
+  <testcase name="lateOutOfOrderResponseIsRejectedByGenerationGuard" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.068"/>
+  <testcase name="couponApplyAndRemoveRepriceWithoutStaleTotal" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.054"/>
+  <testcase name="cancelledRequestResponseCannotOverwriteClearedState" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.058"/>
+  <testcase name="serverAuthoritativeAmountIsUsedForRazorpayOrder" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.072"/>
+  <testcase name="deliveryPickupSwitchRepricesAndClearsZoneFee" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.068"/>
+  <testcase name="freshServerQuoteBelowMinimumBlocksOrderWithShortfall" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.064"/>
+  <testcase name="quoteErrorRetryKeeps48dpTargetOnScreenAt320dpAnd15xFont" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="2.061"/>
+  <testcase name="couponRejectionFallsBackToUncouponedQuoteUnderNewGeneration" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="2.047"/>
+  <testcase name="duplicateCheckoutSubmissionSendsExactlyOneOrderRequest" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.073"/>
+  <testcase name="cartItemEditAndRemovalInvalidateQuoteAndEmptyCartClearsQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.045"/>
+  <testcase name="networkFailureKeepsOldQuoteMarksStaleAndRetryRecovers" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="10.073"/>
+  <testcase name="localSubtotalIsWarningOnlyAndServerQuoteAuthorizesSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.067"/>
+  <testcase name="rust200QuoteWithOrder422BlocksSubmissionAndRequestsRefresh" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.084"/>
+  <testcase name="differentPincodeSwitchFiresExactlyOneQuoteAndUpdatesFee" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.095"/>
+  <testcase name="invalidFiveDigitPincodeCheckClearsCurrentSignature" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.06"/>
+  <testcase name="checkoutScreenPreservesRequiredTestTags" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.095"/>
+  <testcase name="storePausedBlocksFreshQuoteSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.064"/>
+  <testcase name="cartQuantityChangeInvalidatesQuoteAndTracksSignature" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.055"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

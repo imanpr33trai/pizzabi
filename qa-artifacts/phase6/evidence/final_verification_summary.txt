@@ -1,0 +1,70 @@
+PIZZORA Phase 6 final verification summary (2026-11-24)
+=======================================================
+
+Coordinator: primary OpenCode session
+Branch: ui-ux-changes
+Gradle lock: /tmp/opencode/p6-gradle.lock
+Per-invocation Robolectric mirror init script:
+  --init-script /tmp/opencode/p6-maven-mirror.init.gradle
+Reason: Maven Central returned HTTP 429 for org.robolectric:nativeruntime-dist-compat.
+No build file, lockfile, or repository dependency was changed.
+
+Final commands and exact results
+--------------------------------
+
+1. Focused payment-sheet regression after P6-001:
+   flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:testDebugUnitTest --tests "com.example.Phase6PaymentSheetRobolectricTest" \
+     --console=plain
+   Result: BUILD SUCCESSFUL; tests=10, failures=0, errors=0, skipped=0.
+
+2. Focused tracking/a11y regression after P6-003:
+   flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:testDebugUnitTest --tests "com.example.Phase6OrderTrackingRobolectricTest" \
+     --console=plain
+   Result: BUILD SUCCESSFUL; tests=5, failures=0, errors=0, skipped=0.
+   Evidence: a11y_focused_test_summary.txt and unit-test-xml-a11y-focus/.
+
+3. Final APK build:
+   flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:testDebugUnitTest :app:assembleDebug --console=plain
+   Result: BUILD SUCCESSFUL in 7s. APK:
+   app/build/outputs/apk/debug/app-debug.apk (26,554,437 bytes; 2026-11-24 11:17 UTC).
+
+4. Forced final full-suite rerun after the last source/test change:
+   flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:testDebugUnitTest --rerun-tasks --console=plain
+   Result: BUILD SUCCESSFUL in 5m 42s; 34 actionable tasks executed.
+   Aggregated from app/build/test-results/testDebugUnitTest/TEST-*.xml:
+     34 XML files, 191 tests, 0 failures, 0 errors, 0 skipped.
+   Preserved under unit-test-xml-final-verified/.
+
+5. git diff --check
+   Result: exit 0, empty output (git_diff_check_final.txt).
+
+Test-count lineage
+------------------
+- Pre-Phase6 baseline preserved evidence: 189 tests, all green.
+- After P6-001 countdown regression test: 190 tests, all green.
+- After P6-003 state-aware stepper semantics test: 191 tests, all green.
+
+A transient earlier full-suite run recorded in final_regression.log had one
+Phase16NotificationsRobolectricTest `UncaughtExceptionsBeforeTest` failure while
+190 tests ran. Two subsequent forced full-suite executions were green, including
+the final 191-test run above. No test was skipped, deleted, or weakened to obtain
+the green result; the only assertion changes were intentional humanized-copy and
+state-aware semantics updates documented in the coordinated test diffs.
+
+Evidence files
+--------------
+- final_verification_after_a11y.log
+- final_full_suite_forced_after_a11y.log
+- final_regression_verified.log (independent 34-task forced rerun, BUILD SUCCESSFUL in 5m 40s)
+- unit-test-xml-final-verified/TEST-*.xml
+- a11y_focused_test_summary.txt
+- unit-test-xml-a11y-focus/TEST-com.example.Phase6OrderTrackingRobolectricTest.xml
+- git_diff_check_final.txt

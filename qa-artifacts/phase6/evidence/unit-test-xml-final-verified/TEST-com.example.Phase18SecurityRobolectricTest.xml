@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase18SecurityRobolectricTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:19:24.360Z" hostname="ip-10-0-128-100" time="0.307">
+  <properties/>
+  <testcase name="transport security policy blocks cleartext in release and external http in debug" classname="com.example.Phase18SecurityRobolectricTest" time="0.053"/>
+  <testcase name="BuildConfig contains zero backend secrets and AndroidManifest avoids prohibited Play permissions" classname="com.example.Phase18SecurityRobolectricTest" time="0.058"/>
+  <testcase name="keystore cipher uses AES-GCM, rejects tampered ciphertext and blocks plaintext fallback in production" classname="com.example.Phase18SecurityRobolectricTest" time="0.165"/>
+  <testcase name="api client enforces transport security on presigned upload urls and url-encodes ws ticket" classname="com.example.Phase18SecurityRobolectricTest" time="0.025"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase6OrdersHistoryRobolectricTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:22:48.984Z" hostname="ip-10-0-128-100" time="0.159">
+  <properties/>
+  <testcase name="filter-specific empty state stays reachable and summary card is human readable" classname="com.example.Phase6OrdersHistoryRobolectricTest" time="0.056"/>
+  <testcase name="filter tabs show counts and only the selected segment across list refreshes" classname="com.example.Phase6OrdersHistoryRobolectricTest" time="0.072"/>
+  <testcase name="pure filter classifies active past and all from real order status" classname="com.example.Phase6OrdersHistoryRobolectricTest" time="0.029"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

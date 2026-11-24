@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.cart.Phase4CartAndReEditRobolectricTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:22:51.603Z" hostname="ip-10-0-128-100" time="3.119">
+  <properties/>
+  <testcase name="narrowWidthWithLargeFontScaleKeepsControlsUnclippedAndSinglePane" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.1"/>
+  <testcase name="cartItemAtMaxQuantity25DisablesPlusShowsCapNoteAndFulfillmentChipsExposeRadioRole" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.066"/>
+  <testcase name="wideTablet840dpActivatesTwoPane6040CartSplitEvenWithNavigationRail" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.217"/>
+  <testcase name="couponPickerGroupsEligibleAndLockedSectionsAndShowsRetryOnError" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.177"/>
+  <testcase name="undoRemovalViaTrashAndOneToZeroDecrementRestoresExactItem" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.394"/>
+  <testcase name="reEditDuplicateMergeCapsAt25AndEmitsSnackbar" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.217"/>
+  <testcase name="compactTablet600dpRemainsSingleColumnEvenInsideShell" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.115"/>
+  <testcase name="customPizzaReEditEndToEndInShellRestoresConfigUpdatesCartAndRestoresFocus" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.194"/>
+  <testcase name="cartDisplaysThumbnailsForValidUrlsAndWarmFallbackWhenMissing" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.065"/>
+  <testcase name="repeatedEditSubmissionLockAndMenuAddModeContinueToWorkInSameShell" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.307"/>
+  <testcase name="clearCartRequiresConfirmationCancelPreservesAndConfirmClearsAndBrowseReturnsToMenu" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.166"/>
+  <testcase name="landscapeWideShortViewportFallsBackToSingleColumnCartBecauseHeightBelow480dp" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.116"/>
+  <testcase name="discontinuedProductInEditModeGuardsUpdateAndPreservesOriginalCartItem" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.138"/>
+  <testcase name="editModeUnavailableSavedToppingShowsWarningBannerAndSavesCleanActiveToppings" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.292"/>
+  <testcase name="couponPickerAt320dpAndLargeFontKeepsEligibleAndLockedControlsUnclipped" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.089"/>
+  <testcase name="editModeDiscardConfirmationOnDirtyChangeAndInstantDismissWhenClean" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.169"/>
+  <testcase name="failedEditSubmissionKeepsBuilderOpenShowsErrorAndAllowsRetry" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.057"/>
+  <testcase name="reEditMergeUnder25CombinesWithoutCapAndShowsStandardMergeSnackbar" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.164"/>
+  <testcase name="stickyDockDisclosureVsQuotedTotalAndImeVisibilityHiding" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.068"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[System.logW: A resource was acquired at attached stack trace but never released. See java.io.Closeable for information on avoiding resource leaks.
+java.lang.Throwable: Explicit termination method 'close' not called
+	at dalvik.system.CloseGuard.$$robo$$dalvik_system_CloseGuard$openWithCallSite(CloseGuard.java:288)
+	at dalvik.system.CloseGuard.openWithCallSite(CloseGuard.java)
+	at dalvik.system.CloseGuard.$$robo$$dalvik_system_CloseGuard$open(CloseGuard.java:257)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.robolectric.shadows.ShadowCloseGuard$CloseGuardReflector$$Reflector55.open(Unknown Source)
+	at org.robolectric.shadows.ShadowCloseGuard.open(ShadowCloseGuard.java:38)
+	at dalvik.system.CloseGuard.open(CloseGuard.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openInner(SQLiteDatabase.java:1192)
+	at android.database.sqlite.SQLiteDatabase.openInner(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$open(SQLiteDatabase.java:1171)
+	at android.database.sqlite.SQLiteDatabase.open(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openDatabase(SQLiteDatabase.java:1035)
+	at android.database.sqlite.SQLiteDatabase.openDatabase(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openDatabase(SQLiteDatabase.java:1024)
+	at android.database.sqlite.SQLiteDatabase.openDatabase(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteOpenHelper.$$robo$$android_database_sqlite_SQLiteOpenHelper$getDatabaseLocked(SQLiteOpenHelper.java:394)
+	at android.database.sqlite.SQLiteOpenHelper.getDatabaseLocked(SQLiteOpenHelper.java)
+	at android.database.sqlite.SQLiteOpenHelper.$$robo$$android_database_sqlite_SQLiteOpenHelper$getWritableDatabase(SQLiteOpenHelper.java:336)
+	at android.database.sqlite.SQLiteOpenHelper.getWritableDatabase(SQLiteOpenHelper.java)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.getWritableOrReadableDatabase(FrameworkSQLiteOpenHelper.android.kt:224)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.innerGetDatabase(FrameworkSQLiteOpenHelper.android.kt:167)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.getSupportDatabase(FrameworkSQLiteOpenHelper.android.kt:141)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper.getWritableDatabase(FrameworkSQLiteOpenHelper.android.kt:96)
+	at androidx.room.driver.SupportSQLiteDriver.open(SupportSQLiteDriver.android.kt:26)
+	at androidx.room.driver.SupportSQLiteConnectionPool.getSupportConnection(SupportSQLiteConnectionPool.android.kt:35)
+	at androidx.room.driver.SupportSQLiteConnectionPool.useConnection(SupportSQLiteConnectionPool.android.kt:42)
+	at androidx.room.RoomConnectionManager.useConnection(RoomConnectionManager.android.kt:126)
+	at androidx.room.RoomDatabase.useConnection$room_runtime_release(RoomDatabase.android.kt:588)
+	at androidx.room.TriggerBasedInvalidationTracker.syncTriggers$room_runtime_release(InvalidationTracker.kt:300)
+	at androidx.room.TriggerBasedInvalidationTracker$createFlow$1$1.invokeSuspend(InvalidationTracker.kt:233)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+]]></system-err>
+</testsuite>

@@ -1,6 +1,9 @@
 PIZZORA Phase 6 automated verification summary (2026-11-24)
 ==========================================================
 
+NOTE: This is the implementation-era summary. The final, post-fix verification
+is recorded in final_verification_summary.txt and its preserved XML directory.
+
 Coordinator: primary OpenCode session
 HerdR agents used/contacted: only p6-prefixed agents
 Branch: ui-ux-changes
@@ -25,7 +28,8 @@ the resulting XML files):
      ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
      :app:testDebugUnitTest --tests "com.example.Phase6PaymentSheetRobolectricTest" \
      --console=plain
-   Result: BUILD SUCCESSFUL. XML: tests=9 skipped=0 failures=0 errors=0.
+   Result: BUILD SUCCESSFUL. XML: tests=9 skipped=0 failures=0 errors=0 at that time;
+   after the P6-001 layout regression test this class contains 10 passing tests.
 
 3. cd /workspace/pizzabi && flock -w 3600 /tmp/opencode/p6-gradle.lock \
      ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
@@ -48,17 +52,17 @@ the resulting XML files):
    Result: BUILD SUCCESSFUL in 4m 2s.
    Aggregated from app/build/test-results/testDebugUnitTest/TEST-*.xml:
      34 result XML files, 189 tests, 0 failures, 0 errors, 0 skipped.
-   New Phase 6 test functions added in this working tree (18):
-     9  Phase6PaymentSheetRobolectricTest
+   This was the pre-P6-001/P6-003 baseline count. Final forced rerun after all
+   fixes: 191 tests, 0 failures, 0 errors, 0 skipped.
+   New Phase 6 test functions in the final tree (20):
+     10 Phase6PaymentSheetRobolectricTest (incl. P6-001 320dp/1.5x test)
      3  Phase6OrdersHistoryRobolectricTest
-     4  Phase6OrderTrackingRobolectricTest
+     5  Phase6OrderTrackingRobolectricTest (incl. P6-003 a11y wording test)
      2  new OrderDisplayFormattersTest additions
-   (The p6 regression agent described these as "20 new Phase 6 tests"; the
-    direct diff count is 18 newly added @Test functions, with additional
-    assertions added to existing formatter tests.)
 
 6. cd /workspace/pizzabi && git diff --check
-   Result: exit 0, empty output.
+   Result: exit 0, empty output. Final recheck also exit 0; see
+   git_diff_check_final.txt.
 
 Coordinator integration review and fixes
 ----------------------------------------
