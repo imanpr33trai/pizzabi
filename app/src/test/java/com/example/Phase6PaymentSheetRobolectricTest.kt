@@ -1,7 +1,9 @@
 package com.example
 
 import android.app.Activity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -16,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.Density
 import com.example.orders.PaymentCountdownTone
 import com.example.orders.PaymentExpiryFormatter
 import com.example.orders.PaymentExpiryMilestone
@@ -338,6 +341,51 @@ class Phase6PaymentSheetRobolectricTest {
     assertEquals(PaymentExpiryMilestone.EXPIRED, PaymentExpiryFormatter.crossedMilestone(1_000L, 0L))
     assertEquals("5 minutes remaining", PaymentExpiryMilestone.FIVE_MINUTES.announcement)
     assertEquals("Payment window expired", PaymentExpiryMilestone.EXPIRED.announcement)
+  }
+
+  @Test
+  @Config(sdk = [36], qualifiers = "w320dp-h640dp")
+  fun warningCountdownRemainsVisibleAt320dpWith15xFontScale() {
+    val expiryIso = "2099-01-01T00:15:00Z"
+    val expiryEpoch = OrderDisplayFormatters.parseIsoToEpochMillis(expiryIso)!!
+    val clock = AtomicLong(expiryEpoch - 125_000L)
+    val order = makeOrder(expiryIso = expiryIso)
+
+    composeTestRule.mainClock.autoAdvance = false
+    composeTestRule.setContent {
+      val baseDensity = LocalDensity.current
+      CompositionLocalProvider(
+        LocalDensity provides Density(baseDensity.density, fontScale = 1.5f),
+      ) {
+        PizzoraTheme(darkTheme = false, reducedMotion = true) {
+          RazorpayPaymentSheetDialog(
+            order = order,
+            paymentStatus = makeStatus(order),
+            isPollingGatewayOrder = false,
+            isVerifyingPayment = false,
+            isReportingFailure = false,
+            paymentError = null,
+            razorpayCheckoutLauncher = RecordingLauncher(),
+            onDismiss = {},
+            nowProvider = { clock.get() },
+          )
+        }
+      }
+    }
+    composeTestRule.mainClock.advanceTimeBy(100L)
+    composeTestRule.waitForIdle()
+
+    composeTestRule.onNodeWithText("Expires in — complete payment now", substring = true).assertExists()
+    val barBounds = composeTestRule.onNodeWithTag("payment_expiry_countdown_bar")
+      .assertExists().fetchSemanticsNode().boundsInRoot
+    val timerNode = composeTestRule.onNodeWithTag("payment_expiry_countdown_text").assertExists()
+    val timerBounds = timerNode.fetchSemanticsNode().boundsInRoot
+    assertTrue(
+      "MM:SS countdown must stay inside the warning bar at 320dp / 1.5x",
+      timerBounds.width > 0f && timerBounds.left >= barBounds.left - 1f && timerBounds.right <= barBounds.right + 1f,
+    )
+    timerNode.assertTextContains("02:05", substring = true)
+    composeTestRule.mainClock.autoAdvance = true
   }
 
   @Test

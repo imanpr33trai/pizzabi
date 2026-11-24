@@ -473,12 +473,15 @@ fun RazorpayPaymentSheetDialog(
             Row(
               modifier = Modifier.fillMaxWidth(),
               verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.SpaceBetween,
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
               Text(
                 text = countdownPrefix,
                 style = MaterialTheme.typography.bodySmall,
                 color = countdownContentColor,
+                // At 320dp / 1.5x the prefix wraps; reserving the tail for the timer
+                // keeps the authoritative MM:SS value visible instead of pushed off-screen.
+                modifier = Modifier.weight(1f),
               )
               // The ticking text is deliberately NOT a live region (TalkBack protection).
               Text(
