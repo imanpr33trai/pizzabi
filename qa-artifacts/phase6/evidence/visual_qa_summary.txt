@@ -1,248 +1,278 @@
-PHASE 6 LIVE ANDROID EMULATOR VISUAL QA SUMMARY
-================================================
+PHASE 6 VISUAL QA — POST P6-001 FIX LIVE RECAPTURE
+==================================================
 Agent: p6-visual-qa
-Date: 2026-11-24 (UTC; UI observations converted/displayed in IST)
+Date: 2026-11-24 (UTC; app timestamps rendered in Asia/Kolkata)
 Repository: /workspace/pizzabi
-Canonical criteria: public/implementation_plan.md L954/L959 (Section 13.2)
+Canonical criteria: public/implementation_plan.md L954/L959 (Section 13.2 + payment-expired conditional)
+Finding under verification: qa-artifacts/phase6/evidence/findings.md P6-001
+
+0. VERDICT HEADLINE
+-------------------
+P6-001 (missing MM:SS at 320dp / fontScale 1.5 warning state): LIVE VERIFIED FIXED.
+Canonical Section 13.2 matrix: 7/7 PASS.
+Conditional payment-expired state: PASS.
+Cross-cutting checks (raw enums/keys, IST, stepper rails, warning contrast, CTA fit): PASS.
+Exact TalkBack spoken utterances / real Razorpay gateway behavior: UNVERIFIED by design; see LIMITATIONS.
 
 1. SCOPE AND ISOLATION
 ----------------------
-- Source code was READ-ONLY. No file under app/, shared/, backend/, rust/, docs/,
-  public/, or any build config was edited by this agent.
-- Files created: qa-artifacts/phase6/*.png, qa-artifacts/phase6/evidence/*,
-  and temporary QA scripts under /tmp/opencode/p6-*.
-- No commit, push, merge, deploy, destructive git command, real payment, or
-  real refund was performed.
-- Only p6-named agents/processes were inspected or contacted; no new agents
-  were created.
+- Source files were READ-ONLY for this agent. No edit was made under app/, shared/,
+  backend/, rust/, docs/, public/, or build config by p6-visual-qa.
+- Writes were confined to qa-artifacts/phase6/ and /tmp/opencode/p6-*.
+- No commit, push, merge, deploy, destructive git command, real payment, or real
+  refund was performed.
+- At final `git status --short`, source modifications visible in the tree belonged
+  to other p6 work; they were not touched by this agent.
+- No non-p6 agent was contacted or inspected; no new agent was created.
 
-2. ENVIRONMENT AND SETUP
-------------------------
+2. ARCHIVE OF SUPERSEDED EVIDENCE
+---------------------------------
+Before recapture, the previously failing/old payment artifacts were copied (not
+deleted) into qa-artifacts/phase6/superseded/:
+
+  p6_payment_normal_dark_412dp_1.0x.png
+  p6_payment_normal_dark_412dp_1.0x_ui.xml
+  p6_payment_warning_light_320dp_1.5x.png          (P6-001 failing capture)
+  p6_payment_warning_light_320dp_1.5x_ui.xml       (no MM:SS node)
+  p6_payment_expired_dark_412dp_1.0x.png
+  p6_payment_expired_dark_412dp_1.0x_ui.xml
+  p6_payment_warning_light_320dp_1.0x_diagnostic.png
+  p6_payment_warning_light_320dp_1.0x_diagnostic_ui.xml
+  visual_qa_summary_pre_rerun.txt                  (previous FAIL 7/8 report)
+
+3. BUILD / INSTALL / ENVIRONMENT
+-------------------------------
 - Emulator: emulator-5554, AVD pizzora_api36_qa, Android 16 / SDK 36.
 - App package: com.aistudio.pizzora.xkqzmw.
-- QA APK built with the existing build-config flag (no build-file edits):
+- Fixture proxy started from /tmp (no repository changes):
+
+    python3 /tmp/opencode/p6-qa-proxy.py 8081 > /tmp/opencode/p6-proxy-stdout.log 2>&1
+
+  Public config curl returned:
+    {"store_name": "Pizzora QA", "is_accepting_orders": true, "gst_bps": 500,
+     "default_prep_mins": 20, "timezone": "Asia/Kolkata"}
+
+- Serialized rebuild from the current working tree with the existing build flag
+  and init script (no build-file edits):
 
     flock -w 3600 /tmp/opencode/p6-gradle.lock \
       ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
       :app:assembleDebug -PpizzoraDebugApiBaseUrl=http://10.0.2.2:8081 \
-      --console=plain > /tmp/opencode/p6-build.log 2>&1
+      --console=plain > /tmp/opencode/p6-build-rerun.log 2>&1
 
-  Result: BUILD_EXIT=0; log ends "BUILD SUCCESSFUL in 4m 18s".
+  Result: BUILD_EXIT=0; log ends "BUILD SUCCESSFUL in 58s".
   APK: app/build/outputs/apk/debug/app-debug.apk
-  SHA-256: 9f254c6b17b02a477af45f0e8a129fdd28a6a706dcd60407431e068762579228
+  APK SHA-256: 889997752cd7698fffb797cd3b43b8f8b790e16be14e00e6bf2a72646bf5feb1
+  APK size/mtime: 26552713 bytes, 2026-11-24 10:51:53 UTC.
 
-- Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk` -> Success.
-- Full local backend was not available (Postgres/Redis/Mailpit binaries absent),
-  so a deterministic QA-ONLY HTTP fixture proxy was used from /tmp/opencode/
-  on 10.0.2.2:8081. It served contract-shaped DTOs and never touched repo code.
-  Proxy runtime state file: /tmp/opencode/p6-proxy-state.json
-  Proxy request log: /tmp/opencode/p6-proxy-log.txt
-- Fixture QA login was used. The test password is intentionally omitted from
-  this report. No production credentials were used or exposed.
-- Display profiles were set with /tmp/opencode/p6-qa.py `profile <w> <h> <font> 320`
+- Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk` -> "Success".
+- Display helper: /tmp/opencode/p6-qa.py profile <w> <h> <font> 320
   (override density 320 => 1dp = 2px):
     412dp -> 824x1830; 360dp -> 720x1600; 320dp -> 640x1280.
-  Night mode was set with `adb shell cmd uimode night yes|no`.
+- Night mode: `adb shell cmd uimode night yes|no`.
+- Fixture state transitions used /tmp/opencode/p6-proxy-state.json:
+    normal  = {"payment_mode":"normal","cancel_mode":"idle","checkout_mode":"cod"}
+    warning = {"payment_mode":"warning","cancel_mode":"idle","checkout_mode":"cod"}
+    expired = {"payment_mode":"expired","cancel_mode":"idle","checkout_mode":"cod"}
 
-3. CAPTURE INVENTORY
---------------------
-Every PNG below has a same-screen accessibility dump at
+4. CORRECTED CAPTURE INVENTORY (post-fix)
+-----------------------------------------
+Every PNG has a same-screen `uiautomator` dump at
 qa-artifacts/phase6/evidence/<PNG basename>_ui.xml.
 
-  p6_orders_active_past_tabs_dark_412dp_1.0x.png
-    XML: evidence/p6_orders_active_past_tabs_dark_412dp_1.0x_ui.xml
-    Observed: "Your Orders", "Active (4)", "All (5)", "Past (1)",
-    "Payment Pending", "Order Placed", "Out for Delivery", "Picked Up",
-    "Delivery · Razorpay (Unpaid)", "Delivery · Razorpay (Paid)",
-    "Pickup · Cash on Delivery (Paid in Cash)".
+CANONICAL SECTION 13.2 CAPTURES
+1. qa-artifacts/phase6/p6_payment_normal_dark_412dp_1.0x.png
+   sha256 30f3b8b51cbc8e38c194fb533ae6c87cf1d947dc8131b338d10f3cd780c898c3
+   XML: evidence/p6_payment_normal_dark_412dp_1.0x_ui.xml
+   Live observed text: "Razorpay Payment Checkout", "Paying for Order PZ-P6-1001",
+   "₹562.90", "Complete payment within", "11:57", "Pay ₹562.90 Securely",
+   "Payment Reference". Pay container [40,1510][784,1614] enabled=true. No stale,
+   loading, login, or unrelated screen; no raw gateway value in default view.
 
-  p6_orders_past_tab_dark_412dp_1.0x.png
-    XML: evidence/p6_orders_past_tab_dark_412dp_1.0x_ui.xml
-    Observed Past selection: "PZ-P6-1004", "Picked Up", "22 Nov, 3:09 PM",
-    "Pickup · Cash on Delivery (Paid in Cash)".
+2. qa-artifacts/phase6/p6_payment_warning_light_320dp_1.5x.png
+   sha256 e6db3c3d4ecf3a87732527e81268f99527f34eccc74dee06be30730f9b002342
+   XML: evidence/p6_payment_warning_light_320dp_1.5x_ui.xml
+   Live observed text: "Expires in — complete payment now", "01:57",
+   "2 minutes remaining", "Pay ₹562.90 Securely", "Payment Reference".
+   The capture is intentionally scrolled so the amber timer and CTA are visible
+   together on the 640x1280 screen. Countdown node "01:57" bounds
+   [446,163][576,221]; prefix bounds [64,115][430,268]; milestone
+   [64,276][395,317]. Pay container [40,977][600,1081] enabled=true =
+   280x52dp, fully on-screen.
 
-  p6_orders_active_past_tabs_light_320dp_1.0x.png
-    XML: evidence/p6_orders_active_past_tabs_light_320dp_1.0x_ui.xml
-    Observed: "Your Orders", "Active (4)", "All (5)", "Past (1)", humanized
-    statuses and payment labels; no truncation of tab labels.
+3. qa-artifacts/phase6/p6_orders_active_past_tabs_dark_412dp_1.0x.png
+   XML: evidence/p6_orders_active_past_tabs_dark_412dp_1.0x_ui.xml
+   Live observed: "Your Orders", "Active (4)", "All (5)", "Past (1)",
+   humanized statuses/payment labels; no raw enums. (Unchanged by payment fix.)
 
-  p6_orders_past_tab_light_320dp_1.0x.png
-    XML: evidence/p6_orders_past_tab_light_320dp_1.0x_ui.xml
-    Observed Past selection: "PZ-P6-1004", "Picked Up", "22 Nov, 3:10 PM".
+4. qa-artifacts/phase6/p6_orders_active_past_tabs_light_320dp_1.0x.png
+   XML: evidence/p6_orders_active_past_tabs_light_320dp_1.0x_ui.xml
+   Live observed: orders tabs and humanized labels fit at 320dp/1.0x.
+   (Unchanged by payment fix.)
 
-  p6_payment_normal_dark_412dp_1.0x.png
-    XML: evidence/p6_payment_normal_dark_412dp_1.0x_ui.xml
-    Observed: "Razorpay Payment Checkout", "Paying for Order PZ-P6-1001",
-    "₹562.90", "Complete payment within", "11:56", "Pay ₹562.90 Securely",
-    "Payment Reference". No rzp_ value or raw attempt enum in default view.
+5. qa-artifacts/phase6/p6_order_detail_stepper_celebration_dark_412dp_1.0x.png
+   XML: evidence/p6_order_detail_stepper_celebration_dark_412dp_1.0x_ui.xml
+   Live observed: PZ-P6-1006, "Order confirmed! The kitchen has received your
+   order.", full stepper, "Current Status: Order Placed". (Unchanged by payment fix.)
 
-  p6_payment_warning_light_320dp_1.5x.png
-    XML: evidence/p6_payment_warning_light_320dp_1.5x_ui.xml
-    Observed: "Expires in — complete payment now", "2 minutes remaining",
-    "Pay ₹562.90 Securely", "Payment Reference". Amber container sampled as
-    RGB (254,243,199). The MM:SS countdown text was NOT exposed/visible
-    (see DEFECT-1). CTA bounds [40,960][600,1064]px = 280x52dp, fully on-screen.
+6. qa-artifacts/phase6/p6_order_detail_stepper_celebration_light_412dp_1.5x.png
+   XML: evidence/p6_order_detail_stepper_celebration_light_412dp_1.5x_ui.xml
+   Live observed: same celebration + stepper at light 412dp/1.5x.
+   (Unchanged by payment fix.)
 
-  p6_payment_expired_dark_412dp_1.0x.png
-    XML: evidence/p6_payment_expired_dark_412dp_1.0x_ui.xml
-    Observed: "Payment window expired", "00:00", "Pay ₹562.90 Securely".
-    The CTA container is enabled=false; countdown text is exactly "00:00".
+7. qa-artifacts/phase6/p6_cancel_dialog_refund_disclosure_dark_360dp_1.0x.png
+   XML: evidence/p6_cancel_dialog_refund_disclosure_dark_360dp_1.0x_ui.xml
+   Live observed: "Cancel This Order?", refund disclosure for the CAPTURED
+   Razorpay order, quick reasons, reason input, "Confirm Cancellation", "Close".
+   (Unchanged by payment fix.)
 
-  p6_order_detail_stepper_dark_412dp_1.0x.png
-    XML: evidence/p6_order_detail_stepper_dark_412dp_1.0x_ui.xml
-    Observed PZ-P6-1003: "Live Order Progress", "Payment Pending 2:47 PM",
-    "Order Placed 2:48 PM", "Confirmed by Kitchen 2:51 PM", "In the Oven
-    2:54 PM", "Ready for Delivery 3:00 PM", "Out for Delivery 3:04 PM",
-    "Delivered", "Current Status: Out for Delivery".
+CONDITIONAL CAPTURE (implementation_plan.md L959)
+8. qa-artifacts/phase6/p6_payment_expired_dark_412dp_1.0x.png
+   sha256 cdda12a4dcea9c24db4bb12e07cae976468ae8bdbea3337d14a8ceaa44aee133
+   XML: evidence/p6_payment_expired_dark_412dp_1.0x_ui.xml
+   Live observed: "Payment window expired", "00:00", "Pay ₹562.90 Securely".
+   Pay container [40,1510][784,1614] enabled=false. No real payment was attempted.
 
-  p6_order_detail_stepper_light_412dp_1.5x.png
-    XML: evidence/p6_order_detail_stepper_light_412dp_1.5x_ui.xml
-    Observed same PZ-P6-1003 stepper at 412dp/1.5x; all seven labels visible.
+SUPPLEMENTAL / DIAGNOSTIC (not a canonical matrix row)
+9. qa-artifacts/phase6/p6_payment_warning_light_320dp_1.0x.png
+   sha256 722776beaf76ffd5c540edaaa5096c2ca2c6d58e99f238713bfa2ff4b03427a5
+   XML: evidence/p6_payment_warning_light_320dp_1.0x_ui.xml
+   Live observed: "Expires in — complete payment now", "02:32",
+   "5 minutes remaining", on-screen CTA. Confirms timer renders before and after
+   the fix when the prefix fits on one line.
 
-  p6_order_detail_stepper_celebration_light_412dp_1.5x.png
-    XML: evidence/p6_order_detail_stepper_celebration_light_412dp_1.5x_ui.xml
-    Observed PZ-P6-1006: "Order confirmed! The kitchen has received your
-    order." plus the full stepper and "Current Status: Order Placed".
-    Created through the real in-app checkout flow against the fixture proxy;
-    proxy log confirms POST /api/v1/checkout 200 at 2026-11-24T09:41:37Z.
+10. Prior stepper and Past-tab-selected PNG/XML remain as supplemental evidence:
+    p6_order_detail_stepper_dark_412dp_1.0x.png
+    p6_order_detail_stepper_light_412dp_1.5x.png
+    p6_orders_past_tab_dark_412dp_1.0x.png
+    p6_orders_past_tab_light_320dp_1.0x.png
 
-  p6_order_detail_stepper_celebration_dark_412dp_1.0x.png
-    XML: evidence/p6_order_detail_stepper_celebration_dark_412dp_1.0x_ui.xml
-    Observed the same celebration + stepper in dark 412dp/1.0x (second fixture
-    checkout). This is supplementary coverage beyond the canonical row.
+5. P6-001 LIVE VERIFICATION — VERDICT: VERIFIED / RESOLVED
+----------------------------------------------------------
+Requirement: at light 320dp / fontScale 1.5 with expiry <=3m, the authoritative
+MM:SS countdown must stay visible in the amber warning bar.
 
-  p6_cancel_dialog_refund_disclosure_dark_360dp_1.0x.png
-    XML: evidence/p6_cancel_dialog_refund_disclosure_dark_360dp_1.0x_ui.xml
-    Observed: "Cancel This Order?",
-    "Cancelling now will release or restore reserved ingredients immediately.",
-    "Paid via Razorpay — refund will be processed to your original payment
-    method after cancellation.", three quick reasons, reason input,
-    "Confirm Cancellation", "Close".
+Implementation observed in current working tree (read-only inspection):
+  app/src/main/java/com/example/orders/RazorpayPaymentSheet.kt countdown Row now
+  uses `Arrangement.spacedBy(8.dp)`; long prefix has `Modifier.weight(1f)`;
+  timer Text is a separate tail node tagged `payment_expiry_countdown_text`.
 
-  Diagnostic (not a canonical matrix capture):
-  p6_payment_warning_light_320dp_1.0x_diagnostic.png
-    XML: evidence/p6_payment_warning_light_320dp_1.0x_diagnostic_ui.xml
-    Observed at fontScale 1.0: "Expires in — complete payment now", "02:32",
-    "5 minutes remaining". Used to isolate DEFECT-1.
+Live XML evidence (p6_payment_warning_light_320dp_1.5x_ui.xml):
+  "Expires in — complete payment now" [64,115][430,268] enabled=true
+  "01:57"                             [446,163][576,221] enabled=true
+  "2 minutes remaining"               [64,276][395,317] enabled=true
 
-4. PASS/FAIL MATRIX (canonical Section 13.2 + conditional expired state)
-------------------------------------------------------------------------
-  [PASS] Payment sheet, normal, dark 412dp/1.0x — humanized copy, ₹562.90,
-         11:56 countdown, enabled CTA, collapsed Payment Reference.
-  [FAIL] Payment sheet, <=3m warning, light 320dp/1.5x — amber state and
-         non-clipped CTA pass, but the MM:SS countdown is missing/clipped.
-         See DEFECT-1.
-  [PASS] Orders Active/Past tabs, dark 412dp/1.0x — tabs and humanized
-         statuses/payment labels visible; no raw enums.
-  [PASS] Orders Active/Past tabs, light 320dp/1.0x — same, no clipped labels.
-  [PASS] OrderDetail stepper, dark 412dp/1.0x — all steps, IST timestamps,
-         continuous rails.
-  [PASS] OrderDetail stepper + celebration, light 412dp/1.5x — celebration
-         banner and stepper both visible after real in-app checkout.
-  [PASS] CancelOrderDialog with refund disclosure, dark 360dp/1.0x —
-         CAPTURED Razorpay order shows the exact refund disclosure.
-  [PASS] Payment expired conditional, dark 412dp/1.0x — "00:00" and disabled
-         Pay CTA.
+Pixel evidence from the exact screenshot (stdlib PNG sampler
+/tmp/opencode/p6-png.py):
+  Command: python3 /tmp/opencode/p6-png.py \
+    qa-artifacts/phase6/p6_payment_warning_light_320dp_1.5x.png 446 163 576 221
+  Result: 7540 pixels, 256 unique; common colors
+    (254,243,199) amber container 5906 px
+    (120,53,15)  dark amber text 804 px
+    antialias shades present
+  => the MM:SS glyphs are physically rendered inside the amber bar, not merely
+     present in the XML.
 
-5. DETAILED CRITERIA CHECKS
----------------------------
-- Raw enum / key leakage: grep over all captured *_ui.xml text/content-desc
-  found zero occurrences of OUT_FOR_DELIVERY, COD_PENDING,
-  AWAITING_CUSTOMER_PAYMENT, or any rzp_ value. Default customer text uses
-  "Out for Delivery", "Pay on Delivery", "Waiting for payment confirmation...",
-  etc. PASS.
-- IST: order/order-history timestamps were rendered as "Today, 2:xx PM",
-  "22 Nov, 3:10 PM", and "3:11 PM" while UTC was ~09:xx, consistent with
-  Asia/Kolkata. Checkout exposed "Schedule Slot (IST)". Source formatter
-  app/src/main/java/com/example/ui/components/OrderDisplayFormatters.kt uses
-  TimeZone.getTimeZone("Asia/Kolkata"). PASS.
-- Continuous stepper rails: pixel scan at x=84px on both stepper screenshots
-  found an unbroken colored rail segment between each adjacent 24dp step
-  circle (dark RGB 82,183,136; light RGB 45,106,79). PASS.
-- Amber <=3m timer: normal 11:56 and expired 00:00 are visible. At the
-  required 320dp/1.5x warning profile the amber banner and "2 minutes
-  remaining" milestone are present, but the MM:SS node is absent. FAIL
-  (DEFECT-1). At 320dp/1.0x diagnostic, "02:32" is visible.
-- Payment CTA at 320dp/1.5x: bounds [40,960][600,1064]px = 280x52dp inside a
-  640x1280 screen; CTA pixel fill dominates RGB (200,62,43) with white label
-  pixels. Not clipped. PASS.
-- Refund disclosure: CAPTURED Razorpay order PZ-P6-1002 produced the exact
-  consumer-facing disclosure string. PASS.
-- Celebration: PZ-P6-1006 was created through the app checkout flow; banner
-  text appeared on Order Detail in both light 1.5x and dark 1.0x. PASS.
+Contrast:
+  (120,53,15) on (254,243,199) = 8.15:1, passing Section 13.2 >=4.5:1 warning
+  container requirement.
+  White CTA text on (200,62,43) = 5.02:1 in the sampled CTA box.
 
-6. ACCESSIBILITY / TALKBACK-TAB TRAVERSAL
------------------------------------------
-TalkBack was enabled via:
-  adb shell settings put secure enabled_accessibility_services \
-    com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService
-  adb shell settings put secure accessibility_enabled 1
-TAB traversal used KEYCODE_TAB (61) with same-screen uiautomator dumps, then
-TalkBack was disabled again.
+CTA fit:
+  Pay container [40,977][600,1081] = 560x104px = 280x52dp on a 640x1280 screen;
+  fully inside. Text "Pay ₹562.90 Securely" [98,998][543,1061]. No clipping.
 
-  evidence/talkback_payment_sheet_traversal.txt (412dp/1.0x, normal sheet):
-    Close                 48.0x48.0dp, enabled
-    Pay ₹562.90 Securely 372.0x52.0dp, enabled
-    Payment Reference    372.0x48.0dp, enabled
-    Stops 0-6 cycled through the same three targets; no <48dp stop.
+Before/after:
+  superseded/p6_payment_warning_light_320dp_1.5x_ui.xml had no MM:SS node.
+  post-fix p6_payment_warning_light_320dp_1.5x_ui.xml has "01:57".
+  The live timer naturally advanced; 02:32 at 1.0x diagnostic and 01:57/02:09
+  observed during 1.5x traversals all confirm the same countdown node.
 
-  evidence/talkback_cancel_dialog_traversal.txt (360dp/1.0x):
-    Changed my mind        87.0x57.5dp, enabled
-    Ordered wrong item     86.5x57.5dp, enabled
-    Taking too long        86.5x57.5dp, enabled
-    Optional cancellation reason 272.0x64.0dp, enabled
-    Confirm Cancellation  187.0x48.0dp, enabled
-    Close                  86.5x48.0dp, enabled
-    All stops >=48dp.
+P6-001 final verdict: PASS / LIVE VERIFIED. The coordinator may update findings.md
+from FIXEDPendingVerification to VERIFIED using this report. This agent did not
+edit findings.md because it is coordinator-maintained.
 
-LIMITATION: uiautomator exposes focus state, bounds, labels, and enabled
-state; it does NOT expose the exact spoken TalkBack utterances. No claim is
-made about audio wording, pronunciation, or announcement ordering beyond the
-focus stops recorded above.
+6. EXACT PASS/FAIL MATRIX
+-------------------------
+Canonical Section 13.2 (7 captures):
+  PASS R1  Payment normal, dark 412dp/1.0x                  (PNG + XML)
+  PASS R2  Payment <=3m amber, light 320dp/1.5x             (PNG + XML + pixels)
+  PASS R3  Orders Active/Past tabs, dark 412dp/1.0x         (PNG + XML)
+  PASS R4  Orders Active/Past tabs, light 320dp/1.0x        (PNG + XML)
+  PASS R5  OrderDetail stepper + celebration, dark 412dp/1.0x  (PNG + XML)
+  PASS R6  OrderDetail stepper + celebration, light 412dp/1.5x (PNG + XML)
+  PASS R7  CancelOrderDialog refund disclosure, dark 360dp/1.0x (PNG + XML)
 
-7. LIVE DEFECT (no source changes made)
----------------------------------------
-DEFECT-1 — Warning countdown MM:SS is clipped/omitted at 320dp / fontScale 1.5.
-  Location: app/src/main/java/com/example/orders/RazorpayPaymentSheet.kt,
-  countdown Row L476-L488; warning prefix string
-  app/src/main/res/values/phase6_payment_strings.xml L9
-  ("Expires in — complete payment now").
-  State: unpaid PENDING_PAYMENT Razorpay order with expiry <=3 minutes,
-  light theme, 320dp, fontScale 1.5.
-  Evidence:
-    - qa-artifacts/phase6/p6_payment_warning_light_320dp_1.5x.png
-    - qa-artifacts/phase6/evidence/p6_payment_warning_light_320dp_1.5x_ui.xml
-      contains "Expires in — complete payment now" with bounds
-      [64,96][576,146] (full 512px content width) and "2 minutes remaining"
-      at [64,259][395,300], but no "MM:SS" text node.
-    - qa-artifacts/phase6/evidence/p6_warning_scroll_probe_ui.xml (sheet
-      scrolled) still has no MM:SS node.
-    - Pixel strip x=576..640, y=96..200 in the required PNG contains only
-      white (255,255,255) and amber container (254,243,199), i.e. no timer
-      glyphs beyond the wrapped prefix.
-    - Diagnostic at fontScale 1.0
-      (p6_payment_warning_light_320dp_1.0x_diagnostic.png / _ui.xml) shows
-      "02:32", proving the timer itself renders when the prefix fits.
-  Impact: at the required accessibility text size the customer sees the amber
-  warning and a milestone announcement but not the authoritative live
-  countdown. No source edit was made by QA; implementation owner should
-  address layout wrapping (e.g. allow the timer to stay visible when the
-  prefix wraps).
+Conditional:
+  PASS C1  Payment expired 00:00, dark 412dp/1.0x, disabled CTA (PNG + XML)
 
-8. LIMITATIONS AND CLEANUP
---------------------------
-- Evidence used a deterministic local fixture proxy, not the real backend,
-  Razorpay SDK checkout, or payment gateway. No real payment/refund occurred.
-- Fixture DTOs were corrected in /tmp only (delivery address snapshot shape
-  and delivery-zone check response `message`) to match shared/contracts; these
-  were fixture corrections, not production defects.
-- Compose/LazyColumn virtualizes off-screen items; each screenshot's XML
-  reflects the same visible screen and may omit scrolled-away nodes.
-- The QA APK incorporated uncommitted Phase 6 work from other p6-* agents;
-  QA did not modify or commit those source changes.
-- Final cleanup commands (after evidence was written):
-    python3 /tmp/opencode/p6-qa.py restore
-    adb shell cmd uimode night no
-    echo '{"payment_mode":"normal","cancel_mode":"idle"}' > /tmp/opencode/p6-proxy-state.json
-  TalkBack was disabled after both traversals. The temporary proxy may be
-  stopped; it leaves no repository changes.
+Cross-cutting plan criteria:
+  PASS X1  Zero default raw enums OUT_FOR_DELIVERY / COD_PENDING /
+           AWAITING_CUSTOMER_PAYMENT in any captured *_ui.xml.
+  PASS X2  Zero default rzp_ gateway/attempt identifiers in any captured
+           *_ui.xml; "Payment Reference" remains collapsed.
+  PASS X3  IST timestamps/status labels observed; source formatter uses
+           TimeZone.getTimeZone("Asia/Kolkata").
+  PASS X4  Continuous vertical stepper rails observed via pixel scan at x=84px
+           on both stepper PNGs (dark RGB 82,183,136; light RGB 45,106,79).
+  PASS X5  <=3m warning uses amber container; measured 8.15:1 text contrast.
+  PASS X6  Payment CTA not clipped at 320dp/1.5x (280x52dp container inside
+           640x1280; sampled red fill + white glyphs).
+  PASS X7  Refund disclosure appears for CAPTURED Razorpay order.
+  UNVERIFIED X8  Exact TalkBack spoken utterances/audio wording (uiautomator
+           exposes focus/bounds/labels only); focus-target sizes were measured.
+  UNVERIFIED X9  Real Razorpay checkout / real payment or refund; fixture proxy
+           was used by design.
+
+Focus traversal after the fix:
+  evidence/talkback_payment_sheet_rerun_traversal.txt (light 320dp/1.5x warning
+  sheet, scrolled state):
+    "Pay ₹562.90 Securely" 280.0x52.0dp enabled=true
+    "Payment Reference"    280.0x48.0dp enabled=true
+    cycle repeated; no focus target <48dp. Close was off-screen in this scrolled
+    state; its earlier 48x48dp measurement remains in
+    evidence/talkback_payment_sheet_traversal.txt.
+  Existing cancel-dialog traversal remains valid:
+    evidence/talkback_cancel_dialog_traversal.txt; all six stops >=48dp.
+
+7. REJECTED / STALE SCREEN CHECK
+--------------------------------
+- Every recaptured payment XML contains the expected fixture order PZ-P6-1001,
+  amount ₹562.90, payment-sheet copy, and either an active or explicitly disabled
+  Pay CTA. No login screen, splash/loading shimmer, auth prompt, unrelated menu,
+  or generic error screen was accepted.
+- The warning capture was taken after the new APK was installed and after the
+  proxy returned warning-mode expiry; the previous failing XML remains only in
+  superseded/.
+- Minute/second values changed between captures because the countdown is live;
+  that is expected and is itself evidence of ticking.
+
+8. LIMITATIONS
+--------------
+- The fixture proxy is deterministic QA infrastructure in /tmp, not the real
+  backend and not a real payment gateway. No real payment, refund, Razorpay SDK
+  checkout, or gateway identifier was exercised. This limitation is preserved.
+- Offline/Reconnecting labels in some screens are fixture WebSocket limitations,
+  not app defects.
+- uiautomator cannot expose exact TalkBack utterance text; only focus, bounds,
+  labels, and enabled state were observed.
+- Compose virtualizes off-screen nodes; the scrolled warning sheet XML shows the
+  timer and CTA, while diagnostic/superseded XML show the header state.
+- The QA APK included concurrent p6 working-tree changes; p6-visual-qa did not
+  modify, commit, push, or merge any source change.
+
+9. CLEANUP DONE
+---------------
+  python3 /tmp/opencode/p6-qa.py restore
+  adb shell cmd uimode night no
+  echo '{"payment_mode":"normal","cancel_mode":"idle"}' > /tmp/opencode/p6-proxy-state.json
+  python3 /tmp/opencode/p6-a11y.py disable
+  proxy process stopped after evidence was written.
+
+10. RELATED ARTIFACTS
+---------------------
+  qa-artifacts/phase6/evidence/screenshot_requirement_mapping.md
+  qa-artifacts/phase6/evidence/findings.md (coordinator-maintained; P6-001 row)
+  qa-artifacts/phase6/superseded/ (old payment evidence + pre-rerun summary)
+  /tmp/opencode/p6-build-rerun.log
+  /tmp/opencode/p6-proxy-log.txt

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase15ZonesAddressesSlotsRobolectricTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-24T10:57:32.080Z" hostname="ip-10-0-128-100" time="1.628">
+  <properties/>
+  <testcase name="profileAddressBookCrudAndStandalonePincodeChecker" classname="com.example.Phase15ZonesAddressesSlotsRobolectricTest" time="0.649"/>
+  <testcase name="ownerConsoleCreatesTogglesAndDeletesZonesAndSlots" classname="com.example.Phase15ZonesAddressesSlotsRobolectricTest" time="0.455"/>
+  <testcase name="cartPincodeCheckAndScheduledSlotCheckoutFlow" classname="com.example.Phase15ZonesAddressesSlotsRobolectricTest" time="0.52"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

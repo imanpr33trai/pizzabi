@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase1SessionCartIsolationRobolectricTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:04:19.861Z" hostname="ip-10-0-128-100" time="0.337">
+  <properties/>
+  <testcase name="user A adds offline item, logs out offline, user B logs in - Room cleared, GET cart hydrates B, zero PUT of A items" classname="com.example.Phase1SessionCartIsolationRobolectricTest" time="0.059"/>
+  <testcase name="concurrent rapid transitions serialize cleanly with monotonic epoch and zero deadlock when logout returns 401" classname="com.example.Phase1SessionCartIsolationRobolectricTest" time="0.068"/>
+  <testcase name="refresh 401 failure clears tokens, Room cart, Room inbox, and resets realtime stream without PUT" classname="com.example.Phase1SessionCartIsolationRobolectricTest" time="0.046"/>
+  <testcase name="in-flight user A cart and notification fetch resolving after switch to user B is rejected cleanly" classname="com.example.Phase1SessionCartIsolationRobolectricTest" time="0.055"/>
+  <testcase name="passive flows never emit empty PUT cart, whereas explicit clearCart and removeItem last item do" classname="com.example.Phase1SessionCartIsolationRobolectricTest" time="0.06"/>
+  <testcase name="notificationInbox observe, unreadCount, markAsRead, and markAllAsRead isolate active user with shared event_id" classname="com.example.Phase1SessionCartIsolationRobolectricTest" time="0.045"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

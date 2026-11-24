@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase17ReportsAndAuditRobolectricTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-24T10:53:11.374Z" hostname="ip-10-0-128-100" time="0.3">
+  <properties/>
+  <testcase name="owner reports screen displays sales GST netting, operations SLA and wastage, and paginated audit logs" classname="com.example.Phase17ReportsAndAuditRobolectricTest" time="0.297"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

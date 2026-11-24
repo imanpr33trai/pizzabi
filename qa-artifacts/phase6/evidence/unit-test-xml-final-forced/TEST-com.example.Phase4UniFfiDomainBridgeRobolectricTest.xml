@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase4UniFfiDomainBridgeRobolectricTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:04:20.204Z" hostname="ip-10-0-128-100" time="0.147">
+  <properties/>
+  <testcase name="ordersAndKdsViewModels_delegate_causal_tracker_and_kds_next_stage_to_domain_bridge" classname="com.example.Phase4UniFfiDomainBridgeRobolectricTest" time="0.029"/>
+  <testcase name="cartSyncPlanner_and_fallback_mode_enforce_ownership_and_safe_defaults" classname="com.example.Phase4UniFfiDomainBridgeRobolectricTest" time="0.025"/>
+  <testcase name="domainBridge_matches_all_golden_parity_and_storage_key_vectors" classname="com.example.Phase4UniFfiDomainBridgeRobolectricTest" time="0.052"/>
+  <testcase name="cartRepository_and_uploader_route_through_domain_bridge" classname="com.example.Phase4UniFfiDomainBridgeRobolectricTest" time="0.034"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

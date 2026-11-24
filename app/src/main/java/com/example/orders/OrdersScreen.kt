@@ -1007,7 +1007,13 @@ private fun OrderTrackingStepperCard(
           ?.let { OrderDisplayFormatters.formatIstTimeOnly(it) }
           ?.takeIf { it.isNotBlank() }
         val stepDescription = if (timeText != null) {
-          stringResource(R.string.order_step_semantics_with_time, index + 1, steps.size, label, timeText)
+          val timePhrase = when {
+            isCompleted -> stringResource(R.string.order_step_time_completed, timeText)
+            isFailed -> stringResource(R.string.order_step_time_stopped, timeText)
+            isActive -> stringResource(R.string.order_step_time_started, timeText)
+            else -> stringResource(R.string.order_step_time_recorded, timeText)
+          }
+          stringResource(R.string.order_step_semantics_with_time, index + 1, steps.size, label, timePhrase)
         } else {
           stringResource(R.string.order_step_semantics_no_time, index + 1, steps.size, label)
         }

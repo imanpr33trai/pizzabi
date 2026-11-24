@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.ui.OrderDisplayFormattersTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-24T10:56:39.770Z" hostname="ip-10-0-128-100" time="0.006">
+  <properties/>
+  <testcase name="formats payment methods, statuses, attempts, and combined summaries" classname="com.example.ui.OrderDisplayFormattersTest" time="0.003"/>
+  <testcase name="formats relative notification timestamps and handles malformed inputs safely" classname="com.example.ui.OrderDisplayFormattersTest" time="0.001"/>
+  <testcase name="rejects invalid timezone offsets and impossible IST inputs without throwing" classname="com.example.ui.OrderDisplayFormattersTest" time="0.001"/>
+  <testcase name="parses ISO UTC and offset timestamps safely and converts to IST" classname="com.example.ui.OrderDisplayFormattersTest" time="0.0"/>
+  <testcase name="formats every NotificationCategory cleanly" classname="com.example.ui.OrderDisplayFormattersTest" time="0.0"/>
+  <testcase name="formats every OrderStatus with human-friendly copy" classname="com.example.ui.OrderDisplayFormattersTest" time="0.001"/>
+  <testcase name="Phase 6 status mappings never expose raw enum tokens" classname="com.example.ui.OrderDisplayFormattersTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

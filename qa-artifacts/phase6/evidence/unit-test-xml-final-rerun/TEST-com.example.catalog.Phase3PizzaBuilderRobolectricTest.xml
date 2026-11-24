@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.catalog.Phase3PizzaBuilderRobolectricTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:01:11.329Z" hostname="ip-10-0-128-100" time="1.16">
+  <properties/>
+  <testcase name="firstActiveVariantIsDefaultAndBreakdownDrawerShowsExactMath" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.116"/>
+  <testcase name="quantityBoundsEnforceMinOneAndMaxTwentyFive" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.1"/>
+  <testcase name="vegOnlyFilterPreservesNonVegSelectionsAndClearActionsWork" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.124"/>
+  <testcase name="pausedKitchenDisplaysWarningDisablesButtonAndGuardsSubmitHandler" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.112"/>
+  <testcase name="shellOverlayHidesNavChromeTrapsTraversalAndRestoresOriginatingProductFocusOnClose" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.113"/>
+  <testcase name="narrow320dpWith15xFontScaleStacksSizesVerticallyAndKeepsCtaUnclipped" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.045"/>
+  <testcase name="tablet600dpRenders4060TwoPaneSplitWith3UpSizes" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.055"/>
+  <testcase name="discardConfirmationTriggersOnlyWhenDirtyAndCollapsesBreakdownFirstOnBack" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.122"/>
+  <testcase name="landscapePhoneHeightBelow480dpForcesSingleColumn" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.045"/>
+  <testcase name="missingProductImageFallsBackToCompactTypographicHeader" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.045"/>
+  <testcase name="inactiveOptionsCannotBeSelectedAndAllUnavailableDisablesAdd" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.057"/>
+  <testcase name="tablet840dpRenders4060TwoPaneSplitCleanly" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.066"/>
+  <testcase name="duplicateTapSubmissionLockProducesSingleMutationAndHonorsSuccessFailureCallbacks" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.061"/>
+  <testcase name="standaloneCustomerMenuScreenFallbackHostRemainsCompatible" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.094"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[System.logW: A resource was acquired at attached stack trace but never released. See java.io.Closeable for information on avoiding resource leaks.
+java.lang.Throwable: Explicit termination method 'close' not called
+	at dalvik.system.CloseGuard.$$robo$$dalvik_system_CloseGuard$openWithCallSite(CloseGuard.java:288)
+	at dalvik.system.CloseGuard.openWithCallSite(CloseGuard.java)
+	at dalvik.system.CloseGuard.$$robo$$dalvik_system_CloseGuard$open(CloseGuard.java:257)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.robolectric.shadows.ShadowCloseGuard$CloseGuardReflector$$Reflector55.open(Unknown Source)
+	at org.robolectric.shadows.ShadowCloseGuard.open(ShadowCloseGuard.java:38)
+	at dalvik.system.CloseGuard.open(CloseGuard.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openInner(SQLiteDatabase.java:1192)
+	at android.database.sqlite.SQLiteDatabase.openInner(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$open(SQLiteDatabase.java:1171)
+	at android.database.sqlite.SQLiteDatabase.open(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openDatabase(SQLiteDatabase.java:1035)
+	at android.database.sqlite.SQLiteDatabase.openDatabase(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openDatabase(SQLiteDatabase.java:1024)
+	at android.database.sqlite.SQLiteDatabase.openDatabase(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteOpenHelper.$$robo$$android_database_sqlite_SQLiteOpenHelper$getDatabaseLocked(SQLiteOpenHelper.java:394)
+	at android.database.sqlite.SQLiteOpenHelper.getDatabaseLocked(SQLiteOpenHelper.java)
+	at android.database.sqlite.SQLiteOpenHelper.$$robo$$android_database_sqlite_SQLiteOpenHelper$getWritableDatabase(SQLiteOpenHelper.java:336)
+	at android.database.sqlite.SQLiteOpenHelper.getWritableDatabase(SQLiteOpenHelper.java)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.getWritableOrReadableDatabase(FrameworkSQLiteOpenHelper.android.kt:224)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.innerGetDatabase(FrameworkSQLiteOpenHelper.android.kt:167)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.getSupportDatabase(FrameworkSQLiteOpenHelper.android.kt:141)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper.getWritableDatabase(FrameworkSQLiteOpenHelper.android.kt:96)
+	at androidx.room.driver.SupportSQLiteDriver.open(SupportSQLiteDriver.android.kt:26)
+	at androidx.room.driver.SupportSQLiteConnectionPool.getSupportConnection(SupportSQLiteConnectionPool.android.kt:35)
+	at androidx.room.driver.SupportSQLiteConnectionPool.useConnection(SupportSQLiteConnectionPool.android.kt:42)
+	at androidx.room.RoomConnectionManager.useConnection(RoomConnectionManager.android.kt:126)
+	at androidx.room.RoomDatabase.useConnection$room_runtime_release(RoomDatabase.android.kt:588)
+	at androidx.room.TriggerBasedInvalidationTracker.syncTriggers$room_runtime_release(InvalidationTracker.kt:300)
+	at androidx.room.TriggerBasedInvalidationTracker$createFlow$1$1.invokeSuspend(InvalidationTracker.kt:233)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+]]></system-err>
+</testsuite>

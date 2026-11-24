@@ -143,7 +143,11 @@
     <string name="order_tracking_fresh_offline">Offline — pull down to refresh</string>
     <string name="order_version_cd">Order version v%1$d</string>
     <string name="order_step_semantics_no_time">Step %1$d of %2$d: %3$s</string>
-    <string name="order_step_semantics_with_time">Step %1$d of %2$d: %3$s, Completed at %4$s</string>
+    <string name="order_step_semantics_with_time">Step %1$d of %2$d: %3$s, %4$s</string>
+    <string name="order_step_time_completed">Completed at %1$s</string>
+    <string name="order_step_time_started">Started at %1$s</string>
+    <string name="order_step_time_stopped">Stopped at %1$s</string>
+    <string name="order_step_time_recorded">Recorded at %1$s</string>
     <string name="kds_board_title">Kitchen Display</string>
     <string name="kds_empty_title">All caught up</string>
     <string name="kds_empty_subtitle">New paid and COD kitchen tickets will appear and chime here automatically.</string>

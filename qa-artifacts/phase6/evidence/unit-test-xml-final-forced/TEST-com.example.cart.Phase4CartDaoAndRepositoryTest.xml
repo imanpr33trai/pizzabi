@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.cart.Phase4CartDaoAndRepositoryTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:07:46.729Z" hostname="ip-10-0-128-100" time="0.58">
+  <properties/>
+  <testcase name="viewModelFailedEditTransactionReportsFailureWithoutSuccessEventAndAllowsRetry" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.099"/>
+  <testcase name="daoScenarioD_missingItemReturnsNotFoundWithoutReviving" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.025"/>
+  <testcase name="daoScenarioB2_underCapMergeDeletesOldItemAndOldToppingsLeavingZeroOrphans" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.024"/>
+  <testcase name="undoViewModelTokenGuardsPreventDuplicateExpiredWrongItemAndRestoreConcurrentMerge" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.218"/>
+  <testcase name="daoScenarioA_sameConfigEditUpdatesQuantityInPlaceWithoutDuplicate" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.034"/>
+  <testcase name="failedTransactionAndForeignKeyCascadeMaintainZeroOrphans" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.027"/>
+  <testcase name="daoScenarioC_uniqueConfigReplacementZeroOrphanToppingsAndUnrelatedIntact" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.022"/>
+  <testcase name="repositoryOnlineConsecutiveEditsSyncAndPreserveChildToppingIntegrity" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.029"/>
+  <testcase name="daoScenarioB_configMatchMergesIntoExistingAndCapsAt25DeletingOldItem" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.042"/>
+  <testcase name="repositoryOfflineEditPersistsAtomicallyInRoomAndViewModelSurfacesOfflineNotice" classname="com.example.cart.Phase4CartDaoAndRepositoryTest" time="0.057"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

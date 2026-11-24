@@ -1,0 +1,22 @@
+Phase 6 MINOR accessibility-wording fix focused verification (2026-11-24)
+=========================================================================
+
+Command:
+  cd /workspace/pizzabi && flock -w 3600 /tmp/opencode/p6-gradle.lock \
+    ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+    :app:testDebugUnitTest \
+    --tests "com.example.Phase6OrderTrackingRobolectricTest" \
+    --console=plain
+
+Result: BUILD SUCCESSFUL.
+XML: app/build/test-results/testDebugUnitTest/TEST-com.example.Phase6OrderTrackingRobolectricTest.xml
+Preserved copy: qa-artifacts/phase6/evidence/unit-test-xml-a11y-focus/TEST-com.example.Phase6OrderTrackingRobolectricTest.xml
+Totals: tests=5, failures=0, errors=0, skipped=0.
+
+Notes:
+- The first focused run correctly caught the one pre-existing assertion that still
+  expected "Completed at" for the active ACCEPTED step. That assertion was updated
+  intentionally to "Started at".
+- The new regression test `active step semantics say started at instead of completed at`
+  covers PREPARING with prepStartedAt and asserts "Started at 7:50 PM" with no
+  "Completed at" phrase. It is not ignored or skipped.

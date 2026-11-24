@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" tests="37" skipped="0" failures="0" errors="0" timestamp="2026-11-24T10:53:13.349Z" hostname="ip-10-0-128-100" time="196.728">
+  <properties/>
+  <testcase name="localEstimateOnlyDisablesSubmissionUntilFreshQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="0.082"/>
+  <testcase name="kotlin422MinimumOrderClearsQuoteAndDisablesSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.064"/>
+  <testcase name="unavailableOnlyCartCancelsInFlightCouponFallbackQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.11"/>
+  <testcase name="samePincodeAddressSwitchReusesFreshQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.068"/>
+  <testcase name="unavailableCartItemBlocksSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.055"/>
+  <testcase name="unavailableOnlyCartCancelsInFlightQuoteAndCannotResurrectIt" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.069"/>
+  <testcase name="initialQuoteLoadProducesFreshAuthoritativeTotal" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.067"/>
+  <testcase name="couponFallbackZoneFailureClearsQuoteAndPincodeWithAuthoritativeShortfall" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.077"/>
+  <testcase name="duplicateInFlightQuoteRequestsAreSuppressed" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.065"/>
+  <testcase name="checkoutOrderTotalDriftFromQuoteSurfacesNotice" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.076"/>
+  <testcase name="addAddressDialogRetainsTypedValuesAcrossRotation" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="0.194"/>
+  <testcase name="priceDriftBetweenLocalCartAndQuoteSurfacesNoticeAndBanner" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.072"/>
+  <testcase name="identicalCartChangeReusesFreshQuoteWithoutNewRequest" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.063"/>
+  <testcase name="samePincodeAddressChangeRotatesCheckoutIdempotencyKey" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="10.075"/>
+  <testcase name="scheduledModeWithoutSlotBlocksSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.07"/>
+  <testcase name="cartChangeDuringDelayedZoneCheckClearsCheckingFlagAndStillQuotes" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.11"/>
+  <testcase name="checkoutReadinessNoticeAndRetryTagAppearAfterQuoteFailure" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="2.079"/>
+  <testcase name="istDateIsoIsApi24SafeAndUsesKolkataCalendar" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="0.042"/>
+  <testcase name="staleQuoteDisablesSubmissionUntilRefreshCompletes" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.039"/>
+  <testcase name="lateOutOfOrderResponseIsRejectedByGenerationGuard" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.063"/>
+  <testcase name="couponApplyAndRemoveRepriceWithoutStaleTotal" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.044"/>
+  <testcase name="cancelledRequestResponseCannotOverwriteClearedState" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.075"/>
+  <testcase name="serverAuthoritativeAmountIsUsedForRazorpayOrder" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.071"/>
+  <testcase name="deliveryPickupSwitchRepricesAndClearsZoneFee" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.075"/>
+  <testcase name="freshServerQuoteBelowMinimumBlocksOrderWithShortfall" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.067"/>
+  <testcase name="quoteErrorRetryKeeps48dpTargetOnScreenAt320dpAnd15xFont" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="2.08"/>
+  <testcase name="couponRejectionFallsBackToUncouponedQuoteUnderNewGeneration" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="2.05"/>
+  <testcase name="duplicateCheckoutSubmissionSendsExactlyOneOrderRequest" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.082"/>
+  <testcase name="cartItemEditAndRemovalInvalidateQuoteAndEmptyCartClearsQuote" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.044"/>
+  <testcase name="networkFailureKeepsOldQuoteMarksStaleAndRetryRecovers" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="10.076"/>
+  <testcase name="localSubtotalIsWarningOnlyAndServerQuoteAuthorizesSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.072"/>
+  <testcase name="rust200QuoteWithOrder422BlocksSubmissionAndRequestsRefresh" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="8.069"/>
+  <testcase name="differentPincodeSwitchFiresExactlyOneQuoteAndUpdatesFee" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.085"/>
+  <testcase name="invalidFiveDigitPincodeCheckClearsCurrentSignature" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.067"/>
+  <testcase name="checkoutScreenPreservesRequiredTestTags" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.1"/>
+  <testcase name="storePausedBlocksFreshQuoteSubmission" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="6.07"/>
+  <testcase name="cartQuantityChangeInvalidatesQuoteAndTracksSignature" classname="com.example.Phase5CheckoutQuoteIntegrityRobolectricTest" time="4.05"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[System.logW: A resource was acquired at attached stack trace but never released. See java.io.Closeable for information on avoiding resource leaks.
+java.lang.Throwable: Explicit termination method 'SQLiteConnection.close' not called
+	at dalvik.system.CloseGuard.$$robo$$dalvik_system_CloseGuard$openWithCallSite(CloseGuard.java:288)
+	at dalvik.system.CloseGuard.openWithCallSite(CloseGuard.java)
+	at dalvik.system.CloseGuard.$$robo$$dalvik_system_CloseGuard$open(CloseGuard.java:257)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.robolectric.shadows.ShadowCloseGuard$CloseGuardReflector$$Reflector55.open(Unknown Source)
+	at org.robolectric.shadows.ShadowCloseGuard.open(ShadowCloseGuard.java:38)
+	at dalvik.system.CloseGuard.open(CloseGuard.java)
+	at android.database.sqlite.SQLiteConnection.$$robo$$android_database_sqlite_SQLiteConnection$__constructor__(SQLiteConnection.java:197)
+	at android.database.sqlite.SQLiteConnection.<init>(SQLiteConnection.java:188)
+	at android.database.sqlite.SQLiteConnection.$$robo$$android_database_sqlite_SQLiteConnection$open(SQLiteConnection.java:217)
+	at android.database.sqlite.SQLiteConnection.open(SQLiteConnection.java)
+	at android.database.sqlite.SQLiteConnectionPool.$$robo$$android_database_sqlite_SQLiteConnectionPool$openConnectionLocked(SQLiteConnectionPool.java:542)
+	at android.database.sqlite.SQLiteConnectionPool.openConnectionLocked(SQLiteConnectionPool.java)
+	at android.database.sqlite.SQLiteConnectionPool.$$robo$$android_database_sqlite_SQLiteConnectionPool$open(SQLiteConnectionPool.java:228)
+	at android.database.sqlite.SQLiteConnectionPool.open(SQLiteConnectionPool.java)
+	at android.database.sqlite.SQLiteConnectionPool.$$robo$$android_database_sqlite_SQLiteConnectionPool$open(SQLiteConnectionPool.java:220)
+	at android.database.sqlite.SQLiteConnectionPool.open(SQLiteConnectionPool.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openInner(SQLiteDatabase.java:1191)
+	at android.database.sqlite.SQLiteDatabase.openInner(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$open(SQLiteDatabase.java:1171)
+	at android.database.sqlite.SQLiteDatabase.open(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$openDatabase(SQLiteDatabase.java:1035)
+	at android.database.sqlite.SQLiteDatabase.openDatabase(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteDatabase.$$robo$$android_database_sqlite_SQLiteDatabase$createInMemory(SQLiteDatabase.java:1231)
+	at android.database.sqlite.SQLiteDatabase.createInMemory(SQLiteDatabase.java)
+	at android.database.sqlite.SQLiteOpenHelper.$$robo$$android_database_sqlite_SQLiteOpenHelper$getDatabaseLocked(SQLiteOpenHelper.java:389)
+	at android.database.sqlite.SQLiteOpenHelper.getDatabaseLocked(SQLiteOpenHelper.java)
+	at android.database.sqlite.SQLiteOpenHelper.$$robo$$android_database_sqlite_SQLiteOpenHelper$getWritableDatabase(SQLiteOpenHelper.java:336)
+	at android.database.sqlite.SQLiteOpenHelper.getWritableDatabase(SQLiteOpenHelper.java)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.getWritableOrReadableDatabase(FrameworkSQLiteOpenHelper.android.kt:224)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.innerGetDatabase(FrameworkSQLiteOpenHelper.android.kt:167)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper$OpenHelper.getSupportDatabase(FrameworkSQLiteOpenHelper.android.kt:141)
+	at androidx.sqlite.db.framework.FrameworkSQLiteOpenHelper.getWritableDatabase(FrameworkSQLiteOpenHelper.android.kt:96)
+	at androidx.room.driver.SupportSQLiteDriver.open(SupportSQLiteDriver.android.kt:26)
+	at androidx.room.driver.SupportSQLiteConnectionPool.getSupportConnection(SupportSQLiteConnectionPool.android.kt:35)
+	at androidx.room.driver.SupportSQLiteConnectionPool.useConnection(SupportSQLiteConnectionPool.android.kt:42)
+	at androidx.room.RoomConnectionManager.useConnection(RoomConnectionManager.android.kt:126)
+	at androidx.room.RoomDatabase.useConnection$room_runtime_release(RoomDatabase.android.kt:588)
+	at androidx.room.TriggerBasedInvalidationTracker.syncTriggers$room_runtime_release(InvalidationTracker.kt:300)
+	at androidx.room.TriggerBasedInvalidationTracker$createFlow$1$1.invokeSuspend(InvalidationTracker.kt:233)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+]]></system-err>
+</testsuite>

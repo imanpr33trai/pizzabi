@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.catalog.Phase3PizzaBuilderRobolectricTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:07:47.316Z" hostname="ip-10-0-128-100" time="1.093">
+  <properties/>
+  <testcase name="firstActiveVariantIsDefaultAndBreakdownDrawerShowsExactMath" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.092"/>
+  <testcase name="quantityBoundsEnforceMinOneAndMaxTwentyFive" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.106"/>
+  <testcase name="vegOnlyFilterPreservesNonVegSelectionsAndClearActionsWork" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.078"/>
+  <testcase name="pausedKitchenDisplaysWarningDisablesButtonAndGuardsSubmitHandler" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.056"/>
+  <testcase name="shellOverlayHidesNavChromeTrapsTraversalAndRestoresOriginatingProductFocusOnClose" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.139"/>
+  <testcase name="narrow320dpWith15xFontScaleStacksSizesVerticallyAndKeepsCtaUnclipped" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.122"/>
+  <testcase name="tablet600dpRenders4060TwoPaneSplitWith3UpSizes" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.068"/>
+  <testcase name="discardConfirmationTriggersOnlyWhenDirtyAndCollapsesBreakdownFirstOnBack" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.096"/>
+  <testcase name="landscapePhoneHeightBelow480dpForcesSingleColumn" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.048"/>
+  <testcase name="missingProductImageFallsBackToCompactTypographicHeader" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.042"/>
+  <testcase name="inactiveOptionsCannotBeSelectedAndAllUnavailableDisablesAdd" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.052"/>
+  <testcase name="tablet840dpRenders4060TwoPaneSplitCleanly" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.048"/>
+  <testcase name="duplicateTapSubmissionLockProducesSingleMutationAndHonorsSuccessFailureCallbacks" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.056"/>
+  <testcase name="standaloneCustomerMenuScreenFallbackHostRemainsCompatible" classname="com.example.catalog.Phase3PizzaBuilderRobolectricTest" time="0.084"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

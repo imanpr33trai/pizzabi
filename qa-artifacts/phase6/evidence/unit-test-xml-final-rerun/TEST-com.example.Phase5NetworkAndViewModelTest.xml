@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase5NetworkAndViewModelTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:01:01.667Z" hostname="ip-10-0-128-100" time="0.198">
+  <properties/>
+  <testcase name="concurrent 401 calls trigger single-flight token refresh once via Mutex" classname="com.example.Phase5NetworkAndViewModelTest" time="0.168"/>
+  <testcase name="AuthViewModel handles login, unverified redirect, registration, and logout" classname="com.example.Phase5NetworkAndViewModelTest" time="0.029"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+]]></system-err>
+</testsuite>

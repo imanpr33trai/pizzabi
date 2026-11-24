@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase12OrderTrackingRobolectricTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-24T10:57:24.169Z" hostname="ip-10-0-128-100" time="6.387">
+  <properties/>
+  <testcase name="WebSocketEventClient falls back to HTTP replay when socket fails and advances cursor" classname="com.example.Phase12OrderTrackingRobolectricTest" time="0.137"/>
+  <testcase name="orders tracking applies live steps, deduplicates, ignores stale versions, and resyncs causal gaps" classname="com.example.Phase12OrderTrackingRobolectricTest" time="0.157"/>
+  <testcase name="payment gateway_ready frame at same aggregate_version updates gatewayOrderId without resync" classname="com.example.Phase12OrderTrackingRobolectricTest" time="6.089"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

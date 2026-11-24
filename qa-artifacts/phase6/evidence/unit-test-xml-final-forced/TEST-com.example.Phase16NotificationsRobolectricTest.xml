@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase16NotificationsRobolectricTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:04:17.426Z" hostname="ip-10-0-128-100" time="0.741">
+  <properties/>
+  <testcase name="notificationsViewModel_handlesRealtimeFrame_syncsInbox_andEmitsAlertEvent" classname="com.example.Phase16NotificationsRobolectricTest" time="0.097"/>
+  <testcase name="notificationsViewModel_markAllAsRead_andClearSessionState_wipesRoomInbox" classname="com.example.Phase16NotificationsRobolectricTest" time="0.122"/>
+  <testcase name="orderSyncWorker_fetchesUnreadNotifications_deduplicatesInRoom_andPostsLocalNotifications" classname="com.example.Phase16NotificationsRobolectricTest" time="0.261"/>
+  <testcase name="notificationHelper_createsChannels_routesCategory_andRespectsPermission" classname="com.example.Phase16NotificationsRobolectricTest" time="0.061"/>
+  <testcase name="notificationsScreen_showsPermissionPromptOnApi33Plus_filtersUnread_marksRead_andUpdatesPreferences" classname="com.example.Phase16NotificationsRobolectricTest" time="0.194"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

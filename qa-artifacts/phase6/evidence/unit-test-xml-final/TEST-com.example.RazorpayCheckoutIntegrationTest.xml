@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.RazorpayCheckoutIntegrationTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-24T10:56:34.162Z" hostname="ip-10-0-128-100" time="0.618">
+  <properties/>
+  <testcase name="MainActivity forwards onPaymentError and survives recreate configuration change for onPaymentSuccess" classname="com.example.RazorpayCheckoutIntegrationTest" time="0.416"/>
+  <testcase name="official SDK launch cancellation preserves attempt without fail call and allows immediate retry then verify" classname="com.example.RazorpayCheckoutIntegrationTest" time="0.156"/>
+  <testcase name="payload builder produces official Razorpay Checkout options JSON" classname="com.example.RazorpayCheckoutIntegrationTest" time="0.042"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

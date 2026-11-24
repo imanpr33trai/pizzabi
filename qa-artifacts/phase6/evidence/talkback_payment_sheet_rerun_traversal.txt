@@ -1,0 +1,6 @@
+0 NO FOCUS
+1 android.view.View [20.0,488.5][300.0,540.5] 280.0x52.0dp clickable=true enabled=true => Pay ₹562.90 Securely
+2 android.view.View [20.0,557.0][300.0,605.0] 280.0x48.0dp clickable=true enabled=true => Payment Reference
+3 NO FOCUS
+4 android.view.View [20.0,488.5][300.0,540.5] 280.0x52.0dp clickable=true enabled=true => Pay ₹562.90 Securely
+5 android.view.View [20.0,557.0][300.0,605.0] 280.0x48.0dp clickable=true enabled=true => Payment Reference

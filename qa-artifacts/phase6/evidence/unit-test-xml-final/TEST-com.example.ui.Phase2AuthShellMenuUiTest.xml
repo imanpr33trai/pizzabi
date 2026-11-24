@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.ui.Phase2AuthShellMenuUiTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-24T10:56:39.782Z" hostname="ip-10-0-128-100" time="0.868">
+  <properties/>
+  <testcase name="customerMenuScreen_pausedStoreBlocksCardOrdering" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.059"/>
+  <testcase name="customerProfileScreen_requiresConfirmationBeforeSignOut" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.098"/>
+  <testcase name="customerMenuScreen_at320dpWith15xFontScaleRendersCleanly" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.091"/>
+  <testcase name="customerMenuScreen_searchClearAndFilterResetWorkEndToEnd" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.14"/>
+  <testcase name="customerMenuScreen_at600dpTabletStaysSingleColumn" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.075"/>
+  <testcase name="registerAndForgotPassword_exposePasswordVisibilityToggles" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.055"/>
+  <testcase name="customerMenuScreen_at840dpExpandedRendersTwoColumns" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.06"/>
+  <testcase name="customerShell_showsContextualTopBarTitlesAndRemovesGlobalSignOut" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.094"/>
+  <testcase name="forgotPasswordScreen_exposesPasswordToggleAndTokenClearButton" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.069"/>
+  <testcase name="loginScreen_inlineValidationBlocksSubmitAndDisplaysErrorBanner" classname="com.example.ui.Phase2AuthShellMenuUiTest" time="0.123"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

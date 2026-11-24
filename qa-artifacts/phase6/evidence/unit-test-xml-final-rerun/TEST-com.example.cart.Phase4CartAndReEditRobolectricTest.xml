@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.cart.Phase4CartAndReEditRobolectricTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:01:07.251Z" hostname="ip-10-0-128-100" time="3.489">
+  <properties/>
+  <testcase name="narrowWidthWithLargeFontScaleKeepsControlsUnclippedAndSinglePane" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.134"/>
+  <testcase name="cartItemAtMaxQuantity25DisablesPlusShowsCapNoteAndFulfillmentChipsExposeRadioRole" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.085"/>
+  <testcase name="wideTablet840dpActivatesTwoPane6040CartSplitEvenWithNavigationRail" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.152"/>
+  <testcase name="couponPickerGroupsEligibleAndLockedSectionsAndShowsRetryOnError" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.117"/>
+  <testcase name="undoRemovalViaTrashAndOneToZeroDecrementRestoresExactItem" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.658"/>
+  <testcase name="reEditDuplicateMergeCapsAt25AndEmitsSnackbar" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.236"/>
+  <testcase name="compactTablet600dpRemainsSingleColumnEvenInsideShell" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.135"/>
+  <testcase name="customPizzaReEditEndToEndInShellRestoresConfigUpdatesCartAndRestoresFocus" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.219"/>
+  <testcase name="cartDisplaysThumbnailsForValidUrlsAndWarmFallbackWhenMissing" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.075"/>
+  <testcase name="repeatedEditSubmissionLockAndMenuAddModeContinueToWorkInSameShell" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.339"/>
+  <testcase name="clearCartRequiresConfirmationCancelPreservesAndConfirmClearsAndBrowseReturnsToMenu" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.217"/>
+  <testcase name="landscapeWideShortViewportFallsBackToSingleColumnCartBecauseHeightBelow480dp" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.133"/>
+  <testcase name="discontinuedProductInEditModeGuardsUpdateAndPreservesOriginalCartItem" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.123"/>
+  <testcase name="editModeUnavailableSavedToppingShowsWarningBannerAndSavesCleanActiveToppings" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.212"/>
+  <testcase name="couponPickerAt320dpAndLargeFontKeepsEligibleAndLockedControlsUnclipped" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.067"/>
+  <testcase name="editModeDiscardConfirmationOnDirtyChangeAndInstantDismissWhenClean" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.249"/>
+  <testcase name="failedEditSubmissionKeepsBuilderOpenShowsErrorAndAllowsRetry" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.066"/>
+  <testcase name="reEditMergeUnder25CombinesWithoutCapAndShowsStandardMergeSnackbar" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.185"/>
+  <testcase name="stickyDockDisclosureVsQuotedTotalAndImeVisibilityHiding" classname="com.example.cart.Phase4CartAndReEditRobolectricTest" time="0.077"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase5RoomAndUiRobolectricTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:01:01.867Z" hostname="ip-10-0-128-100" time="0.748">
+  <properties/>
+  <testcase name="room relational cart_item_toppings cascades cleanly and notification inbox deduplicates event_id" classname="com.example.Phase5RoomAndUiRobolectricTest" time="0.068"/>
+  <testcase name="login routes CUSTOMER, KITCHEN_STAFF, and OWNER into distinct role shells" classname="com.example.Phase5RoomAndUiRobolectricTest" time="0.454"/>
+  <testcase name="auth navigation moves between Login, Register, VerifyEmail, and ForgotPassword" classname="com.example.Phase5RoomAndUiRobolectricTest" time="0.224"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

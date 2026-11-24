@@ -164,6 +164,7 @@ class Phase6OrderTrackingRobolectricTest {
     paymentStatus: PaymentStatus = PaymentStatus.COD_PENDING,
     fulfillmentType: FulfillmentType = FulfillmentType.PICKUP,
     acceptedAt: String? = null,
+    prepStartedAt: String? = null,
   ): OrderDetailDto = OrderDetailDto(
     id = id,
     orderNumber = "PZ-2026-$id",
@@ -184,7 +185,7 @@ class Phase6OrderTrackingRobolectricTest {
     couponCodeSnapshot = null,
     isPriority = false,
     acceptedAt = acceptedAt,
-    prepStartedAt = null,
+    prepStartedAt = prepStartedAt,
     readyAt = null,
     completedAt = null,
     expiresAt = null,
@@ -277,7 +278,7 @@ class Phase6OrderTrackingRobolectricTest {
         .config[SemanticsProperties.LiveRegion],
     )
     assertEquals(
-      "Step 2 of 5: Confirmed by Kitchen, Completed at 7:45 PM",
+      "Step 2 of 5: Confirmed by Kitchen, Started at 7:45 PM",
       composeTestRule.onNodeWithTag("tracking_step_accepted")
         .fetchSemanticsNode()
         .config[SemanticsProperties.ContentDescription]
@@ -310,6 +311,33 @@ class Phase6OrderTrackingRobolectricTest {
         .config[SemanticsProperties.ContentDescription]
         .joinToString(),
     )
+  }
+
+  @Test
+  fun `active step semantics say started at instead of completed at`() {
+    val order = detail(
+      id = "ord-track-active",
+      status = OrderStatus.PREPARING,
+      acceptedAt = "2026-11-19T14:15:00Z",
+      prepStartedAt = "2026-11-19T14:20:00Z",
+    )
+    val vm = OrdersViewModel(
+      FakeOrderRepository(mutableMapOf(order.id to order)),
+      realtimeEventStream = FakeRealtimeEventStream(),
+    )
+    vm.startLiveTracking("user-p6")
+    vm.openOrderDetail(order.id)
+    render(vm)
+    waitUntilMainLooper {
+      vm.uiState.value.selectedOrder?.id == order.id &&
+        composeTestRule.onAllNodesWithTag("order_tracking_stepper_card").fetchSemanticsNodes().isNotEmpty()
+    }
+
+    val description = composeTestRule.onNodeWithTag("tracking_step_preparing")
+      .fetchSemanticsNode().config[SemanticsProperties.ContentDescription].joinToString()
+    assertTrue(description, description.contains("In the Oven"))
+    assertTrue(description, description.contains("Started at 7:50 PM"))
+    assertTrue(description, !description.contains("Completed at"))
   }
 
   @Test

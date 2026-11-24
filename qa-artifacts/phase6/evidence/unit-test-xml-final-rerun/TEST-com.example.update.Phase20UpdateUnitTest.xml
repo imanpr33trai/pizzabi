@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.update.Phase20UpdateUnitTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:01:14.119Z" hostname="ip-10-0-128-100" time="0.131">
+  <properties/>
+  <testcase name="downloader reports progress, retries transient IO failure, supports cancellation, and blocks untrusted redirect and low storage" classname="com.example.update.Phase20UpdateUnitTest" time="0.072"/>
+  <testcase name="repository discovers update, respects ETag 304, rejects drafts and prereleases, and blocks missing assets" classname="com.example.update.Phase20UpdateUnitTest" time="0.029"/>
+  <testcase name="metadata validator rejects invalid schema, wrong appId, path traversal, bad sha256, untrusted URL and sanitizes notes" classname="com.example.update.Phase20UpdateUnitTest" time="0.001"/>
+  <testcase name="repository handles rate limits, server errors, timeouts, malformed JSON, and blocks untrusted redirects" classname="com.example.update.Phase20UpdateUnitTest" time="0.02"/>
+  <testcase name="integrity verifier rejects wrong checksum, invalid archive, wrong package, downgrade, and signer mismatch" classname="com.example.update.Phase20UpdateUnitTest" time="0.009"/>
+  <testcase name="checker handles newer, equal, older versions, mandatory policy, and minSupportedVersionCode" classname="com.example.update.Phase20UpdateUnitTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

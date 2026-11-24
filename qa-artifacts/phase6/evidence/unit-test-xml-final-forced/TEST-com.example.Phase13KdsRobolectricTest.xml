@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase13KdsRobolectricTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-24T11:04:14.414Z" hostname="ip-10-0-128-100" time="0.331">
+  <properties/>
+  <testcase name="kds board chimes on live WebSocket order arrival and respects persistent mute toggle" classname="com.example.Phase13KdsRobolectricTest" time="0.148"/>
+  <testcase name="kds board renders dark theme with server-skew SLA overdue badge, stage transitions, priority toggle, and keep-screen-on" classname="com.example.Phase13KdsRobolectricTest" time="0.179"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
