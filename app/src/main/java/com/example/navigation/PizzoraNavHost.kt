@@ -745,6 +745,8 @@ fun CustomerRoleShell(
                 onOpenPaymentSheet = ordersViewModel::openPaymentSheet,
                 onDismissPaymentSheet = ordersViewModel::dismissPaymentSheet,
                 onRetryPayment = { ordersViewModel.retryPayment() },
+                onSetOrderListFilter = ordersViewModel::setOrderListFilter,
+                onDismissOrderPlacedCelebration = ordersViewModel::dismissOrderPlacedCelebration,
                 customerName = session.user.fullName,
                 customerEmail = session.user.email,
                 customerPhone = session.user.phone,

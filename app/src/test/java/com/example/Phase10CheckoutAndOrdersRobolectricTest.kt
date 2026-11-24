@@ -556,9 +556,10 @@ class Phase10CheckoutAndOrdersRobolectricTest {
     assertTrue(cartVm.uiState.value.items.isEmpty())
     composeTestRule.onNodeWithTag("order_detail_number_text").assertTextContains("PZ-20261113-0042")
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_status_badge"))
-    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("PLACED")
+    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("Order Placed")
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_payment_status"))
-    composeTestRule.onNodeWithTag("order_detail_payment_status").assertTextContains("COD", substring = true)
+    composeTestRule.onNodeWithTag("order_detail_payment_status").assertTextContains("Cash on Delivery", substring = true)
+    composeTestRule.onNodeWithTag("order_detail_payment_status").assertTextContains("Pay on Delivery", substring = true)
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_item_oi-p10-1"))
     composeTestRule.onNodeWithTag("order_detail_item_oi-p10-1").assertIsDisplayed()
 
@@ -578,7 +579,7 @@ class Phase10CheckoutAndOrdersRobolectricTest {
 
     assertEquals("Changed my mind", capturedCancelReason)
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_status_badge"))
-    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("CANCELLED")
+    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("Cancelled")
     assertTrue(composeTestRule.onAllNodesWithTag("cancel_order_button").fetchSemanticsNodes().isEmpty())
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_status_history_card"))
     composeTestRule.onNodeWithTag("order_status_history_card")

@@ -1,0 +1,7 @@
+0 android.view.View [344.0,441.0][392.0,489.0] 48.0x48.0dp clickable=true enabled=true => Close
+1 android.view.View [20.0,755.0][392.0,807.0] 372.0x52.0dp clickable=true enabled=true => Pay ₹562.90 Securely
+2 android.view.View [20.0,823.0][392.0,871.0] 372.0x48.0dp clickable=true enabled=true => Payment Reference
+3 android.view.View [344.0,441.0][392.0,489.0] 48.0x48.0dp clickable=true enabled=true => Close
+4 android.view.View [20.0,755.0][392.0,807.0] 372.0x52.0dp clickable=true enabled=true => Pay ₹562.90 Securely
+5 android.view.View [20.0,823.0][392.0,871.0] 372.0x48.0dp clickable=true enabled=true => Payment Reference
+6 android.view.View [344.0,441.0][392.0,489.0] 48.0x48.0dp clickable=true enabled=true => Close

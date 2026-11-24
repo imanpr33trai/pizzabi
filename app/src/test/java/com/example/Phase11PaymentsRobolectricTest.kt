@@ -76,6 +76,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -305,7 +309,7 @@ class Phase11PaymentsRobolectricTest {
             totalPaise = breakdown.totalPaise,
             gstBpsSnapshot = 500,
             isPriority = false,
-            expiresAt = "2026-11-13T16:15:00Z",
+            expiresAt = futureExpiryIso(),
             createdAt = "2026-11-13T16:00:00Z",
             items = listOf(
               OrderItemDto("oi-p11-1", cartItem.productId, cartItem.productName, "MEDIUM", "Hand-Tossed", listOf("Basil"), 50_000L, 1, 50_000L),
@@ -531,9 +535,10 @@ class Phase11PaymentsRobolectricTest {
     composeTestRule.onNodeWithTag("place_order_button").performClick()
 
     waitUntilMainLooper(timeoutMs = 8_000) {
-      composeTestRule.onAllNodesWithTag("razorpay_gateway_order_id_text").fetchSemanticsNodes().isNotEmpty() &&
+      composeTestRule.onAllNodesWithTag("payment_reference_toggle").fetchSemanticsNodes().isNotEmpty() &&
         composeTestRule.onAllNodesWithTag("launch_razorpay_checkout_button").fetchSemanticsNodes().isNotEmpty()
     }
+    expandPaymentReference()
     composeTestRule.onNodeWithTag("razorpay_gateway_order_id_text").assertTextContains("order_gw_1", substring = true)
     composeTestRule.onNodeWithTag("razorpay_key_id_text").assertTextContains("rzp_test_pizzora", substring = true)
 
@@ -596,6 +601,7 @@ class Phase11PaymentsRobolectricTest {
     assertEquals(1, retryCount)
     assertFalse(capturedRetryIdempotencyKey.isNullOrBlank())
 
+    expandPaymentReference()
     composeTestRule.onNodeWithTag("razorpay_gateway_order_id_text").performScrollTo().assertTextContains("order_gw_2", substring = true)
     composeTestRule.onNodeWithTag("launch_razorpay_checkout_button").performClick()
     assertEquals(2, fakeLauncher.launchedRequests.size)
@@ -622,10 +628,33 @@ class Phase11PaymentsRobolectricTest {
     assertEquals("sig_valid_p11", capturedVerifyReq?.razorpaySignature)
 
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_status_badge"))
-    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("PLACED")
+    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("Order Placed")
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_payment_status"))
-    composeTestRule.onNodeWithTag("order_detail_payment_status").assertTextContains("CAPTURED", substring = true)
+    composeTestRule.onNodeWithTag("order_detail_payment_status").assertTextContains("Paid", substring = true)
     assertTrue(composeTestRule.onAllNodesWithTag("razorpay_payment_action_card").fetchSemanticsNodes().isEmpty())
+  }
+
+  /** Payment references are opt-in: assert collapsed-by-default, then reveal them before reading values. */
+  private fun expandPaymentReference() {
+    waitUntilMainLooper(timeoutMs = 8_000) {
+      composeTestRule.onAllNodesWithTag("payment_reference_toggle").fetchSemanticsNodes().isNotEmpty()
+    }
+    assertTrue(
+      "Payment reference values must not be visible before the disclosure is expanded",
+      composeTestRule.onAllNodesWithTag("razorpay_gateway_order_id_text").fetchSemanticsNodes().isEmpty(),
+    )
+    composeTestRule.onNodeWithTag("payment_reference_toggle").performScrollTo().performClick()
+    waitUntilMainLooper(timeoutMs = 8_000) {
+      composeTestRule.onAllNodesWithTag("razorpay_gateway_order_id_text").fetchSemanticsNodes().isNotEmpty()
+    }
+  }
+
+  /** The payment sheet disables Pay at 00:00, so fixtures must always use a future UTC expiry. */
+  private fun futureExpiryIso(minutesAhead: Long = 15L): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+      timeZone = TimeZone.getTimeZone("UTC")
+    }
+    return formatter.format(Date(System.currentTimeMillis() + minutesAhead * 60_000L))
   }
 
   private fun bodyAsString(body: OutgoingContent): String = when (body) {

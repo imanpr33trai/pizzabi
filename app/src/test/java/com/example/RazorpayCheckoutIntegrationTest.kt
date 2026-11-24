@@ -54,6 +54,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -287,7 +291,7 @@ class RazorpayCheckoutIntegrationTest {
     assertEquals("pay_rzp_after_cancel", verifyRequest?.razorpayPaymentId)
     assertEquals("sig_after_cancel", verifyRequest?.razorpaySignature)
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_status_badge"))
-    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("PLACED")
+    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("Order Placed")
   }
 
   @Test
@@ -454,6 +458,14 @@ class RazorpayCheckoutIntegrationTest {
     controller2.pause().stop().destroy()
   }
 
+  /** Keep the payment window in the future so the new 00:00 guard does not disable the Pay CTA. */
+  private fun futureExpiryIso(minutesAhead: Long = 15L): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+      timeZone = TimeZone.getTimeZone("UTC")
+    }
+    return formatter.format(Date(System.currentTimeMillis() + minutesAhead * 60_000L))
+  }
+
   private fun pendingOnlineOrder(orderId: String, gatewayOrderId: String): OrderDetailDto =
     OrderDetailDto(
       id = orderId,
@@ -472,7 +484,7 @@ class RazorpayCheckoutIntegrationTest {
       totalPaise = 52_500L,
       gstBpsSnapshot = 500,
       isPriority = false,
-      expiresAt = "2026-11-16T08:15:00Z",
+      expiresAt = futureExpiryIso(),
       createdAt = "2026-11-16T08:00:00Z",
       items = listOf(
         OrderItemDto("oi-1", "prod-1", "Margherita", "MEDIUM", "Hand-Tossed", emptyList(), 50_000L, 1, 50_000L),

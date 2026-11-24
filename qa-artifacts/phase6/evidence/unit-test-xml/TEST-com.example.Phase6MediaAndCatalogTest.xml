@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase6MediaAndCatalogTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-24T09:28:37.118Z" hostname="ip-10-0-128-100" time="0.68">
+  <properties/>
+  <testcase name="ProductImagePickerButton renders with testTag and zero storage permissions declared" classname="com.example.Phase6MediaAndCatalogTest" time="0.06"/>
+  <testcase name="ImageCompressor scales oversized bitmaps within 1280px and outputs valid JPEG under 5MB" classname="com.example.Phase6MediaAndCatalogTest" time="0.403"/>
+  <testcase name="ProductImageUploader executes presign, raw PUT without Auth header, and confirm" classname="com.example.Phase6MediaAndCatalogTest" time="0.156"/>
+  <testcase name="CatalogRepository caches public menu in Room and serves cached snapshot offline" classname="com.example.Phase6MediaAndCatalogTest" time="0.057"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

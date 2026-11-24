@@ -10,7 +10,9 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.semantics.SemanticsProperties
 import com.example.core.network.PizzoraApiClient
 import com.example.core.network.RealtimeEventStream
 import com.example.core.network.WebSocketEventClient
@@ -343,7 +345,8 @@ class Phase12OrderTrackingRobolectricTest {
     }
 
     composeTestRule.onNodeWithTag("realtime_connection_badge").assertIsDisplayed().assertTextContains("Live Updates")
-    composeTestRule.onNodeWithTag("order_tracking_version_text").assertTextContains("v1")
+    assertOrderVersion(expectedVersion = 1L)
+    composeTestRule.onNodeWithTag("order_tracking_version_text").assertTextContains("Live updates active")
     composeTestRule.onNodeWithTag("tracking_step_placed").assertIsDisplayed()
 
     // 1) Normal sequential event: PLACED (v1) -> ACCEPTED (v2)
@@ -370,7 +373,7 @@ class Phase12OrderTrackingRobolectricTest {
       ordersVm.uiState.value.selectedOrder?.status == OrderStatus.ACCEPTED &&
         ordersVm.uiState.value.selectedOrder?.version == 2L
     }
-    composeTestRule.onNodeWithTag("order_tracking_version_text").assertTextContains("v2")
+    assertOrderVersion(expectedVersion = 2L)
     assertEquals(10L, fakeStream.lastHighWaterSeq.value)
     assertEquals(1, detailFetchCount.get())
 
@@ -440,10 +443,10 @@ class Phase12OrderTrackingRobolectricTest {
     }
 
     assertEquals(2, detailFetchCount.get())
-    composeTestRule.onNodeWithTag("order_tracking_version_text").assertTextContains("v4")
-    composeTestRule.onNodeWithTag("tracking_step_ready").assertIsDisplayed()
+    assertOrderVersion(expectedVersion = 4L)
+    composeTestRule.onNodeWithTag("tracking_step_ready").performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithTag("order_detail_lazy_column").performScrollToNode(hasTestTag("order_detail_status_badge"))
-    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("READY")
+    composeTestRule.onNodeWithTag("order_detail_status_badge").assertTextContains("Ready for Delivery")
 
     // Verify reconnecting indicator updates reactively
     fakeStream.emitConnectionState(RealtimeConnectionState.RECONNECTING)
@@ -606,6 +609,15 @@ class Phase12OrderTrackingRobolectricTest {
     assertEquals(45L, wsClient.lastHighWaterSeq.value)
     assertEquals(1, frame.events.size)
     assertEquals("evt-replay-1", frame.events.single().eventId)
+  }
+
+  /** Raw version is semantics-only; the visible copy is friendly freshness text. */
+  private fun assertOrderVersion(expectedVersion: Long) {
+    val actual = composeTestRule.onNodeWithTag("order_tracking_version_text")
+      .fetchSemanticsNode()
+      .config[SemanticsProperties.ContentDescription]
+      .joinToString()
+    assertEquals("Order version v$expectedVersion", actual)
   }
 
   private fun waitUntilMainLooper(

@@ -142,6 +142,60 @@ class OrderDisplayFormattersTest {
   }
 
   @Test
+  fun `Phase 6 status mappings never expose raw enum tokens`() {
+    val orderLabels = OrderStatus.entries.map {
+      OrderDisplayFormatters.formatOrderStatus(it, FulfillmentType.DELIVERY)
+    }
+    assertEquals(
+      listOf(
+        "Payment Pending", "Order Placed", "Confirmed by Kitchen", "In the Oven",
+        "Ready for Delivery", "Out for Delivery", "Delivered", "Cancelled", "Expired",
+      ),
+      orderLabels,
+    )
+    assertEquals(
+      "Ready for Pickup",
+      OrderDisplayFormatters.formatOrderStatus(OrderStatus.READY, FulfillmentType.PICKUP),
+    )
+    assertEquals(
+      "Picked Up",
+      OrderDisplayFormatters.formatOrderStatus(OrderStatus.COMPLETED, FulfillmentType.PICKUP),
+    )
+
+    assertEquals(
+      mapOf(
+        PaymentAttemptStatus.INITIATING to "Preparing secure checkout...",
+        PaymentAttemptStatus.AWAITING_CUSTOMER_PAYMENT to "Waiting for payment confirmation...",
+        PaymentAttemptStatus.AUTHORIZED to "Payment authorized",
+        PaymentAttemptStatus.CAPTURED to "Payment confirmed",
+        PaymentAttemptStatus.FAILED to "Payment wasn't completed",
+        PaymentAttemptStatus.EXPIRED to "Payment window expired",
+        PaymentAttemptStatus.CANCELLED to "Payment cancelled",
+      ),
+      PaymentAttemptStatus.entries.associateWith(OrderDisplayFormatters::formatPaymentAttemptStatus),
+    )
+    assertEquals(
+      "Pickup · Cash on Delivery (Pay at Pickup)",
+      OrderDisplayFormatters.formatFulfillmentAndPayment(
+        FulfillmentType.PICKUP,
+        PaymentMethod.COD,
+        PaymentStatus.COD_PENDING,
+      ),
+    )
+  }
+
+  @Test
+  fun `rejects invalid timezone offsets and impossible IST inputs without throwing`() {
+    assertNull(OrderDisplayFormatters.parseIsoToEpochMillis("2026-11-19T14:12:00+99:99"))
+    assertNull(OrderDisplayFormatters.parseIsoToEpochMillis("2026-11-19T14:12:00+05:60"))
+    assertNull(OrderDisplayFormatters.parseIsoToEpochMillis("2026-11-19T14:12:00+24:00"))
+    assertNull(OrderDisplayFormatters.parseIsoToEpochMillis("2026-11-19T14:12:00UTC"))
+    assertNull(OrderDisplayFormatters.parseIsoToEpochMillis("2026-02-30T14:12:00Z"))
+    assertEquals("Unknown", OrderDisplayFormatters.formatIstTimestamp("2026-11-19T14:12:00+99:99", fallback = "Unknown"))
+    assertEquals("Unknown", OrderDisplayFormatters.formatIstTimeOnly("+99:99", fallback = "Unknown"))
+  }
+
+  @Test
   fun `formats relative notification timestamps and handles malformed inputs safely`() {
     val baseUtc = "2026-11-19T14:12:00Z"
     val baseMillis = OrderDisplayFormatters.parseIsoToEpochMillis(baseUtc)!!

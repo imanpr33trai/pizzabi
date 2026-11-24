@@ -1,0 +1,83 @@
+PIZZORA Phase 6 automated verification summary (2026-11-24)
+==========================================================
+
+Coordinator: primary OpenCode session
+HerdR agents used/contacted: only p6-prefixed agents
+Branch: ui-ux-changes
+HEAD at start: 3135232
+
+Serialized Gradle lock: /tmp/opencode/p6-gradle.lock
+Robolectric dependency mirror used per invocation only:
+  --init-script /tmp/opencode/p6-maven-mirror.init.gradle
+Reason: Maven Central returned HTTP 429 for
+org.robolectric:nativeruntime-dist-compat:1.0.18. No repository build file
+or Gradle lockfile was changed.
+
+Commands and exact results (as reported by the p6 agents and confirmed from
+the resulting XML files):
+
+1. cd /workspace/pizzabi && flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:compileDebugUnitTestKotlin --console=plain
+   Result: BUILD SUCCESSFUL.
+
+2. cd /workspace/pizzabi && flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:testDebugUnitTest --tests "com.example.Phase6PaymentSheetRobolectricTest" \
+     --console=plain
+   Result: BUILD SUCCESSFUL. XML: tests=9 skipped=0 failures=0 errors=0.
+
+3. cd /workspace/pizzabi && flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:testDebugUnitTest \
+     --tests "com.example.ui.OrderDisplayFormattersTest" \
+     --tests "com.example.Phase6OrdersHistoryRobolectricTest" \
+     --tests "com.example.Phase6OrderTrackingRobolectricTest" \
+     --console=plain
+   Result: BUILD SUCCESSFUL. 14 focused tests passed.
+
+4. Coordinated regression classes (each run individually, all BUILD SUCCESSFUL):
+   --tests "com.example.Phase10CheckoutAndOrdersRobolectricTest"       (1 test)
+   --tests "com.example.Phase11PaymentsRobolectricTest"                (1 test)
+   --tests "com.example.Phase12OrderTrackingRobolectricTest"           (3 tests)
+   --tests "com.example.RazorpayCheckoutIntegrationTest"               (3 tests)
+
+5. cd /workspace/pizzabi && flock -w 3600 /tmp/opencode/p6-gradle.lock \
+     ./gradlew --init-script /tmp/opencode/p6-maven-mirror.init.gradle \
+     :app:testDebugUnitTest --console=plain
+   Result: BUILD SUCCESSFUL in 4m 2s.
+   Aggregated from app/build/test-results/testDebugUnitTest/TEST-*.xml:
+     34 result XML files, 189 tests, 0 failures, 0 errors, 0 skipped.
+   New Phase 6 test functions added in this working tree (18):
+     9  Phase6PaymentSheetRobolectricTest
+     3  Phase6OrdersHistoryRobolectricTest
+     4  Phase6OrderTrackingRobolectricTest
+     2  new OrderDisplayFormattersTest additions
+   (The p6 regression agent described these as "20 new Phase 6 tests"; the
+    direct diff count is 18 newly added @Test functions, with additional
+    assertions added to existing formatter tests.)
+
+6. cd /workspace/pizzabi && git diff --check
+   Result: exit 0, empty output.
+
+Coordinator integration review and fixes
+----------------------------------------
+- Wired the new OrdersScreen callbacks in PizzoraNavHost.kt:
+    onSetOrderListFilter = ordersViewModel::setOrderListFilter
+    onDismissOrderPlacedCelebration = ordersViewModel::dismissOrderPlacedCelebration
+  Without this, the filter and banner dismissal would have relied only on the
+  screen's local remembered fallback.
+- Corrected canonical semantic colors in OrdersScreen.kt: pending payment and
+  reconnecting now use LocalPizzoraSemanticColors.warningContainer /
+  onWarningContainer; READY uses secondaryContainer; pending stepper/rail
+  states use outlineInteractive.
+- Fixed a scope error introduced during that color correction so the stepper
+  compiles; final :app:compileDebugUnitTestKotlin passed afterwards.
+
+Preserved boundaries verified by inspection
+--------------------------------------------
+- MainActivity.kt unchanged; KEY_PENDING_RAZORPAY_* restoration intact.
+- RazorpayCheckoutLauncher.kt unchanged; {"retry":{"enabled":false}} intact.
+- WebSocket causal reconciliation logic in OrdersViewModel.kt unchanged except
+  for human-readable action-message copy.
+- No backend, Rust, migration, credentials, commit, push, merge, or deploy.

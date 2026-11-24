@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phase 6 payment sheet: customer-facing copy only; developer keys stay in the disclosure. -->
+    <string name="phase6_pay_for_order">Paying for Order %1$s</string>
+    <string name="phase6_pay_securely">Pay %1$s Securely</string>
+    <string name="phase6_secure_payment_notice">Secure payment via Razorpay</string>
+    <string name="phase6_accepted_methods">Accepted: UPI, Cards, Netbanking, Wallets</string>
+    <string name="phase6_complete_payment_within">Complete payment within</string>
+    <string name="phase6_expires_in">Expires in — complete payment now</string>
+    <string name="phase6_payment_window_expired">Payment window expired</string>
+    <string name="phase6_preparing_secure_checkout">Preparing secure checkout...</string>
+    <string name="phase6_retry_safe_message">Payment wasn\'t completed. You can retry safely — you won\'t be charged twice.</string>
+    <string name="phase6_payment_reference_label">Payment Reference</string>
+    <string name="phase6_reference_gateway_order">Gateway Order: %1$s</string>
+    <string name="phase6_reference_key">Key: %1$s</string>
+    <string name="phase6_refund_pending">Refund requested</string>
+    <string name="phase6_refund_processing">Refund processing</string>
+    <string name="phase6_refund_processed">Refunded</string>
+    <string name="phase6_refund_failed">Refund failed</string>
+</resources>

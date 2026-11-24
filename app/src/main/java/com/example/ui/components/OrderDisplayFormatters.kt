@@ -128,8 +128,19 @@ object OrderDisplayFormatters {
     }
     val normalizedTz = when {
       tzRaw.isEmpty() || tzRaw == "Z" -> "+0000"
-      tzRaw.contains(':') -> tzRaw.replace(":", "")
-      else -> tzRaw
+      else -> {
+        val digits = tzRaw.replace(":", "")
+        val offsetHours = digits.substring(1, 3).toIntOrNull()
+        val offsetMinutes = digits.substring(3, 5).toIntOrNull()
+        // Reject impossible offsets (e.g. +99:99) before SimpleDateFormat can normalize them.
+        if (digits.length != 5 || (digits[0] != '+' && digits[0] != '-') ||
+          offsetHours == null || offsetMinutes == null ||
+          offsetHours > 23 || offsetMinutes > 59
+        ) {
+          return null
+        }
+        digits
+      }
     }
 
     val normalized = "${datePart}T${timePart}.${millisPart}${normalizedTz}"

@@ -13,11 +13,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sync
@@ -34,6 +39,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,24 +48,36 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.checkout.PriceBreakdownCard
+import com.example.ui.components.OrderDisplayFormatters
+import com.example.ui.theme.LocalPizzoraSemanticColors
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.core.domain.RustDomainBridge
@@ -68,6 +87,7 @@ import com.pizzora.contracts.OrderDetailDto
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
 import com.pizzora.contracts.PaymentMethod
+import com.pizzora.contracts.PaymentStatus
 import com.pizzora.contracts.PriceBreakdownDto
 import com.pizzora.contracts.RealtimeConnectionState
 
@@ -82,6 +102,8 @@ fun OrdersScreen(
   onOpenPaymentSheet: () -> Unit = {},
   onDismissPaymentSheet: () -> Unit = {},
   onRetryPayment: () -> Unit = {},
+  onSetOrderListFilter: (OrderListFilter) -> Unit = {},
+  onDismissOrderPlacedCelebration: () -> Unit = {},
   customerName: String? = null,
   customerEmail: String? = null,
   customerPhone: String? = null,
@@ -101,6 +123,7 @@ fun OrdersScreen(
       onOpenPaymentSheet = onOpenPaymentSheet,
       onDismissPaymentSheet = onDismissPaymentSheet,
       onRetryPayment = onRetryPayment,
+      onDismissCelebration = onDismissOrderPlacedCelebration,
       customerName = customerName,
       customerEmail = customerEmail,
       customerPhone = customerPhone,
@@ -115,6 +138,7 @@ fun OrdersScreen(
       onRefreshOrders = onRefreshOrders,
       onOpenOrder = onOpenOrder,
       onBrowseMenu = onBrowseMenu,
+      onSetOrderListFilter = onSetOrderListFilter,
       modifier = modifier,
     )
   }
@@ -126,8 +150,28 @@ private fun OrderHistoryScreen(
   onRefreshOrders: () -> Unit,
   onOpenOrder: (String) -> Unit,
   onBrowseMenu: () -> Unit,
+  onSetOrderListFilter: (OrderListFilter) -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  // Keep the chosen segment stable across WebSocket/list refreshes even when the
+  // host has not supplied a ViewModel callback, while always honouring VM changes.
+  var selectedFilter by rememberSaveable { mutableStateOf(uiState.orderListFilter) }
+  LaunchedEffect(uiState.orderListFilter) { selectedFilter = uiState.orderListFilter }
+
+  val activeCount = uiState.orders.count { !isPastOrder(it.status) }
+  val pastCount = uiState.orders.count { isPastOrder(it.status) }
+  val visibleOrders = filterOrders(uiState.orders, selectedFilter)
+  val emptyTitleRes = when (selectedFilter) {
+    OrderListFilter.ACTIVE -> R.string.orders_empty_active_title
+    OrderListFilter.PAST -> R.string.orders_empty_past_title
+    OrderListFilter.ALL -> R.string.orders_empty_all_title
+  }
+  val emptySubtitleRes = when (selectedFilter) {
+    OrderListFilter.ACTIVE -> R.string.orders_empty_active_subtitle
+    OrderListFilter.PAST -> R.string.orders_empty_past_subtitle
+    OrderListFilter.ALL -> R.string.orders_empty_all_subtitle
+  }
+
   Column(
     modifier = modifier.fillMaxSize().testTag("orders_history_screen"),
     horizontalAlignment = Alignment.CenterHorizontally,
@@ -152,6 +196,59 @@ private fun OrderHistoryScreen(
         ) {
           Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_refresh))
         }
+      }
+    }
+
+    SingleChoiceSegmentedButtonRow(
+      modifier = Modifier
+        .fillMaxWidth()
+        .widthIn(max = 720.dp)
+        .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+      SegmentedButton(
+        selected = selectedFilter == OrderListFilter.ACTIVE,
+        onClick = {
+          selectedFilter = OrderListFilter.ACTIVE
+          onSetOrderListFilter(OrderListFilter.ACTIVE)
+        },
+        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+        modifier = Modifier
+          .weight(1f)
+          .minimumInteractiveComponentSize()
+          .semantics { role = Role.RadioButton }
+          .testTag("orders_filter_active"),
+      ) {
+        Text(stringResource(R.string.orders_filter_active, activeCount))
+      }
+      SegmentedButton(
+        selected = selectedFilter == OrderListFilter.PAST,
+        onClick = {
+          selectedFilter = OrderListFilter.PAST
+          onSetOrderListFilter(OrderListFilter.PAST)
+        },
+        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+        modifier = Modifier
+          .weight(1f)
+          .minimumInteractiveComponentSize()
+          .semantics { role = Role.RadioButton }
+          .testTag("orders_filter_past"),
+      ) {
+        Text(stringResource(R.string.orders_filter_past, pastCount))
+      }
+      SegmentedButton(
+        selected = selectedFilter == OrderListFilter.ALL,
+        onClick = {
+          selectedFilter = OrderListFilter.ALL
+          onSetOrderListFilter(OrderListFilter.ALL)
+        },
+        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+        modifier = Modifier
+          .weight(1f)
+          .minimumInteractiveComponentSize()
+          .semantics { role = Role.RadioButton }
+          .testTag("orders_filter_all"),
+      ) {
+        Text(stringResource(R.string.orders_filter_all, uiState.orders.size))
       }
     }
 
@@ -185,7 +282,7 @@ private fun OrderHistoryScreen(
         }
       }
 
-      if (!uiState.isLoadingList && uiState.orders.isEmpty()) {
+      if (!uiState.isLoadingList && visibleOrders.isEmpty()) {
         item(key = "orders_empty") {
           Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -202,9 +299,9 @@ private fun OrderHistoryScreen(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(44.dp),
               )
-              Text(stringResource(R.string.orders_empty_title), style = MaterialTheme.typography.titleLarge)
+              Text(stringResource(emptyTitleRes), style = MaterialTheme.typography.titleLarge)
               Text(
-                text = stringResource(R.string.orders_empty_subtitle),
+                text = stringResource(emptySubtitleRes),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -219,7 +316,7 @@ private fun OrderHistoryScreen(
           }
         }
       } else {
-        items(uiState.orders, key = { it.id }) { summary ->
+        items(visibleOrders, key = { it.id }) { summary ->
           OrderSummaryCard(
             order = summary,
             onClick = { onOpenOrder(summary.id) },
@@ -255,18 +352,40 @@ private fun OrderSummaryCard(
           style = PizzoraMonoTitle,
           color = MaterialTheme.colorScheme.onSurface,
         )
-        OrderStatusPill(status = order.status)
+        OrderStatusPill(
+          status = order.status,
+          fulfillmentType = order.fulfillmentType,
+        )
       }
+      Text(
+        text = OrderDisplayFormatters.formatIstTimestamp(
+          isoTimestamp = order.createdAt,
+          fallback = stringResource(R.string.order_date_unknown),
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Text(
-          text = "${order.itemCount} item(s) • ${order.fulfillmentType.name} • ${order.paymentMethod.name}",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = stringResource(R.string.checkout_item_count, order.itemCount),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Text(
+            text = OrderDisplayFormatters.formatFulfillmentAndPayment(
+              fulfillmentType = order.fulfillmentType,
+              paymentMethod = order.paymentMethod,
+              paymentStatus = order.paymentStatus,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
         Text(
           text = Money.formatInr(order.totalPaise),
           style = PizzoraMonoTitle,
@@ -287,6 +406,7 @@ private fun OrderDetailScreen(
   onOpenPaymentSheet: () -> Unit,
   onDismissPaymentSheet: () -> Unit,
   onRetryPayment: () -> Unit,
+  onDismissCelebration: () -> Unit,
   customerName: String?,
   customerEmail: String?,
   customerPhone: String?,
@@ -302,7 +422,31 @@ private fun OrderDetailScreen(
   val actionMessage = uiState.actionMessage
 
   var showCancelDialog by remember { mutableStateOf(false) }
-  var cancelReason by remember { mutableStateOf("") }
+  var dismissedCelebrationOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+  var statusAnnouncement by remember { mutableStateOf<String?>(null) }
+  var lastStatusKey by remember { mutableStateOf<String?>(null) }
+
+  // A fresh placement signal for this order re-enables its confirmation banner.
+  LaunchedEffect(uiState.celebrationOrderId) {
+    if (uiState.celebrationOrderId != null) {
+      dismissedCelebrationOrderId = null
+    }
+  }
+
+  // Announce only real status transitions (including WebSocket updates), never recompositions.
+  LaunchedEffect(order.id, order.status) {
+    val key = "${order.id}:${order.status.name}"
+    if (lastStatusKey != null && lastStatusKey != key) {
+      statusAnnouncement = "Order ${order.orderNumber}: ${OrderDisplayFormatters.formatOrderStatus(order.status, order.fulfillmentType)}."
+    }
+    lastStatusKey = key
+  }
+
+  LaunchedEffect(uiState.isCancelling, order.status) {
+    if (!uiState.isCancelling && order.status == OrderStatus.CANCELLED) {
+      showCancelDialog = false
+    }
+  }
 
   if (uiState.isPaymentSheetOpen) {
     RazorpayPaymentSheetDialog(
@@ -319,45 +463,16 @@ private fun OrderDetailScreen(
       onLaunchStarted = onRazorpayLaunchStarted,
       onSdkLaunchError = onRazorpaySdkError,
       onDismiss = onDismissPaymentSheet,
+      onExpiryReached = { onRefresh() },
     )
   }
 
   if (showCancelDialog) {
-    AlertDialog(
-      onDismissRequest = { showCancelDialog = false },
-      title = { Text(stringResource(R.string.cancel_dialog_title)) },
-      text = {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Text(stringResource(R.string.cancel_dialog_body))
-          OutlinedTextField(
-            value = cancelReason,
-            onValueChange = { cancelReason = it },
-            label = { Text(stringResource(R.string.cancel_reason_hint)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("cancel_reason_input"),
-          )
-        }
-      },
-      confirmButton = {
-        Button(
-          onClick = {
-            showCancelDialog = false
-            onCancelOrder(cancelReason.trim().takeIf { it.isNotEmpty() })
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("confirm_cancel_order_button"),
-        ) {
-          Text(stringResource(R.string.action_confirm_cancel))
-        }
-      },
-      dismissButton = {
-        OutlinedButton(
-          onClick = { showCancelDialog = false },
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("dismiss_cancel_dialog_button"),
-        ) {
-          Text(stringResource(R.string.action_close))
-        }
-      },
+    CancelOrderDialog(
+      order = order,
+      isCancelling = uiState.isCancelling,
+      onDismiss = { showCancelDialog = false },
+      onConfirm = { reason -> onCancelOrder(reason) },
     )
   }
 
@@ -415,6 +530,53 @@ private fun OrderDetailScreen(
       contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+      if (uiState.celebrationOrderId == order.id && dismissedCelebrationOrderId != order.id) {
+        item(key = "order_placed_celebration") {
+          Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth().testTag("order_placed_celebration_banner"),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(12.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+              Text(
+                text = stringResource(R.string.order_placed_celebration_banner),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+              )
+              IconButton(
+                onClick = {
+                  dismissedCelebrationOrderId = order.id
+                  onDismissCelebration()
+                },
+                modifier = Modifier
+                  .minimumInteractiveComponentSize()
+                  .testTag("dismiss_order_placed_celebration"),
+              ) {
+                Icon(
+                  Icons.Filled.Close,
+                  contentDescription = stringResource(R.string.order_placed_celebration_dismiss_cd),
+                  tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+              }
+            }
+          }
+        }
+      }
+
+      item(key = "order_status_live_region") {
+        Text(
+          text = statusAnnouncement.orEmpty(),
+          modifier = Modifier
+            .testTag("order_status_live_region")
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        )
+      }
+
       if (!actionMessage.isNullOrBlank()) {
         item(key = "order_action_message") {
           Surface(
@@ -450,7 +612,7 @@ private fun OrderDetailScreen(
       }
 
       item(key = "order_tracking_stepper") {
-        OrderTrackingStepperCard(order = order)
+        OrderTrackingStepperCard(order = order, connectionState = uiState.connectionState)
       }
 
       item(key = "order_status_summary") {
@@ -471,11 +633,16 @@ private fun OrderDetailScreen(
               Text("Current Status", style = MaterialTheme.typography.titleMedium)
               OrderStatusPill(
                 status = order.status,
+                fulfillmentType = order.fulfillmentType,
                 modifier = Modifier.testTag("order_detail_status_badge"),
               )
             }
             Text(
-              text = "Payment: ${order.payment.method.name} (${order.payment.status.name})",
+              text = OrderDisplayFormatters.formatFulfillmentAndPayment(
+                fulfillmentType = order.fulfillmentType,
+                paymentMethod = order.payment.method,
+                paymentStatus = order.payment.status,
+              ),
               style = PizzoraMonoBody,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               modifier = Modifier.testTag("order_detail_payment_status"),
@@ -608,7 +775,18 @@ private fun OrderDetailScreen(
                   modifier = Modifier.size(16.dp),
                 )
                 Column {
-                  Text(entry.toStatus.name, style = MaterialTheme.typography.labelLarge)
+                  Text(
+                    text = OrderDisplayFormatters.formatOrderStatus(entry.toStatus, order.fulfillmentType),
+                    style = MaterialTheme.typography.labelLarge,
+                  )
+                  Text(
+                    text = OrderDisplayFormatters.formatIstTimestamp(
+                      isoTimestamp = entry.createdAt,
+                      fallback = stringResource(R.string.order_date_unknown),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
                   if (!entry.reason.isNullOrBlank()) {
                     Text(
                       text = entry.reason ?: "",
@@ -629,15 +807,17 @@ private fun OrderDetailScreen(
 @Composable
 private fun OrderStatusPill(
   status: OrderStatus,
+  fulfillmentType: FulfillmentType? = null,
   modifier: Modifier = Modifier,
 ) {
+  val semantic = LocalPizzoraSemanticColors.current
   val (container, content) = when (status) {
     OrderStatus.CANCELLED, OrderStatus.EXPIRED ->
       MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-    OrderStatus.COMPLETED, OrderStatus.READY ->
+    OrderStatus.COMPLETED ->
       MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     OrderStatus.PENDING_PAYMENT ->
-      MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+      semantic.warningContainer to semantic.onWarningContainer
     else ->
       MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
   }
@@ -653,7 +833,11 @@ private fun OrderStatusPill(
       horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
       Icon(Icons.Filled.Schedule, contentDescription = null, tint = content, modifier = Modifier.size(14.dp))
-      Text(text = status.name, style = PizzoraMonoBody, color = content)
+      Text(
+        text = OrderDisplayFormatters.formatOrderStatus(status, fulfillmentType),
+        style = PizzoraMonoBody,
+        color = content,
+      )
     }
   }
 }
@@ -663,6 +847,7 @@ private fun RealtimeConnectionBadge(
   connectionState: RealtimeConnectionState,
   modifier: Modifier = Modifier,
 ) {
+  val semantic = LocalPizzoraSemanticColors.current
   val (container, content, label) = when (connectionState) {
     RealtimeConnectionState.CONNECTED -> Triple(
       MaterialTheme.colorScheme.secondaryContainer,
@@ -670,13 +855,13 @@ private fun RealtimeConnectionBadge(
       stringResource(R.string.realtime_live),
     )
     RealtimeConnectionState.CONNECTING -> Triple(
-      MaterialTheme.colorScheme.tertiaryContainer,
-      MaterialTheme.colorScheme.onTertiaryContainer,
+      semantic.warningContainer,
+      semantic.onWarningContainer,
       stringResource(R.string.realtime_connecting),
     )
     RealtimeConnectionState.RECONNECTING -> Triple(
-      MaterialTheme.colorScheme.tertiaryContainer,
-      MaterialTheme.colorScheme.onTertiaryContainer,
+      semantic.warningContainer,
+      semantic.onWarningContainer,
       stringResource(R.string.realtime_reconnecting),
     )
     RealtimeConnectionState.DISCONNECTED -> Triple(
@@ -712,6 +897,7 @@ private fun RealtimeConnectionBadge(
 @Composable
 private fun OrderTrackingStepperCard(
   order: OrderDetailDto,
+  connectionState: RealtimeConnectionState,
   modifier: Modifier = Modifier,
 ) {
   val steps = remember(order.fulfillmentType, order.payment.method) {
@@ -739,6 +925,7 @@ private fun OrderTrackingStepperCard(
   } else {
     steps.indexOf(order.status)
   }
+  val semantic = LocalPizzoraSemanticColors.current
 
   Card(
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -755,11 +942,24 @@ private fun OrderTrackingStepperCard(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(stringResource(R.string.tracking_stepper_title), style = MaterialTheme.typography.titleMedium)
+        val freshness = when (connectionState) {
+          RealtimeConnectionState.CONNECTED -> stringResource(R.string.order_tracking_fresh_live)
+          RealtimeConnectionState.CONNECTING -> stringResource(R.string.order_tracking_fresh_connecting)
+          RealtimeConnectionState.RECONNECTING -> stringResource(R.string.order_tracking_fresh_reconnecting)
+          RealtimeConnectionState.DISCONNECTED -> stringResource(R.string.order_tracking_fresh_offline)
+        }
+        val versionDescription = stringResource(R.string.order_version_cd, order.version)
         Text(
-          text = "v${order.version}",
-          style = PizzoraMonoBody,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.testTag("order_tracking_version_text"),
+          text = freshness,
+          style = MaterialTheme.typography.bodySmall,
+          color = when (connectionState) {
+            RealtimeConnectionState.CONNECTED -> MaterialTheme.colorScheme.secondary
+            RealtimeConnectionState.CONNECTING, RealtimeConnectionState.RECONNECTING -> semantic.onWarningContainer
+            RealtimeConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.onSurfaceVariant
+          },
+          modifier = Modifier
+            .testTag("order_tracking_version_text")
+            .semantics { contentDescription = versionDescription },
         )
       }
 
@@ -784,103 +984,131 @@ private fun OrderTrackingStepperCard(
 
       steps.forEachIndexed { index, stepStatus ->
         val isCompleted = when {
-          isTerminalAbnormal -> index <= currentIndex
+          isTerminalAbnormal -> index < currentIndex
           order.status == OrderStatus.COMPLETED -> true
           else -> index < currentIndex
         }
+        val isFailed = isTerminalAbnormal && index == currentIndex
         val isActive = !isTerminalAbnormal && order.status != OrderStatus.COMPLETED && index == currentIndex
 
-        val label = when (stepStatus) {
-          OrderStatus.PENDING_PAYMENT -> stringResource(R.string.tracking_step_payment)
-          OrderStatus.PLACED -> stringResource(R.string.tracking_step_placed)
-          OrderStatus.ACCEPTED -> stringResource(R.string.tracking_step_accepted)
-          OrderStatus.PREPARING -> stringResource(R.string.tracking_step_preparing)
-          OrderStatus.READY -> stringResource(R.string.tracking_step_ready)
-          OrderStatus.OUT_FOR_DELIVERY -> stringResource(R.string.tracking_step_delivery)
-          OrderStatus.COMPLETED -> if (order.fulfillmentType == FulfillmentType.PICKUP) {
-            stringResource(R.string.tracking_step_picked_up)
-          } else {
-            stringResource(R.string.tracking_step_completed)
-          }
-          else -> stepStatus.name
-        }
-
+        val label = OrderDisplayFormatters.formatOrderStatus(stepStatus, order.fulfillmentType)
         val timestampRaw = when (stepStatus) {
           OrderStatus.PENDING_PAYMENT -> order.createdAt
-          OrderStatus.PLACED -> order.statusHistory.firstOrNull { it.toStatus == OrderStatus.PLACED }?.createdAt ?: if (order.payment.method == PaymentMethod.COD) order.createdAt else null
+          OrderStatus.PLACED -> order.statusHistory.firstOrNull { it.toStatus == OrderStatus.PLACED }?.createdAt
+            ?: if (order.payment.method == PaymentMethod.COD) order.createdAt else null
           OrderStatus.ACCEPTED -> order.acceptedAt
           OrderStatus.PREPARING -> order.prepStartedAt
           OrderStatus.READY -> order.readyAt
           OrderStatus.COMPLETED -> order.completedAt
           else -> order.statusHistory.firstOrNull { it.toStatus == stepStatus }?.createdAt
         }
+        val timeText = timestampRaw
+          ?.takeIf { it.isNotBlank() }
+          ?.let { OrderDisplayFormatters.formatIstTimeOnly(it) }
+          ?.takeIf { it.isNotBlank() }
+        val stepDescription = if (timeText != null) {
+          stringResource(R.string.order_step_semantics_with_time, index + 1, steps.size, label, timeText)
+        } else {
+          stringResource(R.string.order_step_semantics_no_time, index + 1, steps.size, label)
+        }
 
         Row(
           modifier = Modifier
             .fillMaxWidth()
-            .testTag("tracking_step_${stepStatus.name.lowercase()}"),
+            .testTag("tracking_step_${stepStatus.name.lowercase()}")
+            .semantics(mergeDescendants = true) { contentDescription = stepDescription },
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-          val circleModifier = Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-          when {
-            isCompleted -> {
-              Box(
-                modifier = circleModifier.background(MaterialTheme.colorScheme.secondary),
-                contentAlignment = Alignment.Center,
-              ) {
-                Icon(
-                  imageVector = Icons.Filled.Check,
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.onSecondary,
-                  modifier = Modifier.size(14.dp),
-                )
-              }
-            }
-            isActive -> {
-              Box(
-                modifier = circleModifier
-                  .background(MaterialTheme.colorScheme.primaryContainer)
-                  .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                contentAlignment = Alignment.Center,
-              ) {
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val circleModifier = Modifier
+              .size(24.dp)
+              .clip(CircleShape)
+            when {
+              isCompleted -> {
                 Box(
-                  modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
+                  modifier = circleModifier.background(MaterialTheme.colorScheme.secondary),
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondary,
+                    modifier = Modifier.size(14.dp),
+                  )
+                }
+              }
+              isFailed -> {
+                Box(
+                  modifier = circleModifier.background(MaterialTheme.colorScheme.errorContainer),
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(14.dp),
+                  )
+                }
+              }
+              isActive -> {
+                Box(
+                  modifier = circleModifier
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Box(
+                    modifier = Modifier
+                      .size(8.dp)
+                      .clip(CircleShape)
+                      .background(MaterialTheme.colorScheme.primary),
+                  )
+                }
+              }
+              else -> {
+                Box(
+                  modifier = circleModifier
+                    .border(1.5.dp, semantic.outlineInteractive, CircleShape),
                 )
               }
             }
-            else -> {
+            // Continuous vertical rail connecting adjacent step indicators.
+            if (index < steps.lastIndex) {
               Box(
-                modifier = circleModifier
-                  .border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                modifier = Modifier
+                  .width(2.dp)
+                  .height(28.dp)
+                  .background(
+                    when {
+                      isCompleted -> MaterialTheme.colorScheme.secondary
+                      isFailed -> MaterialTheme.colorScheme.errorContainer
+                      else -> semantic.outlineInteractive
+                    },
+                  ),
               )
             }
           }
 
-          Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isActive || isCompleted) FontWeight.SemiBold else FontWeight.Normal,
-            color = when {
-              isActive -> MaterialTheme.colorScheme.primary
-              isCompleted -> MaterialTheme.colorScheme.onSurface
-              else -> MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.weight(1f),
-          )
-
-          if (!timestampRaw.isNullOrBlank()) {
-            val hhmm = remember(timestampRaw) { formatShortIsoTime(timestampRaw) }
+          Column(modifier = Modifier.weight(1f)) {
             Text(
-              text = hhmm,
-              style = PizzoraMonoBody,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              text = label,
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = if (isActive || isCompleted || isFailed) FontWeight.SemiBold else FontWeight.Normal,
+              color = when {
+                isActive -> MaterialTheme.colorScheme.primary
+                isFailed -> MaterialTheme.colorScheme.onErrorContainer
+                isCompleted -> MaterialTheme.colorScheme.onSurface
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+              },
             )
+            if (timeText != null) {
+              Text(
+                text = timeText,
+                style = PizzoraMonoBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
           }
         }
       }
@@ -888,10 +1116,104 @@ private fun OrderTrackingStepperCard(
   }
 }
 
-private fun formatShortIsoTime(iso: String): String {
-  val tIdx = iso.indexOf('T')
-  if (tIdx >= 0 && iso.length >= tIdx + 6) {
-    return iso.substring(tIdx + 1, tIdx + 6)
-  }
-  return iso.take(10)
+@Composable
+private fun CancelOrderDialog(
+  order: OrderDetailDto,
+  isCancelling: Boolean,
+  onDismiss: () -> Unit,
+  onConfirm: (String?) -> Unit,
+) {
+  var reason by rememberSaveable { mutableStateOf("") }
+  val quickReasons = listOf(
+    stringResource(R.string.order_cancel_reason_changed_mind) to "cancel_reason_chip_changed_mind",
+    stringResource(R.string.order_cancel_reason_wrong_item) to "cancel_reason_chip_ordered_wrong_item",
+    stringResource(R.string.order_cancel_reason_too_long) to "cancel_reason_chip_taking_too_long",
+  )
+
+  AlertDialog(
+    onDismissRequest = { if (!isCancelling) onDismiss() },
+    title = {
+      Text(
+        text = stringResource(R.string.cancel_dialog_title),
+        modifier = Modifier.testTag("cancel_dialog_title"),
+      )
+    },
+    text = {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .imePadding()
+          .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Text(stringResource(R.string.cancel_dialog_body))
+        if (order.payment.status == PaymentStatus.CAPTURED) {
+          Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text(
+              text = stringResource(
+                R.string.order_cancel_refund_disclosure,
+                OrderDisplayFormatters.formatPaymentMethod(order.payment.method),
+              ),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSecondaryContainer,
+              modifier = Modifier.padding(10.dp),
+            )
+          }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          quickReasons.forEach { (label, tag) ->
+            FilterChip(
+              selected = reason == label,
+              onClick = { reason = label },
+              label = { Text(label) },
+              enabled = !isCancelling,
+              modifier = Modifier
+                .weight(1f)
+                .minimumInteractiveComponentSize()
+                .testTag(tag),
+            )
+          }
+        }
+        OutlinedTextField(
+          value = reason,
+          onValueChange = { reason = it },
+          label = { Text(stringResource(R.string.cancel_reason_hint)) },
+          singleLine = true,
+          enabled = !isCancelling,
+          modifier = Modifier.fillMaxWidth().testTag("cancel_reason_input"),
+        )
+      }
+    },
+    confirmButton = {
+      Button(
+        onClick = { onConfirm(reason.trim().takeIf { it.isNotEmpty() }) },
+        enabled = !isCancelling,
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+        modifier = Modifier.minimumInteractiveComponentSize().testTag("confirm_cancel_order_button"),
+      ) {
+        if (isCancelling) {
+          CircularProgressIndicator(
+            color = MaterialTheme.colorScheme.onError,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(18.dp),
+          )
+          Spacer(modifier = Modifier.size(6.dp))
+        }
+        Text(stringResource(if (isCancelling) R.string.order_cancel_confirming else R.string.action_confirm_cancel))
+      }
+    },
+    dismissButton = {
+      OutlinedButton(
+        onClick = onDismiss,
+        enabled = !isCancelling,
+        modifier = Modifier.minimumInteractiveComponentSize().testTag("dismiss_cancel_dialog_button"),
+      ) {
+        Text(stringResource(R.string.action_close))
+      }
+    },
+  )
 }

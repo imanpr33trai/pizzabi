@@ -6,6 +6,7 @@ import com.example.core.domain.DomainBridge
 import com.example.core.domain.DomainCausalTracker
 import com.example.core.domain.RustDomainBridge
 import com.example.core.network.RealtimeEventStream
+import com.example.ui.components.OrderDisplayFormatters
 import com.pizzora.contracts.CausalDecision
 import com.pizzora.contracts.FailPaymentAttemptRequest
 import com.pizzora.contracts.OrderDetailDto
@@ -35,8 +36,31 @@ data class PendingRazorpayLaunch(
   val gatewayOrderId: String,
 )
 
+enum class OrderListFilter { ACTIVE, PAST, ALL }
+
+private val TERMINAL_ORDER_STATUSES = setOf(
+  OrderStatus.COMPLETED,
+  OrderStatus.CANCELLED,
+  OrderStatus.EXPIRED,
+)
+
+/** Pure classifier: terminal orders belong to Past, everything else to Active. */
+fun isPastOrder(status: OrderStatus): Boolean = status in TERMINAL_ORDER_STATUSES
+
+/** Pure list filter used by the history screen and unit tests. */
+fun filterOrders(
+  orders: List<OrderSummaryDto>,
+  filter: OrderListFilter,
+): List<OrderSummaryDto> = when (filter) {
+  OrderListFilter.ACTIVE -> orders.filterNot { isPastOrder(it.status) }
+  OrderListFilter.PAST -> orders.filter { isPastOrder(it.status) }
+  OrderListFilter.ALL -> orders
+}
+
 data class OrdersUiState(
   val orders: List<OrderSummaryDto> = emptyList(),
+  val orderListFilter: OrderListFilter = OrderListFilter.ACTIVE,
+  val celebrationOrderId: String? = null,
   val isLoadingList: Boolean = false,
   val listError: String? = null,
   val selectedOrder: OrderDetailDto? = null,
@@ -87,6 +111,12 @@ class OrdersViewModel(
     }
   }
 
+  fun setOrderListFilter(filter: OrderListFilter) {
+    _uiState.update { state ->
+      if (state.orderListFilter == filter) state else state.copy(orderListFilter = filter)
+    }
+  }
+
   fun startLiveTracking(userId: String) {
     realtimeEventStream?.start(userId, causalTracker.lastSeenStreamSeq)
   }
@@ -122,6 +152,7 @@ class OrdersViewModel(
           isLoadingDetail = true,
           detailError = null,
           paymentError = null,
+          celebrationOrderId = null,
         )
       }
       orderRepository.fetchOrderDetail(orderId)
@@ -165,6 +196,7 @@ class OrdersViewModel(
         paymentError = null,
         paymentStatus = null,
         isPaymentSheetOpen = openPaymentFlowIfPending,
+        celebrationOrderId = detail.id,
       )
     }
     loadOrders()
@@ -208,7 +240,9 @@ class OrdersViewModel(
                 payment = statusResp.payment,
               ),
               isPaymentSheetOpen = true,
-              actionMessage = "Payment attempt #${statusResp.payment.latestAttempt?.attemptNumber ?: 1} initiated.",
+              actionMessage = statusResp.payment.latestAttempt?.status?.let {
+                OrderDisplayFormatters.formatPaymentAttemptStatus(it)
+              } ?: "Your secure checkout is ready.",
             )
           }
           if (statusResp.payment.latestAttempt?.status == PaymentAttemptStatus.INITIATING) {
@@ -302,7 +336,7 @@ class OrdersViewModel(
     }
 
     val cleanDescription = description?.trim()?.takeIf { it.isNotEmpty() }
-      ?: "Razorpay checkout failed (code=$code)"
+      ?: "Payment wasn't completed. You can try again safely."
     if (targetOrderId.isNullOrBlank()) {
       _uiState.update {
         it.copy(
@@ -376,7 +410,7 @@ class OrdersViewModel(
               payment = statusResp.payment,
             ),
             paymentError = failureReason,
-            actionMessage = "Payment attempt failed. You can retry while your order window is active.",
+            actionMessage = "Payment wasn't completed. You can retry while your order is still active.",
           )
         }
       }.onFailure { err ->
@@ -464,9 +498,9 @@ class OrdersViewModel(
             paymentError = null,
             actionMessage = when {
               resp.lateCaptureRefundTriggered ->
-                "Order expired prior to capture; an automatic refund has been queued."
+                "Your payment window closed before confirmation; a refund has been queued."
               else ->
-                "Payment confirmed! Order ${resp.order.orderNumber} sent to kitchen."
+                "Payment confirmed! Order ${resp.order.orderNumber} is with the kitchen."
             },
             orders = state.orders.map { summary ->
               if (summary.id == resp.order.id) {
@@ -557,6 +591,7 @@ class OrdersViewModel(
         selectedOrder = null,
         detailError = null,
         actionMessage = null,
+        celebrationOrderId = null,
         paymentStatus = null,
         isPollingGatewayOrder = false,
         isPaymentSheetOpen = false,
@@ -564,6 +599,10 @@ class OrdersViewModel(
         pendingRazorpayLaunch = null,
       )
     }
+  }
+
+  fun dismissOrderPlacedCelebration() {
+    _uiState.update { it.copy(celebrationOrderId = null) }
   }
 
   fun cancelSelectedOrder(reason: String?) {
@@ -582,7 +621,7 @@ class OrdersViewModel(
               isCancelling = false,
               isPaymentSheetOpen = false,
               isPollingGatewayOrder = false,
-              actionMessage = "Order ${updated.orderNumber} cancelled.",
+              actionMessage = "Order ${updated.orderNumber} has been cancelled.",
               orders = state.orders.map { summary ->
                 if (summary.id == updated.id) {
                   summary.copy(
@@ -735,7 +774,7 @@ class OrdersViewModel(
           }
 
           val statusActionMsg = if (updatedSelected != null && updatedSelected.id == orderId && nextStatus != null) {
-            "Order ${updatedSelected.orderNumber} updated: ${nextStatus.name.replace('_', ' ')}."
+            "Order ${updatedSelected.orderNumber}: ${OrderDisplayFormatters.formatOrderStatus(nextStatus, updatedSelected.fulfillmentType)}."
           } else {
             state.actionMessage
           }

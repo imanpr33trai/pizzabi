@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase6OrderTrackingRobolectricTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-24T09:28:37.804Z" hostname="ip-10-0-128-100" time="0.42">
+  <properties/>
+  <testcase name="celebration banner appears only for the newly created order and clears on navigation and dismiss" classname="com.example.Phase6OrderTrackingRobolectricTest" time="0.105"/>
+  <testcase name="cancel dialog discloses captured refund offers quick reasons and disables confirm while cancelling" classname="com.example.Phase6OrderTrackingRobolectricTest" time="0.144"/>
+  <testcase name="stepper uses friendly labels IST times and version semantics reflect connection state" classname="com.example.Phase6OrderTrackingRobolectricTest" time="0.092"/>
+  <testcase name="celebration does not disturb pending Razorpay sheet state or launch restoration" classname="com.example.Phase6OrderTrackingRobolectricTest" time="0.076"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

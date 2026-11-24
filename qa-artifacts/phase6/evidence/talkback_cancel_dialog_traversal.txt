@@ -1,0 +1,11 @@
+0 NO FOCUS
+1 android.view.View [44.0,364.0][131.0,421.5] 87.0x57.5dp clickable=true enabled=true => Changed my mind
+2 android.view.View [137.0,364.0][223.5,421.5] 86.5x57.5dp clickable=true enabled=true => Ordered wrong item
+3 android.view.View [229.5,364.0][316.0,421.5] 86.5x57.5dp clickable=true enabled=true => Taking too long
+4 android.widget.EditText [44.0,303.0][316.0,367.0] 272.0x64.0dp clickable=true enabled=true => Optional cancellation reason
+5 android.view.View [129.0,517.5][316.0,565.5] 187.0x48.0dp clickable=true enabled=true => Confirm Cancellation
+6 android.view.View [229.5,577.5][316.0,625.5] 86.5x48.0dp clickable=true enabled=true => Close
+7 android.view.View [44.0,364.0][131.0,421.5] 87.0x57.5dp clickable=true enabled=true => Changed my mind
+8 android.view.View [137.0,364.0][223.5,421.5] 86.5x57.5dp clickable=true enabled=true => Ordered wrong item
+9 android.view.View [229.5,364.0][316.0,421.5] 86.5x57.5dp clickable=true enabled=true => Taking too long
+10 android.widget.EditText [44.0,303.0][316.0,367.0] 272.0x64.0dp clickable=true enabled=true => Optional cancellation reason

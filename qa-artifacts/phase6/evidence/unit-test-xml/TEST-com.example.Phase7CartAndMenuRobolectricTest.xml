@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase7CartAndMenuRobolectricTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-24T09:28:40.033Z" hostname="ip-10-0-128-100" time="1.462">
+  <properties/>
+  <testcase name="TokenManager awaitSession waits for cold-start DataStore hydration" classname="com.example.Phase7CartAndMenuRobolectricTest" time="0.19"/>
+  <testcase name="offline cart merges identical customizations and flags unavailable modifiers upon reconnect sync" classname="com.example.Phase7CartAndMenuRobolectricTest" time="0.228"/>
+  <testcase name="Customer browses menu, filters veg, customizes pizza, adds to offline cart, and views CartScreen" classname="com.example.Phase7CartAndMenuRobolectricTest" time="0.423"/>
+  <testcase name="Customer sign-in hydrates server cart into Room automatically and supports quantity, sync, and clear actions" classname="com.example.Phase7CartAndMenuRobolectricTest" time="0.563"/>
+  <testcase name="CatalogRepository restores full PublicMenuResponse snapshot when offline" classname="com.example.Phase7CartAndMenuRobolectricTest" time="0.044"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
