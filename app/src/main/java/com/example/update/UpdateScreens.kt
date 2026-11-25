@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -45,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +56,8 @@ import com.example.R
 import com.example.ui.theme.PizzoraMonoBody
 import java.text.DateFormat
 import java.util.Date
+
+internal fun positiveUpdateStatusColor(colorScheme: ColorScheme): Color = colorScheme.secondary
 
 @Composable
 fun AppUpdatesSettingsCard(
@@ -148,13 +153,13 @@ fun AppUpdatesSettingsCard(
             Icon(
               imageVector = Icons.Filled.CheckCircle,
               contentDescription = null,
-              tint = MaterialTheme.colorScheme.primary,
+              tint = positiveUpdateStatusColor(MaterialTheme.colorScheme),
               modifier = Modifier.size(18.dp),
             )
             Text(
               text = stringResource(R.string.update_status_up_to_date, uiState.installedVersionName),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurface,
+              color = positiveUpdateStatusColor(MaterialTheme.colorScheme),
               modifier = Modifier.testTag("update_status_text"),
             )
           }
@@ -221,7 +226,7 @@ fun AppUpdatesSettingsCard(
           Text(
             text = stringResource(R.string.update_completed_banner, s.update.metadata.versionName),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = positiveUpdateStatusColor(MaterialTheme.colorScheme),
             modifier = Modifier.testTag("update_status_text"),
           )
         }
@@ -262,15 +267,14 @@ fun AppUpdatesSettingsCard(
         }
       }
 
-      Row(
+      Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         OutlinedButton(
           onClick = onCheckForUpdates,
           enabled = !isBusy,
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("update_check_button"),
+          modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_check_button"),
         ) {
           Text(stringResource(R.string.update_action_check))
         }
@@ -278,7 +282,7 @@ fun AppUpdatesSettingsCard(
         if (actionableUpdate != null) {
           Button(
             onClick = onOpenUpdateDialog,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_open_dialog_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_open_dialog_button"),
           ) {
             Text(
               text = when (uiState.state) {
@@ -291,7 +295,7 @@ fun AppUpdatesSettingsCard(
         } else if (uiState.state is UpdateState.Failed && uiState.state.canRetry) {
           TextButton(
             onClick = onRetry,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_card_retry_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_card_retry_button"),
           ) {
             Text(stringResource(R.string.action_retry))
           }
@@ -393,13 +397,16 @@ private fun MandatoryUpdateScreen(
       .windowInsetsPadding(WindowInsets.safeDrawing)
       .testTag("update_mandatory_screen"),
   ) {
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(20.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState())
+          .heightIn(min = maxHeight)
+          .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+      ) {
       Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
@@ -470,6 +477,7 @@ private fun MandatoryUpdateScreen(
         }
       }
     }
+    }
   }
 }
 
@@ -520,6 +528,7 @@ private fun OptionalUpdateModal(
       Column(
         modifier = Modifier
           .fillMaxWidth()
+          .verticalScroll(rememberScrollState())
           .padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
       ) {
@@ -624,23 +633,21 @@ private fun UpdateFlowStateControls(
 ) {
   when (state) {
     is UpdateState.UpdateAvailable -> {
-      Row(
+      Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         if (!isMandatory) {
           OutlinedButton(
             onClick = onDismissOptional,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_later_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_later_button"),
           ) {
             Text(stringResource(R.string.update_action_later))
           }
-          Spacer(modifier = Modifier.width(8.dp))
         }
         Button(
           onClick = onStartDownloadOrInstall,
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("update_primary_action_button"),
+          modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_primary_action_button"),
         ) {
           Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(6.dp))
@@ -660,10 +667,9 @@ private fun UpdateFlowStateControls(
         } else {
           "${formatApkSize(state.bytesDownloaded)} downloaded"
         }
-        Row(
+        Column(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           Text(
             text = progressText,
@@ -673,7 +679,7 @@ private fun UpdateFlowStateControls(
           )
           OutlinedButton(
             onClick = onCancelDownload,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_cancel_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_cancel_button"),
           ) {
             Text(stringResource(R.string.update_action_cancel))
           }
@@ -716,23 +722,21 @@ private fun UpdateFlowStateControls(
             )
           }
         }
-        Row(
+        Column(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End,
-          verticalAlignment = Alignment.CenterVertically,
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           if (!isMandatory) {
             OutlinedButton(
               onClick = onDismissOptional,
-              modifier = Modifier.minimumInteractiveComponentSize().testTag("update_later_button"),
+              modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_later_button"),
             ) {
               Text(stringResource(R.string.update_action_later))
             }
-            Spacer(modifier = Modifier.width(8.dp))
           }
           Button(
             onClick = onRequestInstallPermission,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_permission_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_permission_button"),
           ) {
             Text(stringResource(R.string.update_action_open_settings))
           }
@@ -741,23 +745,21 @@ private fun UpdateFlowStateControls(
     }
 
     is UpdateState.ReadyToInstall -> {
-      Row(
+      Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         if (!isMandatory) {
           OutlinedButton(
             onClick = onDismissOptional,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_later_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_later_button"),
           ) {
             Text(stringResource(R.string.update_action_later))
           }
-          Spacer(modifier = Modifier.width(8.dp))
         }
         Button(
           onClick = onStartDownloadOrInstall,
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("update_primary_action_button"),
+          modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_primary_action_button"),
         ) {
           Text(stringResource(R.string.update_action_install))
         }
@@ -772,22 +774,21 @@ private fun UpdateFlowStateControls(
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(
+        Column(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End,
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           if (!isMandatory) {
             OutlinedButton(
               onClick = onDismissOptional,
-              modifier = Modifier.minimumInteractiveComponentSize().testTag("update_later_button"),
+              modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_later_button"),
             ) {
               Text(stringResource(R.string.action_close))
             }
-            Spacer(modifier = Modifier.width(8.dp))
           }
           TextButton(
             onClick = onStartDownloadOrInstall,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_retry_install_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_retry_install_button"),
           ) {
             Text(stringResource(R.string.update_action_relaunch_installer))
           }
@@ -820,23 +821,22 @@ private fun UpdateFlowStateControls(
             )
           }
         }
-        Row(
+        Column(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End,
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           if (!isMandatory) {
             OutlinedButton(
               onClick = onDismissOptional,
-              modifier = Modifier.minimumInteractiveComponentSize().testTag("update_later_button"),
+              modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_later_button"),
             ) {
               Text(stringResource(R.string.action_close))
             }
-            Spacer(modifier = Modifier.width(8.dp))
           }
           if (state.canRetry) {
             Button(
               onClick = onRetry,
-              modifier = Modifier.minimumInteractiveComponentSize().testTag("update_retry_button"),
+              modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_retry_button"),
             ) {
               Text(stringResource(R.string.action_retry))
             }
@@ -853,22 +853,21 @@ private fun UpdateFlowStateControls(
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.testTag("update_cancelled_message"),
         )
-        Row(
+        Column(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End,
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           if (!isMandatory) {
             OutlinedButton(
               onClick = onDismissOptional,
-              modifier = Modifier.minimumInteractiveComponentSize().testTag("update_later_button"),
+              modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_later_button"),
             ) {
               Text(stringResource(R.string.action_close))
             }
-            Spacer(modifier = Modifier.width(8.dp))
           }
           Button(
             onClick = onRetry,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("update_retry_button"),
+            modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("update_retry_button"),
           ) {
             Text(stringResource(R.string.update_action_download_install))
           }

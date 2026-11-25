@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase6PaymentSheetRobolectricTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-24T17:20:13.595Z" hostname="ip-10-0-141-106" time="0.835">
+  <properties/>
+  <testcase name="warningCountdownRemainsVisibleAt320dpWith15xFontScale" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.127"/>
+  <testcase name="sheet binds authoritative attempt amount to display and Razorpay request" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.062"/>
+  <testcase name="action card shows authoritative attempt amount instead of stale order total" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.084"/>
+  <testcase name="refund rows use human readable status without raw gateway ids" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.048"/>
+  <testcase name="only coarse milestones are announced politely and the ticker is not a live region" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.074"/>
+  <testcase name="sheet falls back to order total when there is no latest attempt" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.072"/>
+  <testcase name="expiry disables pay CTA shows expired banner and fires callback exactly once" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.131"/>
+  <testcase name="retry is disabled while initiating and while polling gateway order" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.073"/>
+  <testcase name="expiry formatter covers MM SS formatting warning escalation and milestone thresholds" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.054"/>
+  <testcase name="payment reference is collapsed by default and reveals gateway details when expanded" classname="com.example.Phase6PaymentSheetRobolectricTest" time="0.104"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

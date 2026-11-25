@@ -12,12 +12,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -228,17 +230,20 @@ class Phase2AuthShellMenuUiTest {
           onDeleteAddress = {},
           onPincodeInputChange = {},
           onCheckPincode = {},
+          onCheckDeliveryPincode = {},
           onSignOut = { signedOut = true },
         )
       }
     }
 
+    composeTestRule.onNodeWithTag("profile_lazy_column").performScrollToNode(hasTestTag("profile_sign_out_button"))
     composeTestRule.onNodeWithTag("profile_sign_out_button").performClick()
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("cancel_sign_out_button").assertIsDisplayed().performClick()
     composeTestRule.waitForIdle()
     assertFalse(signedOut)
 
+    composeTestRule.onNodeWithTag("profile_lazy_column").performScrollToNode(hasTestTag("profile_sign_out_button"))
     composeTestRule.onNodeWithTag("profile_sign_out_button").performClick()
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("confirm_sign_out_button").performClick()

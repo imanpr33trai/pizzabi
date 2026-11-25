@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase1RoomMigrationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-24T17:17:00.830Z" hostname="ip-10-0-141-106" time="0.074">
+  <properties/>
+  <testcase name="v2 to v3 migration quarantines unowned cart and inbox rows, preserves catalog cache, and enforces foreign keys" classname="com.example.Phase1RoomMigrationTest" time="0.071"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

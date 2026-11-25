@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase11PaymentsRobolectricTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-24T17:16:47.537Z" hostname="ip-10-0-141-106" time="1.023">
+  <properties/>
+  <testcase name="razorpay checkout polls gateway_order_id, supports failure + retry, and verifies into PLACED CAPTURED" classname="com.example.Phase11PaymentsRobolectricTest" time="1.018"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

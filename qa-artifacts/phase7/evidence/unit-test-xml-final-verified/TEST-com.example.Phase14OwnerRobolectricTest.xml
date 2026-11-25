@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase14OwnerRobolectricTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-24T17:16:55.330Z" hostname="ip-10-0-141-106" time="1.227">
+  <properties/>
+  <testcase name="owner catalog creates product, edits recipe, issues refund, and updates GST and staff" classname="com.example.Phase14OwnerRobolectricTest" time="1.059"/>
+  <testcase name="owner dashboard renders KPIs, toggles store open state, and restocks low inventory" classname="com.example.Phase14OwnerRobolectricTest" time="0.164"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

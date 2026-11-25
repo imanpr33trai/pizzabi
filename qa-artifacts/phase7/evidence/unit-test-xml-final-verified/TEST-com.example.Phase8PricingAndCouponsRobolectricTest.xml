@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase8PricingAndCouponsRobolectricTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-24T17:20:18.024Z" hostname="ip-10-0-141-106" time="0.847">
+  <properties/>
+  <testcase name="customer opens offers sheet, sees eligible and ineligible coupons, applies coupon, and verifies GST breakdown" classname="com.example.Phase8PricingAndCouponsRobolectricTest" time="0.844"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

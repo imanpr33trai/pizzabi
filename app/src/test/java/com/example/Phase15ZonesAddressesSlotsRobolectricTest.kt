@@ -414,6 +414,7 @@ class Phase15ZonesAddressesSlotsRobolectricTest {
 
     composeTestRule.onNodeWithTag("profile_lazy_column").performScrollToNode(hasTestTag("profile_delete_address_addr-1"))
     composeTestRule.onNodeWithTag("profile_delete_address_addr-1").performClick()
+    composeTestRule.onNodeWithTag("confirm_delete_address_button").assertIsDisplayed().performClick()
     waitUntilMainLooper { profileVm.uiState.value.addresses.size == 1 }
     assertTrue(profileVm.uiState.value.addresses.first().isDefault)
   }

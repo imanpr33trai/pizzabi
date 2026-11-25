@@ -1,27 +1,30 @@
 package com.example.profile
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -30,12 +33,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -48,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,10 +60,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.R
 import com.example.ui.components.PizzoraConfirmationDialog
 import com.example.ui.theme.PizzoraMonoBody
@@ -67,6 +81,7 @@ import com.example.update.UpdateUiState
 import com.pizzora.contracts.AddressDto
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.UserProfileDto
+import kotlinx.coroutines.delay
 
 @Composable
 fun CustomerProfileScreen(
@@ -91,6 +106,7 @@ fun CustomerProfileScreen(
   onDeleteAddress: (String) -> Unit,
   onPincodeInputChange: (String) -> Unit,
   onCheckPincode: () -> Unit,
+  onCheckDeliveryPincode: (String) -> Unit,
   onSignOut: () -> Unit,
   modifier: Modifier = Modifier,
   updateUiState: UpdateUiState? = null,
@@ -99,6 +115,31 @@ fun CustomerProfileScreen(
   onRetryUpdate: () -> Unit = {},
 ) {
   var showSignOutConfirm by rememberSaveable { mutableStateOf(false) }
+  var pendingDeleteAddressId by rememberSaveable { mutableStateOf<String?>(null) }
+  val editProfileReturnFocus = remember { FocusRequester() }
+  val addressReturnFocus = remember { FocusRequester() }
+  var editDialogWasOpen by remember { mutableStateOf(false) }
+  var addressDialogWasOpen by remember { mutableStateOf(false) }
+  var addressDialogReturnTargetId by rememberSaveable { mutableStateOf<String?>(null) }
+
+  LaunchedEffect(uiState.isEditProfileDialogOpen) {
+    if (editDialogWasOpen && !uiState.isEditProfileDialogOpen) {
+      delay(0)
+      editProfileReturnFocus.requestFocus()
+    }
+    editDialogWasOpen = uiState.isEditProfileDialogOpen
+  }
+
+  LaunchedEffect(uiState.isAddressDialogOpen, uiState.editingAddress?.id) {
+    if (uiState.isAddressDialogOpen) {
+      addressDialogReturnTargetId = uiState.editingAddress?.id
+    }
+    if (addressDialogWasOpen && !uiState.isAddressDialogOpen) {
+      delay(0)
+      addressReturnFocus.requestFocus()
+    }
+    addressDialogWasOpen = uiState.isAddressDialogOpen
+  }
 
   Box(modifier = modifier.fillMaxSize()) {
   Column(
@@ -151,7 +192,7 @@ fun CustomerProfileScreen(
         AccountProfileCard(
           profile = uiState.profile,
           onEdit = onOpenEditProfile,
-          onSignOut = { showSignOutConfirm = true },
+          returnFocusRequester = editProfileReturnFocus,
         )
       }
 
@@ -180,8 +221,14 @@ fun CustomerProfileScreen(
             )
           }
           Button(
-            onClick = onOpenAddAddress,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_add_address_button"),
+            onClick = {
+              if (addressDialogReturnTargetId == null) addressReturnFocus.requestFocus()
+              onOpenAddAddress()
+            },
+            modifier = Modifier
+              .then(if (addressDialogReturnTargetId == null) Modifier.focusRequester(addressReturnFocus) else Modifier)
+              .minimumInteractiveComponentSize()
+              .testTag("profile_add_address_button"),
           ) {
             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.size(4.dp))
@@ -214,9 +261,12 @@ fun CustomerProfileScreen(
           SavedAddressCard(
             address = address,
             isDeleting = uiState.deletingAddressId == address.id,
+            isAddressDialogReturnTarget = addressDialogReturnTargetId == address.id,
+            addressReturnFocusRequester = addressReturnFocus,
             onSetDefault = { onSetDefaultAddress(address) },
             onEdit = { onOpenEditAddress(address) },
-            onDelete = { onDeleteAddress(address.id) },
+            onCheckDelivery = { onCheckDeliveryPincode(address.pincode) },
+            onDelete = { pendingDeleteAddressId = address.id },
           )
         }
       }
@@ -230,6 +280,10 @@ fun CustomerProfileScreen(
             onRetry = onRetryUpdate,
           )
         }
+      }
+
+      item(key = "profile_account_actions") {
+        AccountActionsSection(onSignOut = { showSignOutConfirm = true })
       }
 
       item(key = "profile_bottom_spacer") {
@@ -258,6 +312,33 @@ fun CustomerProfileScreen(
     )
   }
 
+  val pendingDeleteAddress = pendingDeleteAddressId?.let { addressId ->
+    uiState.addresses.firstOrNull { it.id == addressId }
+  }
+  if (pendingDeleteAddress != null) {
+    PizzoraConfirmationDialog(
+      title = stringResource(R.string.profile_delete_address_title, pendingDeleteAddress.label),
+      body = stringResource(
+        if (pendingDeleteAddress.isDefault) {
+          R.string.profile_delete_default_address_body
+        } else {
+          R.string.profile_delete_address_body
+        },
+      ),
+      confirmLabel = stringResource(R.string.action_delete),
+      onConfirm = {
+        val addressId = pendingDeleteAddress.id
+        pendingDeleteAddressId = null
+        onDeleteAddress(addressId)
+      },
+      onDismiss = { pendingDeleteAddressId = null },
+      isDestructive = true,
+      isSubmitting = uiState.deletingAddressId == pendingDeleteAddress.id,
+      confirmTestTag = "confirm_delete_address_button",
+      dismissTestTag = "cancel_delete_address_button",
+    )
+  }
+
   if (showSignOutConfirm) {
     PizzoraConfirmationDialog(
       title = stringResource(R.string.sign_out_dialog_title),
@@ -280,8 +361,18 @@ fun CustomerProfileScreen(
 private fun AccountProfileCard(
   profile: UserProfileDto?,
   onEdit: () -> Unit,
-  onSignOut: () -> Unit,
+  returnFocusRequester: FocusRequester,
 ) {
+  val monogram = profile?.fullName
+    ?.trim()
+    ?.split(Regex("\\s+"))
+    ?.filter { it.isNotBlank() }
+    ?.take(2)
+    ?.mapNotNull { word -> word.firstOrNull()?.uppercaseChar() }
+    ?.joinToString("")
+    ?.takeIf { it.isNotBlank() }
+    ?: "P"
+
   Card(
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
@@ -303,15 +394,16 @@ private fun AccountProfileCard(
         ) {
           Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.size(44.dp),
+            shape = CircleShape,
+            modifier = Modifier.size(48.dp).testTag("profile_monogram"),
           ) {
-            Icon(
-              imageVector = Icons.Filled.Person,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.onPrimaryContainer,
-              modifier = Modifier.padding(10.dp),
-            )
+            Box(contentAlignment = Alignment.Center) {
+              Text(
+                text = monogram,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+              )
+            }
           }
           Column {
             Text(
@@ -327,8 +419,14 @@ private fun AccountProfileCard(
           }
         }
         OutlinedButton(
-          onClick = onEdit,
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("edit_profile_button"),
+          onClick = {
+            returnFocusRequester.requestFocus()
+            onEdit()
+          },
+          modifier = Modifier
+            .focusRequester(returnFocusRequester)
+            .minimumInteractiveComponentSize()
+            .testTag("edit_profile_button"),
         ) {
           Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.size(4.dp))
@@ -336,25 +434,43 @@ private fun AccountProfileCard(
         }
       }
 
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+      Text(
+        text = stringResource(R.string.profile_phone_fmt, profile?.phone.orEmpty()),
+        style = PizzoraMonoBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag("profile_phone_text"),
+      )
+    }
+  }
+}
+
+@Composable
+private fun AccountActionsSection(onSignOut: () -> Unit) {
+  Column(
+    modifier = Modifier.fillMaxWidth(),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+    Text(
+      text = stringResource(R.string.profile_account_actions_title),
+      style = MaterialTheme.typography.titleMedium,
+      modifier = Modifier.padding(top = 4.dp),
+    )
+    Surface(
+      color = MaterialTheme.colorScheme.surface,
+      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+      shape = MaterialTheme.shapes.medium,
+      modifier = Modifier.fillMaxWidth().testTag("profile_account_actions"),
+    ) {
+      TextButton(
+        onClick = onSignOut,
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize().testTag("profile_sign_out_button"),
       ) {
-        Text(
-          text = "Phone: ${profile?.phone.orEmpty()}",
-          style = PizzoraMonoBody,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.testTag("profile_phone_text"),
-        )
-        TextButton(
-          onClick = onSignOut,
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_sign_out_button"),
-        ) {
-          Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.size(4.dp))
-          Text(stringResource(R.string.action_sign_out))
-        }
+        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.size(8.dp))
+        Text(stringResource(R.string.action_sign_out))
       }
     }
   }
@@ -386,9 +502,13 @@ private fun PincodeServiceabilityCard(
           onValueChange = onPincodeInputChange,
           label = { Text(stringResource(R.string.pincode_label)) },
           singleLine = true,
+          keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Number,
+            imeAction = ImeAction.Done,
+          ),
           modifier = Modifier.weight(1f).testTag("profile_pincode_input"),
         )
-        Button(
+        OutlinedButton(
           onClick = onCheckPincode,
           enabled = !uiState.isCheckingPincode,
           modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_check_pincode_button"),
@@ -464,8 +584,11 @@ private fun PincodeServiceabilityCard(
 private fun SavedAddressCard(
   address: AddressDto,
   isDeleting: Boolean,
+  isAddressDialogReturnTarget: Boolean,
+  addressReturnFocusRequester: FocusRequester,
   onSetDefault: () -> Unit,
   onEdit: () -> Unit,
+  onCheckDelivery: () -> Unit,
   onDelete: () -> Unit,
 ) {
   Card(
@@ -509,8 +632,14 @@ private fun SavedAddressCard(
 
         Row {
           IconButton(
-            onClick = onEdit,
-            modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_edit_address_${address.id}"),
+            onClick = {
+              if (isAddressDialogReturnTarget) addressReturnFocusRequester.requestFocus()
+              onEdit()
+            },
+            modifier = Modifier
+              .then(if (isAddressDialogReturnTarget) Modifier.focusRequester(addressReturnFocusRequester) else Modifier)
+              .minimumInteractiveComponentSize()
+              .testTag("profile_edit_address_${address.id}"),
           ) {
             Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.action_edit))
           }
@@ -540,12 +669,26 @@ private fun SavedAddressCard(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      if (!address.isDefault) {
-        OutlinedButton(
-          onClick = onSetDefault,
-          modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_set_default_${address.id}"),
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        TextButton(
+          onClick = onCheckDelivery,
+          modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_check_delivery_${address.id}"),
         ) {
-          Text(stringResource(R.string.action_set_default))
+          Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.size(4.dp))
+          Text(stringResource(R.string.profile_check_delivery))
+        }
+        if (!address.isDefault) {
+          OutlinedButton(
+            onClick = onSetDefault,
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_set_default_${address.id}"),
+          ) {
+            Text(stringResource(R.string.action_set_default))
+          }
         }
       }
     }
@@ -560,15 +703,31 @@ private fun EditProfileDialog(
   onSave: (fullName: String, phone: String) -> Unit,
   onDismiss: () -> Unit,
 ) {
-  var fullName by remember(profile?.id) { mutableStateOf(profile?.fullName.orEmpty()) }
-  var phone by remember(profile?.id) { mutableStateOf(profile?.phone.orEmpty()) }
+  var fullName by rememberSaveable(profile?.id) { mutableStateOf(profile?.fullName.orEmpty()) }
+  var phone by rememberSaveable(profile?.id) { mutableStateOf(profile?.phone.orEmpty()) }
+  var showValidation by rememberSaveable(profile?.id) { mutableStateOf(false) }
+  val focusManager = LocalFocusManager.current
+  val keyboardController = LocalSoftwareKeyboardController.current
+  val nameError = stringResource(R.string.profile_error_name)
+  val phoneError = stringResource(R.string.profile_error_phone)
+  val fullNameInvalid = fullName.trim().length < 2
+  val phoneInvalid = phone.trim().length < 8
 
-  ProfileModalOverlay(
+  fun submit() {
+    showValidation = true
+    keyboardController?.hide()
+    if (!fullNameInvalid && !phoneInvalid) {
+      onSave(fullName.trim(), phone.trim())
+    }
+  }
+
+  ProfileDialogScaffold(
     title = stringResource(R.string.profile_edit_title),
     onDismiss = onDismiss,
+    testTag = "profile_edit_dialog",
     confirmButton = {
       Button(
-        onClick = { onSave(fullName, phone) },
+        onClick = ::submit,
         enabled = !isSaving,
         modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_edit_save_button"),
       ) {
@@ -598,6 +757,14 @@ private fun EditProfileDialog(
         onValueChange = { fullName = it },
         label = { Text(stringResource(R.string.label_full_name)) },
         singleLine = true,
+        isError = showValidation && fullNameInvalid,
+        supportingText = {
+          if (showValidation && fullNameInvalid) {
+            Text(nameError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+          }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
         modifier = Modifier.fillMaxWidth().testTag("profile_edit_name_input"),
       )
       OutlinedTextField(
@@ -605,6 +772,14 @@ private fun EditProfileDialog(
         onValueChange = { phone = it },
         label = { Text(stringResource(R.string.label_phone)) },
         singleLine = true,
+        isError = showValidation && phoneInvalid,
+        supportingText = {
+          if (showValidation && phoneInvalid) {
+            Text(phoneError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+          }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { submit() }),
         modifier = Modifier.fillMaxWidth().testTag("profile_edit_phone_input"),
       )
     }
@@ -627,21 +802,57 @@ private fun AddressEditorDialog(
   ) -> Unit,
   onDismiss: () -> Unit,
 ) {
-  var label by remember(editing?.id) { mutableStateOf(editing?.label ?: "Home") }
-  var line1 by remember(editing?.id) { mutableStateOf(editing?.line1.orEmpty()) }
-  var line2 by remember(editing?.id) { mutableStateOf(editing?.line2.orEmpty()) }
-  var landmark by remember(editing?.id) { mutableStateOf(editing?.landmark.orEmpty()) }
-  var pincode by remember(editing?.id) { mutableStateOf(editing?.pincode.orEmpty()) }
-  var city by remember(editing?.id) { mutableStateOf(editing?.city ?: "Bengaluru") }
-  var isDefault by remember(editing?.id) { mutableStateOf(editing?.isDefault ?: false) }
+  var label by rememberSaveable(editing?.id) { mutableStateOf(editing?.label ?: "Home") }
+  var line1 by rememberSaveable(editing?.id) { mutableStateOf(editing?.line1.orEmpty()) }
+  var line2 by rememberSaveable(editing?.id) { mutableStateOf(editing?.line2.orEmpty()) }
+  var landmark by rememberSaveable(editing?.id) { mutableStateOf(editing?.landmark.orEmpty()) }
+  var pincode by rememberSaveable(editing?.id) { mutableStateOf(editing?.pincode.orEmpty()) }
+  var city by rememberSaveable(editing?.id) { mutableStateOf(editing?.city ?: "Bengaluru") }
+  var isDefault by rememberSaveable(editing?.id) { mutableStateOf(editing?.isDefault ?: false) }
+  var showValidation by rememberSaveable(editing?.id) { mutableStateOf(false) }
+  val focusManager = LocalFocusManager.current
+  val keyboardController = LocalSoftwareKeyboardController.current
+  val labelRequired = stringResource(R.string.address_error_label_required)
+  val line1Required = stringResource(R.string.address_error_line1_required)
+  val cityRequired = stringResource(R.string.address_error_city_required)
+  val pincodeRequired = stringResource(R.string.address_error_pincode_required)
+  val pincodeInvalid = stringResource(R.string.address_error_pincode_invalid)
 
-  ProfileModalOverlay(
+  val labelError = if (label.trim().isEmpty()) labelRequired else null
+  val line1Error = if (line1.trim().isEmpty()) line1Required else null
+  val cityError = if (city.trim().isEmpty()) cityRequired else null
+  val pincodeError = when {
+    pincode.trim().isEmpty() -> pincodeRequired
+    !pincode.trim().matches(Regex("^[1-9][0-9]{5}$")) -> pincodeInvalid
+    else -> null
+  }
+
+  fun submit() {
+    showValidation = true
+    keyboardController?.hide()
+    if (labelError == null && line1Error == null && cityError == null && pincodeError == null && !isSaving) {
+      onSave(
+        label.trim(),
+        line1.trim(),
+        line2.takeIf { it.isNotBlank() }?.trim(),
+        landmark.takeIf { it.isNotBlank() }?.trim(),
+        pincode.trim(),
+        city.trim(),
+        isDefault,
+      )
+    }
+  }
+
+  val nextFieldActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+
+  ProfileDialogScaffold(
     title = if (editing == null) stringResource(R.string.address_dialog_title)
     else stringResource(R.string.address_edit_dialog_title),
     onDismiss = onDismiss,
+    testTag = "profile_address_dialog",
     confirmButton = {
       Button(
-        onClick = { onSave(label, line1, line2, landmark, pincode, city, isDefault) },
+        onClick = ::submit,
         enabled = !isSaving,
         modifier = Modifier.minimumInteractiveComponentSize().testTag("profile_addr_save_button"),
       ) {
@@ -658,10 +869,7 @@ private fun AddressEditorDialog(
     },
   ) {
     Column(
-      modifier = Modifier
-        .fillMaxWidth()
-        .heightIn(max = 380.dp)
-        .verticalScroll(rememberScrollState()),
+      modifier = Modifier.fillMaxWidth(),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       if (!error.isNullOrBlank()) {
@@ -677,6 +885,14 @@ private fun AddressEditorDialog(
         onValueChange = { label = it },
         label = { Text(stringResource(R.string.address_label_hint)) },
         singleLine = true,
+        isError = showValidation && labelError != null,
+        supportingText = {
+          if (showValidation && labelError != null) {
+            Text(labelError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+          }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+        keyboardActions = nextFieldActions,
         modifier = Modifier.fillMaxWidth().testTag("profile_addr_label_input"),
       )
       OutlinedTextField(
@@ -684,6 +900,14 @@ private fun AddressEditorDialog(
         onValueChange = { line1 = it },
         label = { Text(stringResource(R.string.address_line1_hint)) },
         singleLine = true,
+        isError = showValidation && line1Error != null,
+        supportingText = {
+          if (showValidation && line1Error != null) {
+            Text(line1Error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+          }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+        keyboardActions = nextFieldActions,
         modifier = Modifier.fillMaxWidth().testTag("profile_addr_line1_input"),
       )
       OutlinedTextField(
@@ -691,6 +915,8 @@ private fun AddressEditorDialog(
         onValueChange = { line2 = it },
         label = { Text(stringResource(R.string.address_line2_hint)) },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+        keyboardActions = nextFieldActions,
         modifier = Modifier.fillMaxWidth().testTag("profile_addr_line2_input"),
       )
       OutlinedTextField(
@@ -698,6 +924,8 @@ private fun AddressEditorDialog(
         onValueChange = { landmark = it },
         label = { Text(stringResource(R.string.address_landmark_hint)) },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+        keyboardActions = nextFieldActions,
         modifier = Modifier.fillMaxWidth().testTag("profile_addr_landmark_input"),
       )
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -706,6 +934,14 @@ private fun AddressEditorDialog(
           onValueChange = { v -> pincode = v.filter { it.isDigit() }.take(6) },
           label = { Text(stringResource(R.string.address_pincode_hint)) },
           singleLine = true,
+          isError = showValidation && pincodeError != null,
+          supportingText = {
+            if (showValidation && pincodeError != null) {
+              Text(pincodeError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+          },
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+          keyboardActions = nextFieldActions,
           modifier = Modifier.weight(1f).testTag("profile_addr_pincode_input"),
         )
         OutlinedTextField(
@@ -713,6 +949,14 @@ private fun AddressEditorDialog(
           onValueChange = { city = it },
           label = { Text(stringResource(R.string.address_city_hint)) },
           singleLine = true,
+          isError = showValidation && cityError != null,
+          supportingText = {
+            if (showValidation && cityError != null) {
+              Text(cityError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+          },
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
+          keyboardActions = KeyboardActions(onDone = { submit() }),
           modifier = Modifier.weight(1f).testTag("profile_addr_city_input"),
         )
       }
@@ -733,55 +977,59 @@ private fun AddressEditorDialog(
 }
 
 @Composable
-private fun ProfileModalOverlay(
+private fun ProfileDialogScaffold(
   title: String,
   onDismiss: () -> Unit,
+  testTag: String,
   confirmButton: @Composable () -> Unit,
   dismissButton: (@Composable () -> Unit)? = null,
   content: @Composable () -> Unit,
 ) {
-  BackHandler(onBack = onDismiss)
-  Box(
-    modifier = Modifier
-      .fillMaxSize()
-      .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
-      .clickable(
-        interactionSource = remember { MutableInteractionSource() },
-        indication = null,
-        onClick = onDismiss,
-      ),
-    contentAlignment = Alignment.Center,
+  Dialog(
+    onDismissRequest = onDismiss,
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      decorFitsSystemWindows = false,
+    ),
   ) {
-    Surface(
-      shape = MaterialTheme.shapes.extraLarge,
-      color = MaterialTheme.colorScheme.surface,
-      tonalElevation = 6.dp,
+    Box(
       modifier = Modifier
-        .padding(20.dp)
-        .fillMaxWidth()
-        .widthIn(max = 520.dp)
-        .clickable(
-          interactionSource = remember { MutableInteractionSource() },
-          indication = null,
-          onClick = {},
-        ),
+        .fillMaxSize()
+        .windowInsetsPadding(WindowInsets.safeDrawing)
+        .imePadding()
+        .padding(20.dp),
+      contentAlignment = Alignment.Center,
     ) {
-      Column(
-        modifier = Modifier.padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+      Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 6.dp,
+        modifier = Modifier
+          .fillMaxWidth()
+          .widthIn(max = 560.dp)
+          .heightIn(max = 680.dp)
+          .testTag(testTag),
       ) {
-        Text(text = title, style = MaterialTheme.typography.headlineSmall)
-        content()
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End,
-          verticalAlignment = Alignment.CenterVertically,
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+          verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-          if (dismissButton != null) {
-            dismissButton()
-            Spacer(modifier = Modifier.width(8.dp))
+          Text(text = title, style = MaterialTheme.typography.headlineSmall)
+          content()
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            if (dismissButton != null) {
+              dismissButton()
+              Spacer(modifier = Modifier.width(8.dp))
+            }
+            confirmButton()
           }
-          confirmButton()
         }
       }
     }

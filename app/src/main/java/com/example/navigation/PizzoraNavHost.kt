@@ -69,6 +69,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -109,6 +110,7 @@ import com.example.checkout.CheckoutViewModel
 import com.example.core.database.CartItemWithToppings
 import com.example.core.security.AuthSession
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import com.example.kds.KdsScreen
 import com.example.kds.KdsViewModel
 import com.example.notifications.NotificationsScreen
@@ -410,6 +412,7 @@ fun CustomerRoleShell(
   var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
   var isCheckoutOpen by rememberSaveable { mutableStateOf(false) }
   var isNotificationsOpen by rememberSaveable { mutableStateOf(false) }
+  var pendingNotificationOrderId by rememberSaveable { mutableStateOf<String?>(null) }
   var showFallbackSignOutConfirm by rememberSaveable { mutableStateOf(false) }
   var editingCartItem by remember { mutableStateOf<CartItemWithToppings?>(null) }
   var savedEditingCartItemId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -418,9 +421,11 @@ fun CustomerRoleShell(
   var wasEditOverlayOpen by remember { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
   val overlaySnackbarHostState = remember { SnackbarHostState() }
+  val shellScope = rememberCoroutineScope()
   val menuState = catalogViewModel?.uiState?.collectAsStateWithLifecycle()?.value
   val cartState = cartViewModel?.uiState?.collectAsStateWithLifecycle()?.value
   val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+  val ordersShellState = ordersViewModel?.uiState?.collectAsStateWithLifecycle()?.value
 
   LaunchedEffect(savedEditingCartItemId, cartState?.items) {
     val targetId = savedEditingCartItemId
@@ -529,6 +534,36 @@ fun CustomerRoleShell(
   LaunchedEffect(notificationsViewModel) {
     notificationsViewModel?.events?.collect { message ->
       currentSnackbarHostState.showSnackbar(message)
+    }
+  }
+
+  LaunchedEffect(
+    pendingNotificationOrderId,
+    ordersViewModel,
+    ordersShellState?.selectedOrder?.id,
+    ordersShellState?.detailError,
+    ordersShellState?.isLoadingDetail,
+  ) {
+    val pendingOrderId = pendingNotificationOrderId ?: return@LaunchedEffect
+    val vm = ordersViewModel
+    val shellState = ordersShellState
+    if (vm == null || shellState == null) {
+      pendingNotificationOrderId = null
+      shellScope.launch {
+        snackbarHostState.showSnackbar(context.getString(R.string.notifications_order_unavailable))
+      }
+      return@LaunchedEffect
+    }
+    if (shellState.selectedOrder?.id == pendingOrderId) {
+      pendingNotificationOrderId = null
+      return@LaunchedEffect
+    }
+    if (shellState.detailError != null && !shellState.isLoadingDetail) {
+      pendingNotificationOrderId = null
+      vm.clearSelectedOrder()
+      shellScope.launch {
+        snackbarHostState.showSnackbar(context.getString(R.string.notifications_order_unavailable))
+      }
     }
   }
 
@@ -775,6 +810,9 @@ fun CustomerRoleShell(
                 onDeleteAddress = profileViewModel::deleteAddress,
                 onPincodeInputChange = profileViewModel::onPincodeCheckInputChange,
                 onCheckPincode = { profileViewModel.checkPincodeServiceability() },
+                onCheckDeliveryPincode = { pincode ->
+                  profileViewModel.checkPincodeServiceability(pincode)
+                },
                 onSignOut = onSignOut,
                 modifier = Modifier.weight(1f),
                 updateUiState = updateUiState,
@@ -943,6 +981,13 @@ fun CustomerRoleShell(
             onNotificationPermissionResult = notificationsViewModel::onPermissionResult,
             onBackClick = { isNotificationsOpen = false },
             onClearActionMessage = notificationsViewModel::clearActionMessage,
+            onOpenOrderFromNotification = { orderId ->
+              isNotificationsOpen = false
+              selectedIndex = 2
+              pendingNotificationOrderId = orderId
+              ordersViewModel?.clearSelectedOrder()
+              ordersViewModel?.openOrderDetail(orderId)
+            },
             modifier = Modifier.fillMaxSize(),
           )
           SnackbarHost(

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.ui.PizzoraDesignSystemTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-24T17:20:30.805Z" hostname="ip-10-0-141-106" time="0.543">
+  <properties/>
+  <testcase name="confirmation dialog locks actions while submitting and invokes callbacks when idle" classname="com.example.ui.PizzoraDesignSystemTest" time="0.106"/>
+  <testcase name="confirmation dialog disables buttons while submitting" classname="com.example.ui.PizzoraDesignSystemTest" time="0.115"/>
+  <testcase name="status banner renders action with 48dp touch target and invokes callback" classname="com.example.ui.PizzoraDesignSystemTest" time="0.059"/>
+  <testcase name="typography scale eliminates Roboto fallback on titleSmall bodySmall and labelSmall" classname="com.example.ui.PizzoraDesignSystemTest" time="0.047"/>
+  <testcase name="dark and light theme tokens satisfy WCAG 2_2 AA contrast ratios" classname="com.example.ui.PizzoraDesignSystemTest" time="0.039"/>
+  <testcase name="empty state card, sticky dock, and reduced-motion skeletons compose cleanly" classname="com.example.ui.PizzoraDesignSystemTest" time="0.101"/>
+  <testcase name="dietary indicator exposes accessible content descriptions" classname="com.example.ui.PizzoraDesignSystemTest" time="0.061"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

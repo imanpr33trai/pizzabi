@@ -862,6 +862,7 @@ class Phase19EndToEndRobolectricTest {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
       composeTestRule.onAllNodesWithTag("profile_sign_out_button").fetchSemanticsNodes().isNotEmpty()
     }
+    composeTestRule.onNodeWithTag("profile_lazy_column").performScrollToNode(hasTestTag("profile_sign_out_button"))
     composeTestRule.onNodeWithTag("profile_sign_out_button").performClick()
     composeTestRule.waitUntil(timeoutMillis = 5_000) {
       Shadows.shadowOf(Looper.getMainLooper()).idle()
