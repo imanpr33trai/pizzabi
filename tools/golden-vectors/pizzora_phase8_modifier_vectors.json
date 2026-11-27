@@ -1,0 +1,790 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "PIZZORA Phase 8 Golden Pricing Parity Vectors. 33 vectors covering unit pricing (U-01..U-28) and quote calculations (Q-01..Q-05).",
+  "version": "1.0",
+  "vectors": [
+    {
+      "id": "U-01",
+      "scenario": "Base 10000, no modifiers",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 10000
+    },
+    {
+      "id": "U-02",
+      "scenario": "+ cheese 2000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 2000,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 12000
+    },
+    {
+      "id": "U-03",
+      "scenario": "+ sauce 1500",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 1500,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 11500
+    },
+    {
+      "id": "U-04",
+      "scenario": "+ cheese 2000 + sauce 1500",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 2000,
+        "sauce_extra_paise": 1500,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 13500
+    },
+    {
+      "id": "U-05",
+      "scenario": "+ crust 1000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 1000,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 11000
+    },
+    {
+      "id": "U-06",
+      "scenario": "+ non-default standard 1000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 1000,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 11000
+    },
+    {
+      "id": "U-07",
+      "scenario": "+ non-default standard 1000 + 500",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 1000,
+            "is_default": false,
+            "is_removed": false
+          },
+          {
+            "id": "00000000-0000-0000-0000-000000000102",
+            "extra_price_paise": 500,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 11500
+    },
+    {
+      "id": "U-08",
+      "scenario": "Default standard kept (extra 1000 ignored)",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 1000,
+            "is_default": true,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 10000
+    },
+    {
+      "id": "U-09",
+      "scenario": "Default standard removed (zero credit)",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 1000,
+            "is_default": true,
+            "is_removed": true
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 10000
+    },
+    {
+      "id": "U-10",
+      "scenario": "Default kept + non-default 1000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 1000,
+            "is_default": true,
+            "is_removed": false
+          },
+          {
+            "id": "00000000-0000-0000-0000-000000000102",
+            "extra_price_paise": 1000,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 11000
+    },
+    {
+      "id": "U-11",
+      "scenario": "Default removed + non-default 1000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 1000,
+            "is_default": true,
+            "is_removed": true
+          },
+          {
+            "id": "00000000-0000-0000-0000-000000000102",
+            "extra_price_paise": 1000,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 11000
+    },
+    {
+      "id": "U-12",
+      "scenario": "Crust 1000 + cheese 2000 + sauce 1500 + standard 1000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 1000,
+        "cheese_extra_paise": 2000,
+        "sauce_extra_paise": 1500,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 1000,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 15500
+    },
+    {
+      "id": "U-13",
+      "scenario": "Half 14000/15000 + surcharge 1000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            4000
+          ],
+          "right_topping_extras": [
+            5000
+          ],
+          "surcharge_paise": 1000
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 15500
+    },
+    {
+      "id": "U-14",
+      "scenario": "Half 10001/10002 + surcharge 0 (odd HALF_UP)",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            1
+          ],
+          "right_topping_extras": [
+            2
+          ],
+          "surcharge_paise": 0
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 10002
+    },
+    {
+      "id": "U-15",
+      "scenario": "Half 10001/10002 + surcharge 999",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            1
+          ],
+          "right_topping_extras": [
+            2
+          ],
+          "surcharge_paise": 999
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 11001
+    },
+    {
+      "id": "U-16",
+      "scenario": "Half 15500 + cheese 2000 + sauce 1500",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 2000,
+        "sauce_extra_paise": 1500,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            4000
+          ],
+          "right_topping_extras": [
+            5000
+          ],
+          "surcharge_paise": 1000
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 19000
+    },
+    {
+      "id": "U-17",
+      "scenario": "Half 15500 + non-default standard 700",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 700,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            4000
+          ],
+          "right_topping_extras": [
+            5000
+          ],
+          "surcharge_paise": 1000
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 16200
+    },
+    {
+      "id": "U-18",
+      "scenario": "Half 15500 + cheese 2000 + sauce 1500 + standard 700",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 2000,
+        "sauce_extra_paise": 1500,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 700,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            4000
+          ],
+          "right_topping_extras": [
+            5000
+          ],
+          "surcharge_paise": 1000
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 19700
+    },
+    {
+      "id": "U-19",
+      "scenario": "Half 10000/10001 (1-paise difference)",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            0
+          ],
+          "right_topping_extras": [
+            1
+          ],
+          "surcharge_paise": 0
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 10001
+    },
+    {
+      "id": "U-20",
+      "scenario": "Half 10000/10003 (3-paise difference)",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            0
+          ],
+          "right_topping_extras": [
+            3
+          ],
+          "surcharge_paise": 0
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 10002
+    },
+    {
+      "id": "U-21",
+      "scenario": "Base 10000 × quantity 2",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 2
+      },
+      "expected_unit_price_paise": 10000,
+      "expected_line_total_paise": 20000
+    },
+    {
+      "id": "U-22",
+      "scenario": "All-modifier 19700 × quantity 25",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 1000,
+        "cheese_extra_paise": 2000,
+        "sauce_extra_paise": 1500,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 700,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [
+          2000,
+          2500
+        ],
+        "half_and_half": null,
+        "quantity": 25
+      },
+      "expected_unit_price_paise": 19700,
+      "expected_line_total_paise": 492500
+    },
+    {
+      "id": "U-23",
+      "scenario": "Half 10002 × quantity 3",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            1
+          ],
+          "right_topping_extras": [
+            2
+          ],
+          "surcharge_paise": 0
+        },
+        "quantity": 3
+      },
+      "expected_unit_price_paise": 10002,
+      "expected_line_total_paise": 30006
+    },
+    {
+      "id": "U-24",
+      "scenario": "Half-all 19700 × quantity 25",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 2000,
+        "sauce_extra_paise": 1500,
+        "standard_toppings": [
+          {
+            "id": "00000000-0000-0000-0000-000000000101",
+            "extra_price_paise": 700,
+            "is_default": false,
+            "is_removed": false
+          }
+        ],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            4000
+          ],
+          "right_topping_extras": [
+            5000
+          ],
+          "surcharge_paise": 1000
+        },
+        "quantity": 25
+      },
+      "expected_unit_price_paise": 19700,
+      "expected_line_total_paise": 492500
+    },
+    {
+      "id": "U-25",
+      "scenario": "Half 12000/12000 + surcharge 0",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            2000
+          ],
+          "right_topping_extras": [
+            2000
+          ],
+          "surcharge_paise": 0
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 12000
+    },
+    {
+      "id": "U-26",
+      "scenario": "Half 10000/10000 + surcharge 5000",
+      "inputs": {
+        "variant_price_paise": 10000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": {
+          "left_topping_extras": [
+            0
+          ],
+          "right_topping_extras": [
+            0
+          ],
+          "surcharge_paise": 5000
+        },
+        "quantity": 1
+      },
+      "expected_unit_price_paise": 15000
+    },
+    {
+      "id": "U-27",
+      "scenario": "Unit 1,000,000,000 × quantity 25",
+      "inputs": {
+        "variant_price_paise": 1000000000,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 25
+      },
+      "expected_unit_price_paise": 1000000000,
+      "expected_line_total_paise": 25000000000
+    },
+    {
+      "id": "U-28",
+      "scenario": "Unit i64::MAX × quantity 2 → ARITHMETIC_OVERFLOW",
+      "inputs": {
+        "variant_price_paise": 9223372036854775807,
+        "crust_extra_paise": 0,
+        "cheese_extra_paise": 0,
+        "sauce_extra_paise": 0,
+        "standard_toppings": [],
+        "extra_topping_extras": [],
+        "half_and_half": null,
+        "quantity": 2
+      },
+      "expected_error": "ARITHMETIC_OVERFLOW"
+    },
+    {
+      "id": "Q-01",
+      "scenario": "Quote 14500, GST 500, delivery 0",
+      "inputs": {
+        "lines": [
+          {
+            "unit_price_paise": 14500,
+            "quantity": 1,
+            "is_taxable": true
+          }
+        ],
+        "gst_bps": 500,
+        "delivery_fee_paise": 0,
+        "coupon": null
+      },
+      "expected_quote": {
+        "subtotal_paise": 14500,
+        "taxable_subtotal_paise": 14500,
+        "discount_paise": 0,
+        "taxable_amount_paise": 14500,
+        "delivery_fee_paise": 0,
+        "gst_bps": 500,
+        "tax_paise": 725,
+        "cgst_paise": 362,
+        "sgst_paise": 363,
+        "total_paise": 15225
+      }
+    },
+    {
+      "id": "Q-02",
+      "scenario": "Quote 14500, 10% coupon",
+      "inputs": {
+        "lines": [
+          {
+            "unit_price_paise": 14500,
+            "quantity": 1,
+            "is_taxable": true
+          }
+        ],
+        "gst_bps": 500,
+        "delivery_fee_paise": 0,
+        "coupon": {
+          "discount_type": "PercentBps",
+          "discount_value": 1000,
+          "max_discount_paise": null,
+          "min_order_paise": 0,
+          "is_active": true
+        }
+      },
+      "expected_quote": {
+        "subtotal_paise": 14500,
+        "taxable_subtotal_paise": 14500,
+        "discount_paise": 1450,
+        "taxable_amount_paise": 13050,
+        "delivery_fee_paise": 0,
+        "gst_bps": 500,
+        "tax_paise": 653,
+        "cgst_paise": 326,
+        "sgst_paise": 327,
+        "total_paise": 13703
+      }
+    },
+    {
+      "id": "Q-03",
+      "scenario": "Quote 10001, 12.5% coupon",
+      "inputs": {
+        "lines": [
+          {
+            "unit_price_paise": 10001,
+            "quantity": 1,
+            "is_taxable": true
+          }
+        ],
+        "gst_bps": 500,
+        "delivery_fee_paise": 0,
+        "coupon": {
+          "discount_type": "PercentBps",
+          "discount_value": 1250,
+          "max_discount_paise": null,
+          "min_order_paise": 0,
+          "is_active": true
+        }
+      },
+      "expected_quote": {
+        "subtotal_paise": 10001,
+        "taxable_subtotal_paise": 10001,
+        "discount_paise": 1250,
+        "taxable_amount_paise": 8751,
+        "delivery_fee_paise": 0,
+        "gst_bps": 500,
+        "tax_paise": 438,
+        "cgst_paise": 219,
+        "sgst_paise": 219,
+        "total_paise": 9189
+      }
+    },
+    {
+      "id": "Q-04",
+      "scenario": "Quote 14500, flat 5000 cap 3000, delivery 3000",
+      "inputs": {
+        "lines": [
+          {
+            "unit_price_paise": 14500,
+            "quantity": 1,
+            "is_taxable": true
+          }
+        ],
+        "gst_bps": 500,
+        "delivery_fee_paise": 3000,
+        "coupon": {
+          "discount_type": "FlatPaise",
+          "discount_value": 5000,
+          "max_discount_paise": 3000,
+          "min_order_paise": 0,
+          "is_active": true
+        }
+      },
+      "expected_quote": {
+        "subtotal_paise": 14500,
+        "taxable_subtotal_paise": 14500,
+        "discount_paise": 3000,
+        "taxable_amount_paise": 11500,
+        "delivery_fee_paise": 3000,
+        "gst_bps": 500,
+        "tax_paise": 575,
+        "cgst_paise": 287,
+        "sgst_paise": 288,
+        "total_paise": 15075
+      }
+    },
+    {
+      "id": "Q-05",
+      "scenario": "19700 × 2, 10% coupon, GST 500, delivery 3000",
+      "inputs": {
+        "lines": [
+          {
+            "unit_price_paise": 19700,
+            "quantity": 2,
+            "is_taxable": true
+          }
+        ],
+        "gst_bps": 500,
+        "delivery_fee_paise": 3000,
+        "coupon": {
+          "discount_type": "PercentBps",
+          "discount_value": 1000,
+          "max_discount_paise": null,
+          "min_order_paise": 0,
+          "is_active": true
+        }
+      },
+      "expected_quote": {
+        "subtotal_paise": 39400,
+        "taxable_subtotal_paise": 39400,
+        "discount_paise": 3940,
+        "taxable_amount_paise": 35460,
+        "delivery_fee_paise": 3000,
+        "gst_bps": 500,
+        "tax_paise": 1773,
+        "cgst_paise": 886,
+        "sgst_paise": 887,
+        "total_paise": 40233
+      }
+    }
+  ]
+}

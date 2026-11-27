@@ -373,6 +373,12 @@ fn cart_validation_limits_merge_and_sync_planner() {
             crust_id: c_id.to_string(),
             topping_ids: vec![],
             quantity: 1,
+            cheese_id: None,
+            sauce_id: None,
+            standard_topping_ids: vec![],
+            half_and_half_config_id: None,
+            half_and_half_left_topping_ids: vec![],
+            half_and_half_right_topping_ids: vec![],
         })
         .collect();
     assert!(matches!(
@@ -392,6 +398,12 @@ fn cart_validation_limits_merge_and_sync_planner() {
             crust_id: c_id.to_string(),
             topping_ids: vec![t1_id.to_string(), t2_id.to_string(), t1_id.to_string()],
             quantity: 20,
+            cheese_id: None,
+            sauce_id: None,
+            standard_topping_ids: vec![],
+            half_and_half_config_id: None,
+            half_and_half_left_topping_ids: vec![],
+            half_and_half_right_topping_ids: vec![],
         },
         CartItemInput {
             id: Some("line-b".to_owned()),
@@ -400,6 +412,12 @@ fn cart_validation_limits_merge_and_sync_planner() {
             crust_id: c_id.to_string(),
             topping_ids: vec![t2_id.to_string(), t1_id.to_string()],
             quantity: 10,
+            cheese_id: None,
+            sauce_id: None,
+            standard_topping_ids: vec![],
+            half_and_half_config_id: None,
+            half_and_half_left_topping_ids: vec![],
+            half_and_half_right_topping_ids: vec![],
         },
     ];
     let parsed = CartValidation::validate_and_parse_inputs(&dup_inputs).unwrap();
@@ -413,6 +431,11 @@ fn cart_validation_limits_merge_and_sync_planner() {
         variants: HashMap::new(),
         crusts: HashMap::new(),
         toppings: HashMap::new(),
+        cheeses: HashMap::new(),
+        sauces: HashMap::new(),
+        standard_toppings: HashMap::new(),
+        half_and_half_configs: HashMap::new(),
+        product_toppings: HashMap::new(),
     };
     lookup.products.insert(
         p_id,

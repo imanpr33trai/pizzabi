@@ -12,10 +12,13 @@ pub use cart_sync::{
     CartSyncAction, CartSyncPlanRequest, CartSyncPlanner, CartSyncTrigger, SessionIdentity,
 };
 pub use cart_validation::{
-    CartItemInput, CartValidation, CartValidationIssue, CartValidationIssueCode, CatalogCrustRef,
-    CatalogProductRef, CatalogRefLookup, CatalogToppingRef, CatalogVariantRef, EvaluatedCartItem,
-    EvaluatedCartSummary, EvaluatedToppingView, ParsedCartItem, SizeCode, MAX_CART_LINE_ITEMS,
-    MAX_ITEM_QUANTITY,
+    CartItemInput, CartValidation, CartValidationIssue, CartValidationIssueCode, CatalogCheeseRef,
+    CatalogCrustRef, CatalogHalfAndHalfConfigRef, CatalogProductRef, CatalogRefLookup,
+    CatalogSauceRef, CatalogStandardToppingRef, CatalogToppingRef, CatalogVariantRef,
+    EvaluatedCartItem, EvaluatedCartSummary, EvaluatedCheeseView, EvaluatedHalfAndHalfView,
+    EvaluatedSauceView, EvaluatedStandardToppingView, EvaluatedToppingView, ParsedCartItem,
+    SizeCode, MAX_CART_LINE_ITEMS, MAX_HALF_AND_HALF_DISTINCT_TOPPINGS,
+    MAX_HALF_AND_HALF_TOPPINGS_PER_HALF, MAX_ITEM_QUANTITY,
 };
 pub use causal_tracker::{CausalDecision, OrderCausalTracker, RealtimeEventInput};
 pub use error::DomainError;
@@ -26,6 +29,7 @@ pub use order_state::{
 pub use payment_state::{PaymentAttemptStatus, PaymentStateMachine, PaymentStatus, RefundStatus};
 pub use pricing::{
     CouponCalculationSpec, CouponEvaluator, CouponListingEvaluation, CouponRuleInput, DiscountType,
-    PriceBreakdown, PricedLineInput, PricingEngine,
+    HalfAndHalfBreakdown, HalfAndHalfInput, PriceBreakdown, PricedLineInput,
+    PricedLineInputExtended, PricingEngine, StandardToppingSelection,
 };
 pub use storage_key::StorageKeyValidator;

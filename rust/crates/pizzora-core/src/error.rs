@@ -36,4 +36,35 @@ pub enum DomainError {
 
     #[error("invalid storage object key: {0}")]
     InvalidObjectKey(String),
+
+    // Phase 8 modifier validation errors
+    #[error("{code}: {message}")]
+    CheeseUnavailable { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    SauceUnavailable { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    StandardToppingUnavailable { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    HalfAndHalfUnavailable { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    HalfAndHalfToppingLimitExceeded { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    HalfAndHalfLeftRightOverlap { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    StandardToppingNotInProduct { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    CheeseNotInProduct { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    SauceNotInProduct { code: &'static str, message: String },
+
+    #[error("{code}: {message}")]
+    HalfAndHalfConfigNotInProduct { code: &'static str, message: String },
 }

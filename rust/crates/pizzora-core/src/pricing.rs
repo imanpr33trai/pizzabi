@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::error::DomainError;
 use crate::money::Money;
@@ -15,6 +16,49 @@ pub struct PricedLineInput {
     pub unit_price_paise: i64,
     pub quantity: i32,
     pub is_taxable: bool,
+}
+
+/// Extended input for unit price calculation with all Phase 8 modifiers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PricedLineInputExtended {
+    pub variant_price_paise: i64,
+    pub crust_extra_paise: i64,
+    pub cheese_extra_paise: i64,
+    pub sauce_extra_paise: i64,
+    pub standard_toppings: Vec<StandardToppingSelection>,
+    pub extra_topping_extras: Vec<i64>,
+    pub half_and_half: Option<HalfAndHalfInput>,
+    pub quantity: i32,
+}
+
+/// A standard topping selection with its pricing metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StandardToppingSelection {
+    pub id: Uuid,
+    pub extra_price_paise: i64,
+    pub is_default: bool,
+    pub is_removed: bool,
+}
+
+/// Half-and-half configuration input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HalfAndHalfInput {
+    pub left_topping_extras: Vec<i64>,
+    pub right_topping_extras: Vec<i64>,
+    pub surcharge_paise: i64,
+}
+
+/// Half-and-half price breakdown for transparency.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HalfAndHalfBreakdown {
+    pub left_half_base_paise: i64,
+    pub right_half_base_paise: i64,
+    pub average_paise: i64,
+    pub surcharge_paise: i64,
+    pub cheese_extra_paise: i64,
+    pub sauce_extra_paise: i64,
+    pub standard_toppings_extra_paise: i64,
+    pub unit_price_paise: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -194,6 +238,223 @@ impl PricingEngine {
             sgst_paise,
             total_paise,
         })
+    }
+
+    /// Calculate extra price from standard topping selections.
+    /// Only non-default selected toppings add their extra_price_paise.
+    /// Default toppings (kept or removed) contribute 0 (zero credit, never negative).
+    pub fn calculate_standard_toppings_extra_paise(
+        selections: &[StandardToppingSelection],
+    ) -> Result<i64, DomainError> {
+        let mut total: i64 = 0;
+        for sel in selections {
+            if !sel.is_default && !sel.is_removed {
+                if sel.extra_price_paise < 0 {
+                    return Err(DomainError::NegativeAmount("standard_topping_extra_price_paise"));
+                }
+                total = total
+                    .checked_add(sel.extra_price_paise)
+                    .ok_or(DomainError::ArithmeticOverflow(
+                        "calculate_standard_toppings_extra_paise",
+                    ))?;
+            }
+            // is_default == true (kept or removed) -> contributes 0
+            // is_removed == true for non-default -> contributes 0 (zero credit)
+        }
+        Ok(total)
+    }
+
+    /// Calculate unit price for a line item with all Phase 8 modifiers.
+    /// Supports both linear and half-and-half pricing.
+    /// All arithmetic is checked; overflow returns DomainError::ArithmeticOverflow.
+    #[allow(clippy::too_many_arguments)]
+    pub fn calculate_unit_price_paise(
+        variant_price_paise: i64,
+        crust_extra_paise: i64,
+        cheese_extra_paise: i64,
+        sauce_extra_paise: i64,
+        standard_toppings_extra_paise: i64,
+        extra_topping_extras: &[i64],
+        half_and_half: Option<&HalfAndHalfInput>,
+    ) -> Result<i64, DomainError> {
+        // Validate all inputs are non-negative
+        if variant_price_paise < 0 {
+            return Err(DomainError::NegativeAmount("variant_price_paise"));
+        }
+        if crust_extra_paise < 0 {
+            return Err(DomainError::NegativeAmount("crust_extra_paise"));
+        }
+        if cheese_extra_paise < 0 {
+            return Err(DomainError::NegativeAmount("cheese_extra_paise"));
+        }
+        if sauce_extra_paise < 0 {
+            return Err(DomainError::NegativeAmount("sauce_extra_paise"));
+        }
+        if standard_toppings_extra_paise < 0 {
+            return Err(DomainError::NegativeAmount("standard_toppings_extra_paise"));
+        }
+        for extra in extra_topping_extras {
+            if *extra < 0 {
+                return Err(DomainError::NegativeAmount("extra_topping_extra_price_paise"));
+            }
+        }
+
+        match half_and_half {
+            None => {
+                // Linear pricing:
+                // unit_price = variant + crust + cheese + sauce + std_extra + sum(extra topping extras)
+                let mut price = variant_price_paise;
+                price = price
+                    .checked_add(crust_extra_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_crust"))?;
+                price = price
+                    .checked_add(cheese_extra_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_cheese"))?;
+                price = price
+                    .checked_add(sauce_extra_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_sauce"))?;
+                price = price
+                    .checked_add(standard_toppings_extra_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_std"))?;
+                for extra in extra_topping_extras {
+                    price = price
+                        .checked_add(*extra)
+                        .ok_or(DomainError::ArithmeticOverflow("unit_price_add_extra_topping"))?;
+                }
+                Ok(price)
+            }
+            Some(hah) => {
+                // Half-and-half pricing:
+                // left_half_base  = variant + crust + Σ(left extras)
+                // right_half_base = variant + crust + Σ(right extras)
+                // average = ROUND_HALF_UP((left + right) / 2) = (left + right + 1) / 2 in i128
+                // unit_price = average + surcharge + cheese + sauce + std_extra
+
+                // Sum left extras
+                let mut left_sum: i64 = 0;
+                for extra in &hah.left_topping_extras {
+                    if *extra < 0 {
+                        return Err(DomainError::NegativeAmount("half_and_half_left_extra"));
+                    }
+                    left_sum = left_sum
+                        .checked_add(*extra)
+                        .ok_or(DomainError::ArithmeticOverflow("half_left_sum"))?;
+                }
+
+                // Sum right extras
+                let mut right_sum: i64 = 0;
+                for extra in &hah.right_topping_extras {
+                    if *extra < 0 {
+                        return Err(DomainError::NegativeAmount("half_and_half_right_extra"));
+                    }
+                    right_sum = right_sum
+                        .checked_add(*extra)
+                        .ok_or(DomainError::ArithmeticOverflow("half_right_sum"))?;
+                }
+
+                // left_half_base = variant + crust + left_sum
+                let left_half_base = variant_price_paise
+                    .checked_add(crust_extra_paise)
+                    .and_then(|v| v.checked_add(left_sum))
+                    .ok_or(DomainError::ArithmeticOverflow("left_half_base"))?;
+
+                // right_half_base = variant + crust + right_sum
+                let right_half_base = variant_price_paise
+                    .checked_add(crust_extra_paise)
+                    .and_then(|v| v.checked_add(right_sum))
+                    .ok_or(DomainError::ArithmeticOverflow("right_half_base"))?;
+
+                // average = ROUND_HALF_UP((left + right) / 2) = (left + right + 1) / 2
+                let average = i128::from(left_half_base)
+                    .checked_add(i128::from(right_half_base))
+                    .and_then(|v| v.checked_add(1))
+                    .and_then(|v| v.checked_div(2))
+                    .ok_or(DomainError::ArithmeticOverflow("half_average"))?;
+
+                let average_paise = i64::try_from(average)
+                    .map_err(|_| DomainError::ArithmeticOverflow("half_average_i64"))?;
+
+                // unit_price = average + surcharge + cheese + sauce + std_extra
+                let mut price = average_paise;
+                if hah.surcharge_paise < 0 {
+                    return Err(DomainError::NegativeAmount("half_and_half_surcharge_paise"));
+                }
+                price = price
+                    .checked_add(hah.surcharge_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_surcharge"))?;
+                price = price
+                    .checked_add(cheese_extra_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_cheese"))?;
+                price = price
+                    .checked_add(sauce_extra_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_sauce"))?;
+                price = price
+                    .checked_add(standard_toppings_extra_paise)
+                    .ok_or(DomainError::ArithmeticOverflow("unit_price_add_std"))?;
+
+                Ok(price)
+            }
+        }
+    }
+
+    /// Calculate unit price with full breakdown for half-and-half.
+    pub fn calculate_unit_price_with_breakdown(
+        variant_price_paise: i64,
+        crust_extra_paise: i64,
+        cheese_extra_paise: i64,
+        sauce_extra_paise: i64,
+        standard_toppings_extra_paise: i64,
+        extra_topping_extras: &[i64],
+        half_and_half: Option<&HalfAndHalfInput>,
+    ) -> Result<(i64, Option<HalfAndHalfBreakdown>), DomainError> {
+        let unit_price = Self::calculate_unit_price_paise(
+            variant_price_paise,
+            crust_extra_paise,
+            cheese_extra_paise,
+            sauce_extra_paise,
+            standard_toppings_extra_paise,
+            extra_topping_extras,
+            half_and_half,
+        )?;
+
+        let breakdown = half_and_half.map(|hah| {
+            // Recompute for breakdown
+            let mut left_sum: i64 = 0;
+            for extra in &hah.left_topping_extras {
+                left_sum = left_sum.saturating_add(*extra);
+            }
+            let mut right_sum: i64 = 0;
+            for extra in &hah.right_topping_extras {
+                right_sum = right_sum.saturating_add(*extra);
+            }
+            let left_half_base = variant_price_paise
+                .checked_add(crust_extra_paise)
+                .and_then(|v| v.checked_add(left_sum))
+                .unwrap_or(i64::MAX);
+            let right_half_base = variant_price_paise
+                .checked_add(crust_extra_paise)
+                .and_then(|v| v.checked_add(right_sum))
+                .unwrap_or(i64::MAX);
+            let average = i128::from(left_half_base)
+                .checked_add(i128::from(right_half_base))
+                .and_then(|v| v.checked_add(1))
+                .and_then(|v| v.checked_div(2))
+                .map(|v| i64::try_from(v).unwrap_or(i64::MAX))
+                .unwrap_or(i64::MAX);
+
+            HalfAndHalfBreakdown {
+                left_half_base_paise: left_half_base,
+                right_half_base_paise: right_half_base,
+                average_paise: average,
+                surcharge_paise: hah.surcharge_paise,
+                cheese_extra_paise,
+                sauce_extra_paise,
+                standard_toppings_extra_paise,
+                unit_price_paise: unit_price,
+            }
+        });
+
+        Ok((unit_price, breakdown))
     }
 }
 

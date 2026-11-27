@@ -69,6 +69,9 @@ Limitation recorded: HerdR 0.9.5 creates tabs/panes and can start interactive ag
 coordinator uses OpenCode's native subagent sessions for isolated implementation context. Pane
 commands are used for build/test execution and evidence capture.
 
+Subagent model policy (user instruction, 2026-11-27): all **new** subagents and all **failed-agent
+retries** use `opencode/big-pickle`. Already-running healthy agents are left undisturbed.
+
 ---
 
 ## 4. Workstream status
@@ -76,10 +79,10 @@ commands are used for build/test execution and evidence capture.
 | Workstream | State | Owner | Notes |
 |------------|-------|-------|-------|
 | W1 SQLx V4+ schema + invariants | **IMPLEMENTED / VERIFIED** | Coordinator / `p8-backend` | 8 migrations (0004–0011), 51 tables, two profiles, rollback/reapply — Checkpoint A PASS |
-| W2 Rust pricing + 33 vectors | NOT STARTED | `p8-rust-pricing` | Ready — W1 complete; mapping from `explore` agent received |
-| W3 DTO/API + reorder endpoint | NOT STARTED | `p8-api-contracts` | Ready — W1 complete; mapping received |
-| W4 UniFFI | NOT STARTED | `p8-uniffi` | Blocked by W2/W3 |
-| W5 Kotlin backend five-service audit | **IMPLEMENTED (audit complete)** | `p8-backend` | Read-only mapping received; implementation blocked by W3 |
+| W2 Rust pricing + 33 vectors | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de343b2a7ffez42D4TrxHUvV6d`) | Initial audit REJECTED (3 MAJOR); all fixed; independent big-pickle re-audit PASS. 21 core tests PASS; 33/33 vectors match contract |
+| W3 DTO/API + reorder endpoint | **IN PROGRESS (resumed)** | `general` subagent (`ses_de3265e86ffe22X5qe8D2MaULu`, `opencode/big-pickle`) | Initial agent hit HTTP 429; partial work preserved; 18 compile errors being fixed |
+| W4 UniFFI | **IN PROGRESS** | `general` subagent (`ses_de3338c34ffeK2iXRknZkhoPi8`) | 11 records + 6 exports, FFI/core parity; W2 dependency satisfied |
+| W5 Kotlin backend five-service audit | **IN PROGRESS** | `general` subagent (`ses_de321c174ffemMqJrNxjY5Tmsg`, `opencode/big-pickle`) | Audit complete; implementing five services + reorder route + new tests |
 | W6 Android builder | NOT STARTED | `p8-builder-ui` | Blocked by W3/W4; mapping received |
 | W7 Android orders/reorder | NOT STARTED | `p8-orders-ui` | Blocked by W3/W4; mapping received |
 | W8 Regression/QA | IN PROGRESS (DB evidence) | `p8-test-engineer`, `android-qa` | Checkpoint A logs captured |
@@ -118,9 +121,10 @@ commands are used for build/test execution and evidence capture.
 | ID | Blocker | Impact | Mitigation |
 |----|---------|--------|------------|
 | B8-01 | Reviewed contract not present as a standalone file | Agents could implement against stale draft | Binding addendum created; all agents must read it |
-| B8-02 | No committed Phase 8 code yet | — | W1 started |
+| B8-02 | Phase 8 work after Checkpoint A not yet committed | Intermediate work exists only in the working tree | Stage scoped files after each workstream verifies; do not stage `.opencode/opencode.jsonc` |
 
-No open BLOCKER or MAJOR design findings remain after the addendum.
+No open BLOCKER or MAJOR design findings remain after the addendum. W2 completion is pending
+scoped commit; W3/W4/W5 are still in progress.
 
 ---
 
@@ -129,7 +133,8 @@ No open BLOCKER or MAJOR design findings remain after the addendum.
 | Checkpoint | Commit | Push | Status |
 |------------|--------|------|--------|
 | Baseline | `db41169` | `origin/ui-ux-changes` | VERIFIED |
-| A — Schema | pending | pending | VERIFIED locally; commit in progress |
+| A — Schema | `897b8f9` | `origin/ui-ux-changes` | VERIFIED — 51 tables, 2 profiles + rollback, 10 tests PASS |
+| B — Rust core pricing | pending | pending | VERIFIED locally; commit in progress |
 
 ---
 
@@ -145,8 +150,27 @@ All 11 criteria from the reviewed addendum remain open until their evidence is r
 | Evidence | Path | Status |
 |----------|------|--------|
 | Reviewed resolutions | `docs/PHASE8_REVIEWED_CONTRACT_RESOLUTIONS.md` | CREATED |
-| Migration reports | `qa-artifacts/phase8/migrations/` | PENDING |
-| Golden parity reports | `qa-artifacts/phase8/parity/` | PENDING |
+| Migration reports | `qa-artifacts/phase8/migrations/` | CREATED — Checkpoint A PASS |
+| Golden parity reports | `qa-artifacts/phase8/parity/` | CREATED — W2 PASS (21 tests, 33/33 vectors) |
+| API/contract evidence | `qa-artifacts/phase8/api-contracts/` | PENDING (W3) |
+| UniFFI evidence | `qa-artifacts/phase8/uniffi/` | PENDING (W4) |
+| Kotlin backend evidence | `qa-artifacts/phase8/backend/` | PENDING (W5) |
 | Unit test XML | `qa-artifacts/phase8/unit-test-xml/` | PENDING |
 | Visual QA | `qa-artifacts/phase8/visual/` | PENDING |
 | Independent review | `qa-artifacts/phase8/review/` | PENDING |
+
+### 10.1 Acceptance-criteria command map
+
+| # | Criterion | Command / artifact |
+|---|-----------|--------------------|
+| 1 | Fresh migration | `qa-artifacts/phase8/migrations/FRESH_SCHEMA_REPORT.md` (51 tables) |
+| 2 | Flyway V1–V3 adoption | `pg18_integration_tests.log` — adoption profile PASS |
+| 3 | 51-table inventory + invariants | `migrator.rs` unit test + integration `verify_catalog_invariants` |
+| 4 | Rollback/reapply | `pg18_integration_tests.log` — `pg18_phase8_rollback_and_reapply_succeeds` |
+| 5 | 33 golden vectors | `cargo test -p pizzora-core --test phase8_golden_parity_tests` + Kotlin parity |
+| 6 | Pricing rules | Rust core unit tests + UniFFI parity exports |
+| 7 | Cart validation | Rust validation tests + API validation tests |
+| 8 | DTO/API backward compatibility | Kotlin serialization tests + historical reorder test |
+| 9 | Reorder endpoint | API tests (200/403/404 + unavailable reconciliation) |
+| 10 | Android builder/reorder UI | Robolectric + API 36 emulator (`pizzora_api36_qa`) captures |
+| 11 | Regression + independent review | Full Gradle/Rust test XML + `qa-artifacts/phase8/review/` |
