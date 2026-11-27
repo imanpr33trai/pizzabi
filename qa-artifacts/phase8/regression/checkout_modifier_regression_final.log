@@ -1,0 +1,15 @@
+=== Final checkout modifier + idempotency live regression (2026-11-27T14:29:31Z) ===
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.83s
+     Running tests/pg18_phase8_reorder.rs (rust/target/debug/deps/pg18_phase8_reorder-8d8bac0580001034)
+
+running 5 tests
+test pg18_checkout_accepts_and_persists_phase8_modifiers ... ok
+test pg18_reorder_historical_order_warning_path_is_reported ... ok
+test pg18_reorder_owner_customer_returns_contract_shape_without_cart_mutation ... ok
+test pg18_reorder_rejects_other_customer_and_nonexistent_order ... ok
+test pg18_reorder_unavailable_topping_has_reason_and_no_substitution ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.16s
+
+exit: 0

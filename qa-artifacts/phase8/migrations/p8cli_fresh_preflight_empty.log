@@ -1,0 +1,11 @@
+=== PHASE 8 MIGRATION CLI EVIDENCE ===
+label: fresh/empty preflight (expected read-only guard rejection)
+timestamp_utc_start: 2026-11-27T13:24:39Z
+binary: /workspace/pizzabi/rust/target/debug/pizzora-api
+database: pizzora_p8cli_fresh
+exact_command: env DATABASE_URL='postgres://pizzora:<redacted-local-db-password>@127.0.0.1:5432/pizzora_p8cli_fresh' '/workspace/pizzabi/rust/target/debug/pizzora-api' --preflight-only
+--- stdout+stderr BEGIN ---
+pizzora-api fatal error: UNSAFE_DATABASE_STATE: neither flyway_schema_history nor _sqlx_migrations exists; database is not ready for cutover
+--- stdout+stderr END ---
+exit_code: 1
+timestamp_utc_end: 2026-11-27T13:24:39Z

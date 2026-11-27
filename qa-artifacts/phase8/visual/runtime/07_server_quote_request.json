@@ -1,0 +1,16 @@
+{
+  "items": [{
+    "product_id": "3080ae51-b70d-4c8b-96ab-c3d4b0b99555",
+    "variant_id": "c9f49bf5-3da3-4fb8-a6e9-5dbd8c270460",
+    "crust_id": "6b8dfcfe-2776-47e3-a2d8-c862d5d717b4",
+    "topping_ids": [],
+    "quantity": 1,
+    "cheese_id": "73bebd6c-9eb7-42a2-a5c5-a60234c68a69",
+    "sauce_id": "69365fa6-085c-471f-8755-d7ff7f489653",
+    "standard_topping_ids": ["fe295f25-366d-45f5-ab99-a1c9ddaa9571", "745c0622-8b8a-43f5-b065-5fb13b1defdb"],
+    "half_and_half_config_id": "89568ba2-3370-4fa8-993d-72f7a1952dfc",
+    "half_and_half_left_topping_ids": ["7b698cc3-3714-4b06-bd6d-fe119a9cc6b7"],
+    "half_and_half_right_topping_ids": ["999e45d5-73a7-4c44-abaf-0d48510f1385"]
+  }],
+  "fulfillment_type": "PICKUP"
+}

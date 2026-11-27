@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.contracts.PricingEngineParameterizedRoundingTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:19:05.468Z" hostname="ip-10-0-138-216" time="0.007">
+  <properties/>
+  <testcase name="verifies deterministic integer-paise breakdown and CGST plus SGST invariant[sub=19,900, bps=0, gst=500, del=0 -&gt; disc=0, tax=995, cgst=497, sgst=498, total=20,895]" classname="com.pizzora.contracts.PricingEngineParameterizedRoundingTest" time="0.001"/>
+  <testcase name="verifies deterministic integer-paise breakdown and CGST plus SGST invariant[sub=105, bps=250, gst=500, del=0 -&gt; disc=3, tax=5, cgst=2, sgst=3, total=107]" classname="com.pizzora.contracts.PricingEngineParameterizedRoundingTest" time="0.0"/>
+  <testcase name="verifies deterministic integer-paise breakdown and CGST plus SGST invariant[sub=100, bps=250, gst=500, del=2,500 -&gt; disc=3, tax=5, cgst=2, sgst=3, total=2,602]" classname="com.pizzora.contracts.PricingEngineParameterizedRoundingTest" time="0.0"/>
+  <testcase name="verifies deterministic integer-paise breakdown and CGST plus SGST invariant[sub=5,000,000,000, bps=1,234, gst=1,800, del=5,000 -&gt; disc=617,000,000, tax=788,940,000, cgst=394,470,000, sgst=394,470,000, total=5,171,945,000]" classname="com.pizzora.contracts.PricingEngineParameterizedRoundingTest" time="0.0"/>
+  <testcase name="verifies deterministic integer-paise breakdown and CGST plus SGST invariant[sub=44,900, bps=1,000, gst=0, del=3,000 -&gt; disc=4,490, tax=0, cgst=0, sgst=0, total=43,410]" classname="com.pizzora.contracts.PricingEngineParameterizedRoundingTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

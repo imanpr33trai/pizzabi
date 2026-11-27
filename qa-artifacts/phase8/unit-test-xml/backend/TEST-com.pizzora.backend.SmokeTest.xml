@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.backend.SmokeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:20:41.761Z" hostname="ip-10-0-138-216" time="0.006">
+  <properties/>
+  <testcase name="health live responds 200 and shared contracts link cleanly" classname="com.pizzora.backend.SmokeTest" time="0.006"/>
+  <system-out><![CDATA[{"@timestamp":"2026-11-27T14:20:41.763527486Z","@version":"1","message":"No ktor.deployment.watch patterns specified, automatic reload is not active.","logger_name":"io.ktor.test","thread_name":"DefaultDispatcher-worker-61 @call-context#5681","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:41.764920533Z","@version":"1","message":"Application started in 0.001 seconds.","logger_name":"io.ktor.test","thread_name":"DefaultDispatcher-worker-61 @call-context#5681","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:41.765096794Z","@version":"1","message":"Responding at http://localhost:80","logger_name":"io.ktor.test","thread_name":"DefaultDispatcher-worker-70 @coroutine#5683","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:41.765114455Z","@version":"1","message":"Responding at https://localhost:443","logger_name":"io.ktor.test","thread_name":"DefaultDispatcher-worker-70 @coroutine#5683","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

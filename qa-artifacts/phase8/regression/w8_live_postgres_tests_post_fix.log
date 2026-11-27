@@ -1,0 +1,192 @@
+=== W8 live PostgreSQL tests (post checkout-fix, fresh pizzora_w8_postfix DB, UTC 2026-11-27T13:21:17Z) ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_api-0e29282d89aa06ac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (rust/target/debug/deps/pizzora_api-a2a16416b56b6ecf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pg18_http_contracts.rs (rust/target/debug/deps/pg18_http_contracts-5c5a5060ca23c8d2)
+
+running 3 tests
+test pg18_auth_rbac_profile_and_addresses_matrix ... ok
+test pg18_cart_coupons_checkout_razorpay_webhooks_kds_and_reports ... ok
+test pg18_catalog_zones_slots_images_and_disabled_storage ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.33s
+
+     Running tests/pg18_phase8_reorder.rs (rust/target/debug/deps/pg18_phase8_reorder-f8e41c8a9f2571df)
+
+running 5 tests
+test pg18_checkout_accepts_and_persists_phase8_modifiers ... ok
+test pg18_reorder_historical_order_warning_path_is_reported ... ok
+test pg18_reorder_owner_customer_returns_contract_shape_without_cart_mutation ... ok
+test pg18_reorder_rejects_other_customer_and_nonexistent_order ... ok
+test pg18_reorder_unavailable_topping_has_reason_and_no_substitution ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.59s
+
+     Running tests/pg18_realtime_ws.rs (rust/target/debug/deps/pg18_realtime_ws-58ae985a27ebb180)
+
+running 3 tests
+test pg18_events_replay_and_ws_resume_with_room_isolation ... ok
+test pg18_ws_live_hub_fanout_heartbeat_ping_pong_and_oversized_frame ... ok
+test pg18_ws_ticket_bearer_auth_single_use_and_revocation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.12s
+
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_auth-afcacc3acbfae5bf)
+
+running 1 test
+test tests::pg18_auth_rbac_outbox_and_ws_ticket_full_integration ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 1.21s
+
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_config-16bce09b861dc8d6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_core-50a512cbc897cf61)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden_parity_tests.rs (rust/target/debug/deps/golden_parity_tests-46578b68a9154336)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/phase8_golden_parity_tests.rs (rust/target/debug/deps/phase8_golden_parity_tests-c3fd7a7a834ffa06)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/unit_and_edge_tests.rs (rust/target/debug/deps/unit_and_edge_tests-92ab5a7f82e69e4b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_db-f43569005fc69351)
+
+running 3 tests
+test migrator::tests::pg18_locked_handoff_fresh_adopt_tamper_and_concurrency ... ok
+test migrator::tests::pg18_phase8_rollback_and_reapply_succeeds ... ok
+test tests::pg18_fresh_and_concurrent_handoff_under_advisory_lock ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.37s
+
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_payments-25c1d6a41b2c30c9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/pg18_capture_webhook_reconciliation.rs (rust/target/debug/deps/pg18_capture_webhook_reconciliation-a680c359b0c2d678)
+
+running 1 test
+test pg18_verify_concurrent_webhook_mismatch_late_capture_and_reconciliation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests/pg18_retry_idempotency.rs (rust/target/debug/deps/pg18_retry_idempotency-3316f038c485f764)
+
+running 1 test
+test pg18_concurrent_retry_receipt_idempotency_and_conflicts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_uniffi-6411a16dc092a7ad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running unittests src/bin/uniffi_bindgen.rs (rust/target/debug/deps/uniffi_bindgen-0c7d9dc68c001b49)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_workers-2636ff55c556827d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (rust/target/debug/deps/pizzora_workers-faceb04823d14b01)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pg18_workers.rs (rust/target/debug/deps/pg18_workers-18b19f224109e610)
+
+running 4 tests
+test pg18_email_post_smtp_crash_window_recovers_and_keeps_single_use_tokens ... ok
+test pg18_email_security_key_rotation_aad_tamper_dead_letter_scrub_purge_and_zero_log_leakage ... ok
+test pg18_expiry_sweep_reconciler_broadcast_health_metrics_and_graceful_shutdown ... ok
+test pg18_sequencer_advisory_lock_assigns_monotonic_gap_free_sequences ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.74s
+
+   Doc-tests pizzora_api
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_auth
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_config
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_db
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_payments
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_uniffi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_workers
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+exit: 0

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.catalog.PizzaBuilderPricingTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:01:07.876Z" hostname="ip-10-0-138-216" time="0.013">
+  <properties/>
+  <testcase name="inactiveVariantOrCrustYieldsZeroTotalAndIncompleteSelections" classname="com.example.catalog.PizzaBuilderPricingTest" time="0.011"/>
+  <testcase name="unsavedChangesAndUnsupportedModifierSlotsBehaveDeterministically" classname="com.example.catalog.PizzaBuilderPricingTest" time="0.0"/>
+  <testcase name="firstActiveDefaultsSkipInactiveVariantsAndCrusts" classname="com.example.catalog.PizzaBuilderPricingTest" time="0.001"/>
+  <testcase name="calculateBreakdownMatchesDomainBridgeAndIgnoresInactiveOptions" classname="com.example.catalog.PizzaBuilderPricingTest" time="0.001"/>
+  <testcase name="quantityClampsStrictlyBetweenOneAndTwentyFive" classname="com.example.catalog.PizzaBuilderPricingTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

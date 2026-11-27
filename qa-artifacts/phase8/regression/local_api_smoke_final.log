@@ -1,0 +1,10 @@
+=== Final local API smoke (2026-11-27T13:31:33Z, final binary) ===
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+quote breakdown: {'cheese_extra_paise': 2000, 'sauce_extra_paise': 0, 'standard_toppings_extra_paise': 800, 'half_and_half_surcharge_paise': 5000, 'modifier_extra_paise': 7800}
+cart resolved modifiers: {'cheese': 'Mozzarella', 'sauce': 'Tomato', 'standards': ['Jalapeno'], 'half_and_half': 'Two Flavours'}
+checkout order: a3869c27-4e3a-4678-a4ab-597db9581c54
+reorder top-level keys: ['canReorder', 'items', 'orderId', 'unavailable', 'warnings']
+reorder item keys: ['cheeseId', 'crustId', 'halfAndHalfConfigId', 'halfAndHalfLeftToppingIds', 'halfAndHalfRightToppingIds', 'isAvailable', 'issues', 'orderItemId', 'productId', 'productName', 'quantity', 'sauceId', 'standardToppingIds', 'standardToppingRemovedIds', 'toppingIds', 'variantId']
+LOCAL API SMOKE PASS
+exit: 0

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.catalog.Phase8PizzaBuilderRobolectricTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:01:07.254Z" hostname="ip-10-0-138-216" time="0.62">
+  <properties/>
+  <testcase name="quoteFailureShowsInlineErrorAndBlocksSubmission" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.069"/>
+  <testcase name="emittedCartInputContainsEveryPhaseEightModifierId" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.12"/>
+  <testcase name="pureHelpersFollowContractConstants" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.036"/>
+  <testcase name="keptDefaultIsIncludedAndRemovedDefaultIsZeroCredit" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.049"/>
+  <testcase name="nonDefaultStandardToppingUsesServerQuoteForLivePrice" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.064"/>
+  <testcase name="inactiveModifierOptionsAndWholeEmptySectionsAreHidden" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.041"/>
+  <testcase name="halfAndHalfEnforcesPerHalfDistinctAndOverlapLimitsInline" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.139"/>
+  <testcase name="emptyModifierSectionsAreHidden" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.043"/>
+  <testcase name="editModeRestoresModifiersFromResolvedCartView" classname="com.example.catalog.Phase8PizzaBuilderRobolectricTest" time="0.055"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

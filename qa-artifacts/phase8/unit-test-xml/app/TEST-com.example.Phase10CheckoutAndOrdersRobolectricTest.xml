@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase10CheckoutAndOrdersRobolectricTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-27T13:57:13.341Z" hostname="ip-10-0-138-216" time="9.218">
+  <properties/>
+  <testcase name="customer adds delivery address, places COD order with Idempotency-Key, views order detail, and cancels" classname="com.example.Phase10CheckoutAndOrdersRobolectricTest" time="9.21"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

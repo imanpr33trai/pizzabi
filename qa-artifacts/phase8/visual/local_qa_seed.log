@@ -1,0 +1,15 @@
+curl: (22) The requested URL returned error: 409
+INSERT 0 6
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+QA catalog seeded.
+category_id=70023243-9224-41ae-b985-a6abe0b605d7
+margherita_id=3080ae51-b70d-4c8b-96ab-c3d4b0b99555
+pepperoni_id=46804244-0ece-40f7-847b-041a798e0e3d
+customer_email=qa.customer@pizzora.local
+customer_password=[redacted]

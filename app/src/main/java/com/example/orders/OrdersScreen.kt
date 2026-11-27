@@ -1490,7 +1490,7 @@ private fun ReorderReconciliationDialog(
           .minimumInteractiveComponentSize()
           .testTag("reorder_confirm_button"),
       ) {
-        Text(if (isAdding) "Adding..." else "Add available items to cart")
+        Text(if (isAdding) "Adding..." else "Add available items only")
       }
     },
     dismissButton = {

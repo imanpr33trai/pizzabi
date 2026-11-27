@@ -1,0 +1,72 @@
+$ adb shell am force-stop com.aistudio.pizzora.xkqzmw ; rc=0
+$ adb shell am start -n com.aistudio.pizzora.xkqzmw/com.example.MainActivity ; rc=0
+$ python3 p8_runtime_helper.py tapxy 403 2274 ; rc=0
+$ python3 p8_runtime_helper.py dump 95_cap_batch_0_state.xml ; rc=0
+batch=0 qty=4 inc=(276, 698, 339, 761)
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+tapped 5 times
+$ adb shell am force-stop com.aistudio.pizzora.xkqzmw ; rc=0
+$ adb shell am start -n com.aistudio.pizzora.xkqzmw/com.example.MainActivity ; rc=0
+$ python3 p8_runtime_helper.py tapxy 403 2274 ; rc=0
+$ python3 p8_runtime_helper.py dump 95_cap_batch_1_state.xml ; rc=0
+batch=1 qty=9 inc=(276, 698, 339, 761)
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+tapped 5 times
+$ adb shell am force-stop com.aistudio.pizzora.xkqzmw ; rc=0
+$ adb shell am start -n com.aistudio.pizzora.xkqzmw/com.example.MainActivity ; rc=0
+$ python3 p8_runtime_helper.py tapxy 403 2274 ; rc=0
+$ python3 p8_runtime_helper.py dump 95_cap_batch_2_state.xml ; rc=0
+batch=2 qty=14 inc=(298, 698, 361, 761)
+$ python3 p8_runtime_helper.py tapxy 329 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 329 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 329 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 329 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 329 729 ; rc=0
+tapped 5 times
+$ adb shell am force-stop com.aistudio.pizzora.xkqzmw ; rc=0
+$ adb shell am start -n com.aistudio.pizzora.xkqzmw/com.example.MainActivity ; rc=0
+$ python3 p8_runtime_helper.py tapxy 403 2274 ; rc=0
+$ python3 p8_runtime_helper.py dump 95_cap_batch_3_state.xml ; rc=0
+batch=3 qty=9 inc=(276, 698, 339, 761)
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+tapped 5 times
+$ adb shell am force-stop com.aistudio.pizzora.xkqzmw ; rc=0
+$ adb shell am start -n com.aistudio.pizzora.xkqzmw/com.example.MainActivity ; rc=0
+$ python3 p8_runtime_helper.py tapxy 403 2274 ; rc=0
+$ python3 p8_runtime_helper.py dump 95_cap_batch_4_state.xml ; rc=0
+batch=4 qty=8 inc=(276, 698, 339, 761)
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+tapped 5 times
+$ adb shell am force-stop com.aistudio.pizzora.xkqzmw ; rc=0
+$ adb shell am start -n com.aistudio.pizzora.xkqzmw/com.example.MainActivity ; rc=0
+$ python3 p8_runtime_helper.py tapxy 403 2274 ; rc=0
+$ python3 p8_runtime_helper.py dump 95_cap_batch_5_state.xml ; rc=0
+batch=5 qty=9 inc=(276, 698, 339, 761)
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+$ python3 p8_runtime_helper.py tapxy 307 729 ; rc=0
+tapped 5 times
+$ python3 p8_runtime_helper.py dump 96_quantity_25_final.xml ; rc=0
+FINAL qty 10 increase (298, 687, 361, 750) enabled?
+$ python3 p8_runtime_helper.py shot 96_quantity_25_final.png ; rc=0
+$ python3 p8_runtime_helper.py tapxy 329 718 ; rc=0
+$ python3 p8_runtime_helper.py dump 97_quantity_after_extra_tap.xml ; rc=0
+AFTER EXTRA TAP qty 13

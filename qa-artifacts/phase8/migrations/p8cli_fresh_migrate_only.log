@@ -1,0 +1,12 @@
+=== PHASE 8 MIGRATION CLI EVIDENCE ===
+label: fresh migrate-only
+timestamp_utc_start: 2026-11-27T13:24:39Z
+binary: /workspace/pizzabi/rust/target/debug/pizzora-api
+database: pizzora_p8cli_fresh
+exact_command: env DATABASE_URL='postgres://pizzora:<redacted-local-db-password>@127.0.0.1:5432/pizzora_p8cli_fresh' '/workspace/pizzabi/rust/target/debug/pizzora-api' --migrate-only
+--- stdout+stderr BEGIN ---
+[2m2026-11-27T13:24:40.377839Z[0m [32m INFO[0m [2mpizzora_db::migrator[0m[2m:[0m Completed fresh PostgreSQL SQLx bootstrap under advisory lock [3mbackend_pid[0m[2m=[0m1632 [3mversions[0m[2m=[0m[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+[2m2026-11-27T13:24:40.378244Z[0m [32m INFO[0m [2mpizzora_api[0m[2m:[0m Pre-deploy migration step completed [3mmode[0m[2m=[0mFreshBootstrap [3mbackend_pid[0m[2m=[0m1632 [3mapplied_or_verified_versions[0m[2m=[0m[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+--- stdout+stderr END ---
+exit_code: 0
+timestamp_utc_end: 2026-11-27T13:24:40Z

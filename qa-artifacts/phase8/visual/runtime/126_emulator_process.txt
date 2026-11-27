@@ -1,0 +1,18 @@
+$ ps -ef | grep -E "emulator|qemu-system" | grep -v grep
+remote     43472       1  0 12:01 ?        00:00:00 [qemu-system-x86] <defunct>
+remote     43581       1  2 12:01 ?        00:04:02 [qemu-system-x86] <defunct>
+remote     45724       1  0 12:03 ?        00:00:00 [emulator] <defunct>
+remote     46229       1  9 12:03 ?        00:14:50 [qemu-system-x86] <defunct>
+remote    173995       1  0 14:14 ?        00:00:00 [emulator] <defunct>
+remote    174054   10240 84 14:15 ?        00:26:31 /home/remote/Android/Sdk/emulator/qemu/linux-x86_64/qemu-system-x86_64-headless -avd pizzora_api36_qa -no-window -noaudio -no-boot-anim -gpu swiftshader -camera-back none -camera-front none
+remote    174071       1  0 14:15 ?        00:00:00 /home/remote/Android/Sdk/emulator/crashpad_handler --no-rate-limit --database=/tmp/android-remote/emu-crash-37.3.10.db --url=https://clients2.google.com/cr/report --annotation=prod=AndroidEmulator --annotation=ver=37.3.10-16970787 --initial-client-fd=4 --shared-client-connection
+remote    174122  174054  0 14:15 ?        00:00:13 /home/remote/Android/Sdk/emulator/netsimd --host-dns=127.0.0.53
+rc=0
+
+$ adb shell getprop ro.kernel.qemu
+1
+rc=0
+
+$ adb shell getprop ro.product.model
+sdk_gphone64_x86_64
+rc=0

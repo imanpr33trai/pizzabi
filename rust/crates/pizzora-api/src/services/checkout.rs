@@ -18,7 +18,10 @@ use uuid::Uuid;
 use crate::dto::{CheckoutRequest, CheckoutResponse};
 use crate::error::ApiError;
 use crate::extractors::parse_uuid_param;
-use crate::services::cart::{load_catalog_ref_lookup, to_core_cart_inputs};
+use crate::services::cart::{
+    ensure_half_and_half_config_matches, ensure_modifier_features_enabled,
+    load_extended_catalog_ref_lookup, to_core_cart_inputs,
+};
 use crate::services::recipes::{CheckoutRecipeLineDemandInput, RecipeService};
 use crate::services::slots::fulfillment_type_as_str;
 use crate::storage::ObjectStorageClient;
@@ -59,6 +62,7 @@ impl CheckoutService {
             ));
         }
 
+        ensure_modifier_features_enabled(&request.items)?;
         let core_inputs = to_core_cart_inputs(&request.items);
         let parsed_items = CartValidation::validate_and_parse_inputs(&core_inputs)?;
         let merged_items = CartValidation::merge_duplicate_configurations(parsed_items);
@@ -121,8 +125,9 @@ impl CheckoutService {
             ));
         }
 
-        let lookup = load_catalog_ref_lookup(&mut tx, &*self.storage).await?;
+        let lookup = load_extended_catalog_ref_lookup(&mut tx, &*self.storage).await?;
         CartValidation::ensure_catalog_fk_references(&merged_items, &lookup)?;
+        ensure_half_and_half_config_matches(&merged_items, &lookup)?;
         let evaluated = CartValidation::evaluate_cart(&merged_items, &lookup)?;
         if !evaluated.all_available {
             return Err(ApiError::unprocessable(
@@ -787,18 +792,31 @@ fn compute_request_hash(
         Some(c) => CouponEvaluator::normalize_code(c).unwrap_or_else(|_| c.to_ascii_uppercase()),
         None => String::new(),
     };
+    let sorted_ids = |ids: &[Uuid]| -> String {
+        let mut values: Vec<String> = ids.iter().map(ToString::to_string).collect();
+        values.sort();
+        values.join(",")
+    };
+    let optional_id = |id: Option<Uuid>| -> String {
+        id.map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_owned())
+    };
     let mut item_parts: Vec<String> = merged
         .iter()
         .map(|i| {
-            let mut tids: Vec<String> = i.topping_ids.iter().map(ToString::to_string).collect();
-            tids.sort();
             format!(
-                "{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:cheese={}:sauce={}:standard={}:hah_config={}:hah_left={}:hah_right={}",
                 i.product_id,
                 i.variant_id,
                 i.crust_id,
-                tids.join(","),
-                i.quantity
+                sorted_ids(&i.topping_ids),
+                i.quantity,
+                optional_id(i.cheese_id),
+                optional_id(i.sauce_id),
+                sorted_ids(&i.standard_topping_ids),
+                optional_id(i.half_and_half_config_id),
+                sorted_ids(&i.half_and_half_left_topping_ids),
+                sorted_ids(&i.half_and_half_right_topping_ids),
             )
         })
         .collect();

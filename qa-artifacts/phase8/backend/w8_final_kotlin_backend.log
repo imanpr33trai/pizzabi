@@ -1,0 +1,32 @@
+=== Final Kotlin backend + shared contract suites (2026-11-27T14:18:33Z) ===
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :backend:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :backend:processResources
+> Task :backend:processTestResources NO-SOURCE
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :shared:contracts:processTestResources NO-SOURCE
+> Task :shared:contracts:compileKotlin
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+> Task :shared:contracts:compileTestKotlin
+> Task :shared:contracts:compileTestJava NO-SOURCE
+> Task :shared:contracts:testClasses UP-TO-DATE
+> Task :shared:contracts:test
+> Task :backend:compileKotlin
+> Task :backend:compileJava NO-SOURCE
+> Task :backend:classes
+> Task :backend:jar
+> Task :backend:compileTestKotlin
+> Task :backend:compileTestJava NO-SOURCE
+> Task :backend:testClasses UP-TO-DATE
+> Task :backend:test
+
+BUILD SUCCESSFUL in 2m 8s
+9 actionable tasks: 9 executed
+exit: 0
+--- XML-DERIVED TEST COUNTS ---
+backend: tests=86 failures=0 errors=0 skipped=0
+shared/contracts: tests=40 failures=0 errors=0 skipped=0

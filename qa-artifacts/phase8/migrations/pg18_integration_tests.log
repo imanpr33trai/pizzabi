@@ -7,4 +7,3 @@ test migrator::tests::pg18_phase8_rollback_and_reapply_succeeds ... ok
 test tests::pg18_fresh_and_concurrent_handoff_under_advisory_lock ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.41s
-

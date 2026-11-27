@@ -14,4 +14,3 @@ test tests::pg18_fresh_and_concurrent_handoff_under_advisory_lock ... ignored, R
 test tests::sql_migrations_0001_to_0003_are_embedded_in_migrator ... ok
 
 test result: ok. 7 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
-

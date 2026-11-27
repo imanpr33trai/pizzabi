@@ -1,0 +1,415 @@
+2026-11-27T14:21:34Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:21:34Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 40.6 MB/s (37420 bytes in 0.001s)
+2026-11-27T14:21:34Z rc=0 cmd=adb shell input tap 461 729
+2026-11-27T14:21:36Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:21:36Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 39.6 MB/s (37420 bytes in 0.001s)
+2026-11-27T14:21:36Z rc=0 cmd=adb shell input tap 825 1124
+2026-11-27T14:21:39Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:21:39Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 40.4 MB/s (37420 bytes in 0.001s)
+2026-11-27T14:21:39Z rc=0 cmd=adb shell input tap 482 1713
+2026-11-27T14:21:41Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:21:41Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 46.8 MB/s (37111 bytes in 0.001s)
+2026-11-27T14:22:00Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:22:00Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 12.4 MB/s (37449 bytes in 0.003s)
+2026-11-27T14:22:50Z rc=0 cmd=adb exec-out screencap -p :: 08_builder_modifiers_server_price.png
+2026-11-27T14:22:52Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:22:52Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 29.2 MB/s (37449 bytes in 0.001s)
+2026-11-27T14:22:58Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:22:58Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 35.6 MB/s (37449 bytes in 0.001s)
+2026-11-27T14:22:58Z rc=0 cmd=adb shell input tap 719 2239
+2026-11-27T14:23:04Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:23:04Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 33.0 MB/s (29810 bytes in 0.001s)
+2026-11-27T14:23:14Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:23:14Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 31.8 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:23:21Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:23:21Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 28.7 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:23:21Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:23:25Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:23:25Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 41.3 MB/s (35905 bytes in 0.001s)
+2026-11-27T14:23:49Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:23:49Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 34.3 MB/s (35905 bytes in 0.001s)
+2026-11-27T14:23:49Z rc=0 cmd=adb shell input tap 797 360
+2026-11-27T14:23:54Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:23:54Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 33.4 MB/s (35196 bytes in 0.001s)
+2026-11-27T14:24:19Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:19Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 35.7 MB/s (35196 bytes in 0.001s)
+2026-11-27T14:24:19Z rc=0 cmd=adb shell input tap 127 2274
+2026-11-27T14:24:22Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:22Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 22.1 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:24:22Z rc=0 cmd=adb shell input tap 572 1427
+2026-11-27T14:24:25Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:25Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 38.1 MB/s (30594 bytes in 0.001s)
+2026-11-27T14:24:37Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:37Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 31.6 MB/s (30594 bytes in 0.001s)
+2026-11-27T14:24:37Z rc=0 cmd=adb shell input tap 291 1437
+2026-11-27T14:24:39Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:39Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 42.1 MB/s (30595 bytes in 0.001s)
+2026-11-27T14:24:39Z rc=0 cmd=adb shell input tap 461 1706
+2026-11-27T14:24:44Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:44Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 41.4 MB/s (37397 bytes in 0.001s)
+2026-11-27T14:24:50Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:50Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 41.2 MB/s (37397 bytes in 0.001s)
+2026-11-27T14:24:50Z rc=0 cmd=adb shell input tap 825 1033
+2026-11-27T14:24:52Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:52Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 10.8 MB/s (36670 bytes in 0.003s)
+2026-11-27T14:24:52Z rc=0 cmd=adb shell input tap 596 1364
+2026-11-27T14:24:55Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:24:55Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 45.7 MB/s (37396 bytes in 0.001s)
+2026-11-27T14:24:55Z rc=0 cmd=adb shell input tap 482 1622
+2026-11-27T14:25:00Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:25:00Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 32.2 MB/s (37082 bytes in 0.001s)
+2026-11-27T14:25:07Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:25:07Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 37.1 MB/s (37082 bytes in 0.001s)
+2026-11-27T14:25:07Z rc=0 cmd=adb shell input tap 719 2239
+2026-11-27T14:25:21Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:25:21Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 29.8 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:25:21Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:25:23Z rc=0 cmd=adb exec-out screencap -p :: 14_cart_after_authenticated_add.png
+2026-11-27T14:25:25Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:25:25Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 41.0 MB/s (40217 bytes in 0.001s)
+2026-11-27T14:25:33Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:25:33Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 47.6 MB/s (40217 bytes in 0.001s)
+2026-11-27T14:25:33Z rc=0 cmd=adb shell input tap 677 2274
+2026-11-27T14:25:36Z rc=0 cmd=adb exec-out screencap -p :: 15_orders_screen.png
+2026-11-27T14:25:39Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:25:39Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 32.7 MB/s (30847 bytes in 0.001s)
+2026-11-27T14:25:54Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:25:54Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 32.1 MB/s (28101 bytes in 0.001s)
+2026-11-27T14:26:02Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:26:02Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 24.8 MB/s (26894 bytes in 0.001s)
+2026-11-27T14:26:10Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:26:10Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 31.3 MB/s (25796 bytes in 0.001s)
+2026-11-27T14:28:49Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:28:49Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 24.3 MB/s (25796 bytes in 0.001s)
+2026-11-27T14:29:02Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:29:02Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 26.5 MB/s (25796 bytes in 0.001s)
+2026-11-27T14:29:06Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:29:06Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 13.1 MB/s (25796 bytes in 0.002s)
+2026-11-27T14:29:10Z rc=0 cmd=adb shell input tap 996 375
+2026-11-27T14:29:15Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:29:15Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 0.6 MB/s (26173 bytes in 0.042s)
+2026-11-27T14:29:19Z rc=0 cmd=adb shell input tap 572 467
+2026-11-27T14:29:21Z rc=0 cmd=adb exec-out screencap -p :: 27_reorder_dialog.png
+2026-11-27T14:29:23Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:29:23Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 8.9 MB/s (8326 bytes in 0.001s)
+2026-11-27T14:30:32Z rc=0 cmd=adb shell input tap 773 1627
+2026-11-27T14:30:34Z rc=0 cmd=adb shell input tap 190 212
+2026-11-27T14:30:37Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:30:37Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 24.9 MB/s (26173 bytes in 0.001s)
+2026-11-27T14:30:42Z rc=0 cmd=adb shell input tap 84 375
+2026-11-27T14:30:45Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:30:45Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 31.6 MB/s (30847 bytes in 0.001s)
+2026-11-27T14:30:49Z rc=0 cmd=adb shell input tap 976 385
+2026-11-27T14:30:53Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:30:53Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 38.1 MB/s (27474 bytes in 0.001s)
+2026-11-27T14:31:03Z rc=0 cmd=adb shell input tap 540 548
+2026-11-27T14:31:06Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:31:06Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 14.4 MB/s (24139 bytes in 0.002s)
+2026-11-27T14:31:11Z rc=0 cmd=adb shell input tap 500 820
+2026-11-27T14:31:15Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:31:15Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 31.5 MB/s (28994 bytes in 0.001s)
+2026-11-27T14:31:21Z rc=0 cmd=adb shell input tap 572 1798
+2026-11-27T14:31:24Z rc=0 cmd=adb exec-out screencap -p :: 39_reorder_dialog_available_unavailable.png
+2026-11-27T14:31:26Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:31:26Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 7.7 MB/s (8296 bytes in 0.001s)
+2026-11-27T14:31:45Z rc=0 cmd=adb shell input tap 631 1473
+2026-11-27T14:31:48Z rc=0 cmd=adb exec-out screencap -p :: 40_after_reorder_confirm.png
+2026-11-27T14:31:50Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:31:50Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 12.5 MB/s (8287 bytes in 0.001s)
+2026-11-27T14:31:57Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:32:01Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:32:01Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 49.9 MB/s (43827 bytes in 0.001s)
+2026-11-27T14:32:09Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:32:09Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 42.1 MB/s (35898 bytes in 0.001s)
+2026-11-27T14:32:22Z rc=0 cmd=adb shell input tap 313 1220
+2026-11-27T14:32:25Z rc=0 cmd=adb shell input text RS-3568C4
+2026-11-27T14:32:29Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:32:29Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 2.7 MB/s (33676 bytes in 0.012s)
+2026-11-27T14:32:30Z rc=0 cmd=adb shell input tap 889 1221
+2026-11-27T14:32:33Z rc=0 cmd=adb exec-out screencap -p :: 46_coupon_applied.png
+2026-11-27T14:32:36Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:32:36Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 8.0 MB/s (33676 bytes in 0.004s)
+2026-11-27T14:32:57Z rc=0 cmd=adb shell input tap 845 1244
+2026-11-27T14:33:01Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:33:01Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 33.3 MB/s (33676 bytes in 0.001s)
+2026-11-27T14:33:23Z rc=0 cmd=adb shell am start -a android.settings.SETTINGS :: Starting: Intent { act=android.settings.SETTINGS }
+Warning: Activity not started, its current task has been brought to the front
+2026-11-27T14:33:23Z rc=0 cmd=adb shell am start -n com.aistudio.pizzora.xkqzmw/com.example.MainActivity :: Starting: Intent { cmp=com.aistudio.pizzora.xkqzmw/com.example.MainActivity }
+Warning: Activity not started, its current task has been brought to the front
+2026-11-27T14:33:25Z rc=0 cmd=adb shell input tap 127 2274
+2026-11-27T14:33:29Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:33:29Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 4.7 MB/s (33676 bytes in 0.007s)
+2026-11-27T14:33:39Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:33:39Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 36.6 MB/s (33676 bytes in 0.001s)
+2026-11-27T14:33:39Z rc=0 cmd=adb shell input tap 127 2274
+2026-11-27T14:33:44Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:33:44Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 8.1 MB/s (33676 bytes in 0.004s)
+2026-11-27T14:33:56Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:33:56Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 15.3 MB/s (25979 bytes in 0.002s)
+2026-11-27T14:34:03Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:34:03Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 17.8 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:34:03Z rc=0 cmd=adb shell input tap 572 1427
+2026-11-27T14:34:06Z rc=0 cmd=adb exec-out screencap -p :: 51_builder_default_scale.png
+2026-11-27T14:34:08Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:34:08Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 33.5 MB/s (30594 bytes in 0.001s)
+2026-11-27T14:34:25Z rc=0 cmd=adb exec-out screencap -p :: 55_talkback_builder.png
+2026-11-27T14:34:27Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:34:27Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 0.8 MB/s (5455 bytes in 0.006s)
+2026-11-27T14:34:41Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:34:41Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 21.2 MB/s (24184 bytes in 0.001s)
+2026-11-27T14:34:41Z rc=0 cmd=adb shell input tap 518 1675
+2026-11-27T14:34:44Z rc=0 cmd=adb exec-out screencap -p :: 57_builder_font_1_5.png
+2026-11-27T14:34:46Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:34:46Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 28.8 MB/s (25189 bytes in 0.001s)
+2026-11-27T14:34:52Z rc=0 cmd=adb exec-out screencap -p :: 58_builder_font_1_5_scrolled.png
+2026-11-27T14:34:54Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:34:54Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 29.2 MB/s (25189 bytes in 0.001s)
+2026-11-27T14:35:05Z rc=0 cmd=adb exec-out screencap -p :: 60_menu_font_2_0.png
+2026-11-27T14:35:07Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:35:07Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 28.0 MB/s (22693 bytes in 0.001s)
+2026-11-27T14:35:09Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:35:09Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 29.1 MB/s (22693 bytes in 0.001s)
+2026-11-27T14:35:09Z rc=0 cmd=adb shell input tap 490 1898
+2026-11-27T14:35:11Z rc=0 cmd=adb exec-out screencap -p :: 61_builder_font_2_0.png
+2026-11-27T14:35:13Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:35:13Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 13.4 MB/s (23729 bytes in 0.002s)
+2026-11-27T14:35:26Z rc=0 cmd=adb exec-out screencap -p :: 64_menu_large_display.png
+2026-11-27T14:35:29Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:35:29Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 33.6 MB/s (25951 bytes in 0.001s)
+2026-11-27T14:35:31Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:35:31Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 11.0 MB/s (25951 bytes in 0.002s)
+2026-11-27T14:35:31Z rc=0 cmd=adb shell input tap 693 1114
+2026-11-27T14:35:33Z rc=0 cmd=adb exec-out screencap -p :: 65_builder_large_display.png
+2026-11-27T14:35:35Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:35:35Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 43.5 MB/s (45481 bytes in 0.001s)
+2026-11-27T14:35:54Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:36:01Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:36:02Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 41.9 MB/s (40575 bytes in 0.001s)
+2026-11-27T14:36:02Z rc=0 cmd=adb shell input tap 811 2032
+2026-11-27T14:36:06Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:36:06Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 20.5 MB/s (23215 bytes in 0.001s)
+2026-11-27T14:36:12Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:36:12Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 23.3 MB/s (23215 bytes in 0.001s)
+2026-11-27T14:36:12Z rc=0 cmd=adb shell input tap 860 1494
+2026-11-27T14:36:16Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:36:16Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 15.0 MB/s (11888 bytes in 0.001s)
+2026-11-27T14:36:21Z rc=0 cmd=adb shell input tap 463 787
+2026-11-27T14:36:24Z rc=0 cmd=adb shell input text 12%sQA%sStreet
+2026-11-27T14:36:28Z rc=0 cmd=adb exec-out screencap -p :: 69_address_ime_visible.png
+2026-11-27T14:36:31Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:36:31Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 0.3 MB/s (12239 bytes in 0.043s)
+2026-11-27T14:36:37Z rc=0 cmd=adb shell input keyevent 4
+2026-11-27T14:36:42Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:36:42Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 10.5 MB/s (12239 bytes in 0.001s)
+2026-11-27T14:36:46Z rc=0 cmd=adb shell input tap 407 2055
+2026-11-27T14:36:51Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:36:51Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 23.8 MB/s (22839 bytes in 0.001s)
+2026-11-27T14:37:00Z rc=0 cmd=adb shell input keyevent 4
+2026-11-27T14:37:04Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:37:04Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 45.9 MB/s (45953 bytes in 0.001s)
+2026-11-27T14:37:09Z rc=0 cmd=adb shell input tap 313 1942
+2026-11-27T14:37:13Z rc=0 cmd=adb exec-out screencap -p :: 75_cart_ime_visible.png
+2026-11-27T14:37:15Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:37:15Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 10.1 MB/s (39102 bytes in 0.004s)
+2026-11-27T14:37:28Z rc=0 cmd=adb shell input keyevent 4
+2026-11-27T14:37:32Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:37:32Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 24.4 MB/s (40570 bytes in 0.002s)
+2026-11-27T14:37:37Z rc=0 cmd=adb shell input tap 845 1715
+2026-11-27T14:37:41Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:37:41Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 16.0 MB/s (14312 bytes in 0.001s)
+2026-11-27T14:37:46Z rc=0 cmd=adb exec-out screencap -p :: 78_coupon_picker.png
+2026-11-27T14:37:46Z rc=0 cmd=adb shell input tap 894 1623
+2026-11-27T14:37:49Z rc=0 cmd=adb exec-out screencap -p :: 79_coupon_applied.png
+2026-11-27T14:37:51Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:37:51Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 38.8 MB/s (40574 bytes in 0.001s)
+2026-11-27T14:37:56Z rc=0 cmd=adb shell input tap 906 1878
+2026-11-27T14:37:59Z rc=0 cmd=adb exec-out screencap -p :: 80_coupon_removed.png
+2026-11-27T14:38:01Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:38:01Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 45.1 MB/s (40217 bytes in 0.001s)
+2026-11-27T14:38:09Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:38:09Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 40.5 MB/s (40217 bytes in 0.001s)
+2026-11-27T14:38:16Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:38:16Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 2.5 MB/s (40241 bytes in 0.015s)
+2026-11-27T14:38:35Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:38:42Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:38:42Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 46.9 MB/s (40615 bytes in 0.001s)
+2026-11-27T14:39:08Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:39:15Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:39:15Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 44.1 MB/s (40615 bytes in 0.001s)
+2026-11-27T14:39:20Z rc=0 cmd=adb shell input tap 960 360
+2026-11-27T14:39:22Z rc=0 cmd=adb exec-out screencap -p :: 88_clear_cart_confirmation.png
+2026-11-27T14:39:24Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:39:24Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 2.2 MB/s (5950 bytes in 0.003s)
+2026-11-27T14:39:29Z rc=0 cmd=adb shell input tap 721 1344
+2026-11-27T14:39:34Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:39:34Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 14.1 MB/s (13839 bytes in 0.001s)
+2026-11-27T14:39:38Z rc=0 cmd=adb shell input tap 540 835
+2026-11-27T14:39:42Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:39:42Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 36.9 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:39:42Z rc=0 cmd=adb shell input tap 572 1427
+2026-11-27T14:39:46Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:39:46Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 40.7 MB/s (30594 bytes in 0.001s)
+2026-11-27T14:39:52Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:39:52Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 28.3 MB/s (30594 bytes in 0.001s)
+2026-11-27T14:39:52Z rc=0 cmd=adb shell input tap 719 2239
+2026-11-27T14:39:55Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:39:59Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:39:59Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 32.1 MB/s (27074 bytes in 0.001s)
+2026-11-27T14:40:15Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:40:21Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:40:21Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 0.9 MB/s (33334 bytes in 0.036s)
+2026-11-27T14:40:26Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:27Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:27Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:28Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:28Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:29Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:29Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:29Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:30Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:30Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:31Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:31Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:32Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:32Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:33Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:33Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:33Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:34Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:34Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:35Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:35Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:35Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:36Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:36Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:40:41Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:40:41Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 38.0 MB/s (36289 bytes in 0.001s)
+2026-11-27T14:40:58Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:41:05Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:41:05Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 9.4 MB/s (33346 bytes in 0.003s)
+2026-11-27T14:41:05Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:05Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:06Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:06Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:06Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:11Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:41:17Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:41:17Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 8.0 MB/s (33347 bytes in 0.004s)
+2026-11-27T14:41:18Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:18Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:19Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:19Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:19Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:24Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:41:31Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:41:31Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 33.9 MB/s (33350 bytes in 0.001s)
+2026-11-27T14:41:31Z rc=0 cmd=adb shell input tap 329 729
+2026-11-27T14:41:32Z rc=0 cmd=adb shell input tap 329 729
+2026-11-27T14:41:32Z rc=0 cmd=adb shell input tap 329 729
+2026-11-27T14:41:33Z rc=0 cmd=adb shell input tap 329 729
+2026-11-27T14:41:33Z rc=0 cmd=adb shell input tap 329 729
+2026-11-27T14:41:38Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:41:44Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:41:44Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 2.8 MB/s (33347 bytes in 0.011s)
+2026-11-27T14:41:45Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:45Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:45Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:46Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:46Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:51Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:41:57Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:41:57Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 3.6 MB/s (33347 bytes in 0.009s)
+2026-11-27T14:41:58Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:58Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:59Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:59Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:41:59Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:42:04Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:42:10Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:42:10Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 2.5 MB/s (33347 bytes in 0.013s)
+2026-11-27T14:42:11Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:42:11Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:42:11Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:42:12Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:42:12Z rc=0 cmd=adb shell input tap 307 729
+2026-11-27T14:42:15Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:42:15Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 27.6 MB/s (32984 bytes in 0.001s)
+2026-11-27T14:42:16Z rc=0 cmd=adb exec-out screencap -p :: 96_quantity_25_final.png
+2026-11-27T14:42:16Z rc=0 cmd=adb shell input tap 329 718
+2026-11-27T14:42:19Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:42:19Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 40.6 MB/s (32984 bytes in 0.001s)
+2026-11-27T14:42:31Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:42:38Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:42:38Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 10.2 MB/s (33350 bytes in 0.003s)
+2026-11-27T14:42:53Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:42:53Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 8.0 MB/s (8543 bytes in 0.001s)
+2026-11-27T14:42:57Z rc=0 cmd=adb shell input tap 540 1545
+2026-11-27T14:43:01Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:43:01Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 3.7 MB/s (11515 bytes in 0.003s)
+2026-11-27T14:43:07Z rc=0 cmd=adb shell input tap 235 1031
+2026-11-27T14:43:10Z rc=0 cmd=adb shell input text qa.customer@pizzora.local
+2026-11-27T14:43:10Z rc=0 cmd=adb shell input tap 235 1231
+2026-11-27T14:43:14Z rc=0 cmd=adb shell input text '[redacted]'
+2026-11-27T14:43:14Z rc=0 cmd=adb shell input tap 540 1415
+2026-11-27T14:43:21Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:43:21Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 28.3 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:43:25Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:43:29Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:43:29Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 30.3 MB/s (35925 bytes in 0.001s)
+2026-11-27T14:43:34Z rc=0 cmd=adb shell input tap 329 718
+2026-11-27T14:43:36Z rc=0 cmd=adb exec-out screencap -p :: 105_quantity_25.png
+2026-11-27T14:43:39Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:43:39Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 16.3 MB/s (36675 bytes in 0.002s)
+2026-11-27T14:43:39Z rc=0 cmd=adb shell input tap 329 718
+2026-11-27T14:43:43Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:43:43Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 36.2 MB/s (36304 bytes in 0.001s)
+2026-11-27T14:43:48Z rc=0 cmd=adb shell input tap 137 718
+2026-11-27T14:43:50Z rc=0 cmd=adb exec-out screencap -p :: 107_after_remove_undo_snackbar.png
+2026-11-27T14:43:52Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:43:52Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 41.5 MB/s (36296 bytes in 0.001s)
+2026-11-27T14:43:57Z rc=0 cmd=adb shell input tap 943 718
+2026-11-27T14:43:59Z rc=0 cmd=adb exec-out screencap -p :: 108_after_remove_snackbar.png
+2026-11-27T14:44:01Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:44:01Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 18.9 MB/s (16021 bytes in 0.001s)
+2026-11-27T14:44:06Z rc=0 cmd=adb shell input tap 948 2032
+2026-11-27T14:44:11Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:44:11Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 40.5 MB/s (32984 bytes in 0.001s)
+2026-11-27T14:44:17Z rc=0 cmd=adb shell input tap 127 2274
+2026-11-27T14:44:20Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:44:20Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 26.7 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:44:20Z rc=0 cmd=adb shell input tap 572 1427
+2026-11-27T14:44:24Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:44:24Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 37.8 MB/s (30594 bytes in 0.001s)
+2026-11-27T14:44:24Z rc=0 cmd=adb shell input tap 719 2239
+2026-11-27T14:44:30Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:44:30Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 9.0 MB/s (7339 bytes in 0.001s)
+2026-11-27T14:44:35Z rc=0 cmd=adb shell input tap 403 2274
+2026-11-27T14:44:37Z rc=0 cmd=adb exec-out screencap -p :: 111_duplicate_merge.png
+2026-11-27T14:44:42Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:44:42Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 11.7 MB/s (40605 bytes in 0.003s)
+2026-11-27T14:44:54Z rc=0 cmd=adb shell input tap 809 718
+2026-11-27T14:44:58Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:44:58Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 38.7 MB/s (32086 bytes in 0.001s)
+2026-11-27T14:45:05Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:05Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 30.8 MB/s (32086 bytes in 0.001s)
+2026-11-27T14:45:05Z rc=0 cmd=adb shell input tap 291 1437
+2026-11-27T14:45:07Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:07Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 32.7 MB/s (32087 bytes in 0.001s)
+2026-11-27T14:45:07Z rc=0 cmd=adb shell input tap 461 1706
+2026-11-27T14:45:12Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:12Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 29.5 MB/s (32087 bytes in 0.001s)
+2026-11-27T14:45:19Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:19Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 35.8 MB/s (32087 bytes in 0.001s)
+2026-11-27T14:45:19Z rc=0 cmd=adb shell input tap 719 2239
+2026-11-27T14:45:23Z rc=0 cmd=adb exec-out screencap -p :: 115_after_cart_edit.png
+2026-11-27T14:45:25Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:25Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 39.1 MB/s (38380 bytes in 0.001s)
+2026-11-27T14:45:37Z rc=0 cmd=adb shell input tap 127 2274
+2026-11-27T14:45:40Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:40Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 24.9 MB/s (25979 bytes in 0.001s)
+2026-11-27T14:45:40Z rc=0 cmd=adb shell input tap 572 1427
+2026-11-27T14:45:44Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:44Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 38.3 MB/s (30594 bytes in 0.001s)
+2026-11-27T14:45:44Z rc=0 cmd=adb shell input keyevent 4
+2026-11-27T14:45:48Z rc=0 cmd=adb shell uiautomator dump /sdcard/p8_runtime_window.xml :: UI hierchary dumped to: /sdcard/p8_runtime_window.xml
+2026-11-27T14:45:48Z rc=0 cmd=adb pull /sdcard/p8_runtime_window.xml /tmp/opencode/p8_runtime_window.xml :: /sdcard/p8_runtime_window.xml: 1 file pulled, 0 skipped. 33.8 MB/s (25979 bytes in 0.001s)

@@ -1,0 +1,35 @@
+=== PHASE 8 MIGRATION CLI EVIDENCE ===
+label: fresh preflight-only (post-bootstrap)
+timestamp_utc_start: 2026-11-27T13:24:40Z
+binary: /workspace/pizzabi/rust/target/debug/pizzora-api
+database: pizzora_p8cli_fresh
+exact_command: env DATABASE_URL='postgres://pizzora:<redacted-local-db-password>@127.0.0.1:5432/pizzora_p8cli_fresh' '/workspace/pizzabi/rust/target/debug/pizzora-api' --preflight-only
+--- stdout+stderr BEGIN ---
+{
+  "flyway_table_exists": false,
+  "sqlx_table_exists": true,
+  "flyway_verified": false,
+  "sqlx_verified": true,
+  "catalog_invariants_ok": true,
+  "flyway_versions": [],
+  "sqlx_versions": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "outbox_dead_letter_count": 0,
+  "outbox_pending_count": 0,
+  "stream_high_water_seq": 0,
+  "active_worker_sessions": 0
+}
+--- stdout+stderr END ---
+exit_code: 0
+timestamp_utc_end: 2026-11-27T13:24:40Z

@@ -1,0 +1,108 @@
+=== adopt profile setup (pinned Flyway V1-V3, mirroring migrator.rs tests) ===
+timestamp_utc_start: 2026-11-27T13:24:40Z
+[2026-11-27T13:24:40Z] docker exec -i pizzora-pg18 psql -U pizzora -d pizzora_p8cli_adopt -v ON_ERROR_STOP=1 -f - < rust/crates/pizzora-db/migrations/0001_core_schema.sql
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+[2026-11-27T13:24:40Z] docker exec -i pizzora-pg18 psql -U pizzora -d pizzora_p8cli_adopt -v ON_ERROR_STOP=1 -f - < rust/crates/pizzora-db/migrations/0002_seed_rbac_and_settings.sql
+INSERT 0 3
+INSERT 0 22
+INSERT 0 7
+INSERT 0 4
+INSERT 0 22
+INSERT 0 1
+INSERT 0 1
+[2026-11-27T13:24:40Z] docker exec -i pizzora-pg18 psql -U pizzora -d pizzora_p8cli_adopt -v ON_ERROR_STOP=1 -f - < rust/crates/pizzora-db/migrations/0003_hot_path_indexes.sql
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+-- Pinned Flyway history (checksums from tools/golden-vectors/flyway_11_3_4_checksums.json)
+[2026-11-27T13:24:40Z] CREATE/INSERT flyway_schema_history
+CREATE TABLE
+INSERT 0 1
+INSERT 0 3
+[2026-11-27T13:24:41Z] adopt baseline table count (expect 46):
+47
+[2026-11-27T13:24:41Z] flyway history:
+ installed_rank | version |             script             |  checksum   | success
+----------------+---------+--------------------------------+-------------+---------
+              0 |         | "public"                       |             | t
+              1 | 1       | V1__core_schema.sql            | -1549990012 | t
+              2 | 2       | V2__seed_rbac_and_settings.sql | -1701246598 | t
+              3 | 3       | V3__hot_path_indexes.sql       | -1177665950 | t
+(4 rows)
+
+timestamp_utc_end: 2026-11-27T13:24:41Z

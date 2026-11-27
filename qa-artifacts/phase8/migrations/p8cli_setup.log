@@ -1,0 +1,13 @@
+=== setup: create isolated databases ===
+[2026-11-27T13:24:39Z] DROP DATABASE IF EXISTS "pizzora_p8cli_fresh"; CREATE DATABASE "pizzora_p8cli_fresh";
+NOTICE:  database "pizzora_p8cli_fresh" does not exist, skipping
+DROP DATABASE
+CREATE DATABASE
+[2026-11-27T13:24:39Z] DROP DATABASE IF EXISTS "pizzora_p8cli_adopt"; CREATE DATABASE "pizzora_p8cli_adopt";
+NOTICE:  database "pizzora_p8cli_adopt" does not exist, skipping
+DROP DATABASE
+CREATE DATABASE
+=== verify fresh DB starts empty ===
+0
+=== verify adopt DB starts empty ===
+0

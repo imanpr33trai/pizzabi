@@ -1,0 +1,127 @@
+=== Kotlin Phase 8 33-vector parity verification (final isolated run) ===
+START: 2026-11-27T14:01:31Z
+WORKDIR: /workspace/pizzabi
+CMD: ./gradlew -I /tmp/opencode/pizzora-gradle-init.gradle --dependency-verification=off -PbackendOnly=true :backend:test --tests '*Phase8*' --no-daemon --rerun-tasks
+CANONICAL_FIXTURE: tools/golden-vectors/pizzora_phase8_modifier_vectors.json
+CANONICAL_FIXTURE_SHA256_EXPECTED: a1e6f596d14c9a74ea820d20fbe7a349bbbcfab29bb02cf7464598ea9fc61623
+--- GRADLE OUTPUT BEGIN ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :backend:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :backend:processResources
+> Task :backend:processTestResources NO-SOURCE
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :shared:contracts:compileKotlin
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+> Task :backend:compileKotlin
+> Task :backend:compileJava NO-SOURCE
+> Task :backend:classes
+> Task :backend:jar
+> Task :backend:compileTestKotlin
+> Task :backend:compileTestJava NO-SOURCE
+> Task :backend:testClasses UP-TO-DATE
+> Task :backend:test
+
+BUILD SUCCESSFUL in 2m 27s
+7 actionable tasks: 7 executed
+--- GRADLE OUTPUT END ---
+GRADLE_EXIT: 0
+END: 2026-11-27T14:03:59Z
+--- XML-DERIVED TEST COUNTS ---
+com.pizzora.backend.Phase8GoldenVectorFullParityTest: tests=2 failures=0 errors=0 skipped=0 time=4.974
+com.pizzora.backend.Phase8HistoricalOrderDisplayTest: tests=1 failures=0 errors=0 skipped=0 time=1.007
+com.pizzora.backend.Phase8ModifierPersistenceTest: tests=1 failures=0 errors=0 skipped=0 time=0.816
+com.pizzora.backend.Phase8PricingAndCouponsTest: tests=3 failures=0 errors=0 skipped=0 time=1.901
+com.pizzora.backend.Phase8PricingParityTest: tests=4 failures=0 errors=0 skipped=0 time=1.0
+com.pizzora.backend.Phase8ReorderApiTest: tests=1 failures=0 errors=0 skipped=0 time=0.893
+com.pizzora.backend.Phase8UnavailableReconciliationTest: tests=1 failures=0 errors=0 skipped=0 time=0.76
+TOTAL Phase8 XML: tests=13 failures=0 errors=0 skipped=0
+--- 33-VECTOR EXECUTION EVIDENCE FROM XML system-out ---
+VECTOR U-28 expected_error=ARITHMETIC_OVERFLOW observed=ArithmeticException code=null message=long overflow
+VECTOR Q-01 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=0, taxableAmountPaise=14500, deliveryFeePaise=0, gstBps=500, taxPaise=725, cgstPaise=362, sgstPaise=363, totalPaise=15225) observed_quote=subtotal=14500,taxable=14500,discount=0,taxable_amount=14500,delivery=0,gst=500,tax=725,cgst=362,sgst=363,total=15225
+VECTOR Q-02 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=1450, taxableAmountPaise=13050, deliveryFeePaise=0, gstBps=500, taxPaise=653, cgstPaise=326, sgstPaise=327, totalPaise=13703) observed_quote=subtotal=14500,taxable=14500,discount=1450,taxable_amount=13050,delivery=0,gst=500,tax=653,cgst=326,sgst=327,total=13703
+VECTOR Q-03 expected_quote=ExpectedQuote(subtotalPaise=10001, taxableSubtotalPaise=10001, discountPaise=1250, taxableAmountPaise=8751, deliveryFeePaise=0, gstBps=500, taxPaise=438, cgstPaise=219, sgstPaise=219, totalPaise=9189) observed_quote=subtotal=10001,taxable=10001,discount=1250,taxable_amount=8751,delivery=0,gst=500,tax=438,cgst=219,sgst=219,total=9189
+VECTOR Q-04 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=3000, taxableAmountPaise=11500, deliveryFeePaise=3000, gstBps=500, taxPaise=575, cgstPaise=287, sgstPaise=288, totalPaise=15075) observed_quote=subtotal=14500,taxable=14500,discount=3000,taxable_amount=11500,delivery=3000,gst=500,tax=575,cgst=287,sgst=288,total=15075
+VECTOR Q-05 expected_quote=ExpectedQuote(subtotalPaise=39400, taxableSubtotalPaise=39400, discountPaise=3940, taxableAmountPaise=35460, deliveryFeePaise=3000, gstBps=500, taxPaise=1773, cgstPaise=886, sgstPaise=887, totalPaise=40233) observed_quote=subtotal=39400,taxable=39400,discount=3940,taxable_amount=35460,delivery=3000,gst=500,tax=1773,cgst=886,sgst=887,total=40233
+VERIFIED_VECTOR_COUNT=33
+VERIFIED_VECTOR_IDS=U-01,U-02,U-03,U-04,U-05,U-06,U-07,U-08,U-09,U-10,U-11,U-12,U-13,U-14,U-15,U-16,U-17,U-18,U-19,U-20,U-21,U-22,U-23,U-24,U-25,U-26,U-27,U-28,Q-01,Q-02,Q-03,Q-04,Q-05
+FIXTURE=/workspace/pizzabi/tools/golden-vectors/pizzora_phase8_modifier_vectors.json
+FIXTURE_SHA256=a1e6f596d14c9a74ea820d20fbe7a349bbbcfab29bb02cf7464598ea9fc61623
+MODIFIER_FIXTURE_VECTOR_COUNT=33
+WROTE_FIXTURE_DIGEST=/workspace/pizzabi/qa-artifacts/phase8/parity/kotlin_parity_fixture_sha256.txt
+--- FIXTURE DIGEST RECHECK ---
+a1e6f596d14c9a74ea820d20fbe7a349bbbcfab29bb02cf7464598ea9fc61623  tools/golden-vectors/pizzora_phase8_modifier_vectors.json
+--- GENERATED DIGEST EVIDENCE FILE ---
+# Canonical Kotlin Phase 8 33-vector parity fixture (SHA-256 of raw bytes)
+pizzora_phase8_modifier_vectors.json=a1e6f596d14c9a74ea820d20fbe7a349bbbcfab29bb02cf7464598ea9fc61623
+verified_vector_count=33
+--- APPENDED: ALL VECTOR LINES FROM FINAL XML system-out ---
+VECTOR U-01 Base 10000, no modifiers
+VECTOR U-01 expected_unit=10000 observed_unit=10000 line_total=10000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-02 + cheese 2000
+VECTOR U-02 expected_unit=12000 observed_unit=12000 line_total=12000 breakdown=cheese=2000,sauce=0,standards=0,half=0,modifier=2000
+VECTOR U-03 + sauce 1500
+VECTOR U-03 expected_unit=11500 observed_unit=11500 line_total=11500 breakdown=cheese=0,sauce=1500,standards=0,half=0,modifier=1500
+VECTOR U-04 + cheese 2000 + sauce 1500
+VECTOR U-04 expected_unit=13500 observed_unit=13500 line_total=13500 breakdown=cheese=2000,sauce=1500,standards=0,half=0,modifier=3500
+VECTOR U-05 + crust 1000
+VECTOR U-05 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-06 + non-default standard 1000
+VECTOR U-06 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=1000,half=0,modifier=1000
+VECTOR U-07 + non-default standard 1000 + 500
+VECTOR U-07 expected_unit=11500 observed_unit=11500 line_total=11500 breakdown=cheese=0,sauce=0,standards=1500,half=0,modifier=1500
+VECTOR U-08 Default standard kept (extra 1000 ignored)
+VECTOR U-08 expected_unit=10000 observed_unit=10000 line_total=10000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-09 Default standard removed (zero credit)
+VECTOR U-09 expected_unit=10000 observed_unit=10000 line_total=10000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-10 Default kept + non-default 1000
+VECTOR U-10 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=1000,half=0,modifier=1000
+VECTOR U-11 Default removed + non-default 1000
+VECTOR U-11 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=1000,half=0,modifier=1000
+VECTOR U-12 Crust 1000 + cheese 2000 + sauce 1500 + standard 1000
+VECTOR U-12 expected_unit=15500 observed_unit=15500 line_total=15500 breakdown=cheese=2000,sauce=1500,standards=1000,half=0,modifier=4500
+VECTOR U-13 Half 14000/15000 + surcharge 1000
+VECTOR U-13 expected_unit=15500 observed_unit=15500 line_total=15500 breakdown=cheese=0,sauce=0,standards=0,half=1000,modifier=1000
+VECTOR U-14 Half 10001/10002 + surcharge 0 (odd HALF_UP)
+VECTOR U-14 expected_unit=10002 observed_unit=10002 line_total=10002 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-15 Half 10001/10002 + surcharge 999
+VECTOR U-15 expected_unit=11001 observed_unit=11001 line_total=11001 breakdown=cheese=0,sauce=0,standards=0,half=999,modifier=999
+VECTOR U-16 Half 15500 + cheese 2000 + sauce 1500
+VECTOR U-16 expected_unit=19000 observed_unit=19000 line_total=19000 breakdown=cheese=2000,sauce=1500,standards=0,half=1000,modifier=4500
+VECTOR U-17 Half 15500 + non-default standard 700
+VECTOR U-17 expected_unit=16200 observed_unit=16200 line_total=16200 breakdown=cheese=0,sauce=0,standards=700,half=1000,modifier=1700
+VECTOR U-18 Half 15500 + cheese 2000 + sauce 1500 + standard 700
+VECTOR U-18 expected_unit=19700 observed_unit=19700 line_total=19700 breakdown=cheese=2000,sauce=1500,standards=700,half=1000,modifier=5200
+VECTOR U-19 Half 10000/10001 (1-paise difference)
+VECTOR U-19 expected_unit=10001 observed_unit=10001 line_total=10001 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-20 Half 10000/10003 (3-paise difference)
+VECTOR U-20 expected_unit=10002 observed_unit=10002 line_total=10002 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-21 Base 10000 × quantity 2
+VECTOR U-21 expected_unit=10000 observed_unit=10000 line_total=20000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-22 All-modifier 19700 × quantity 25
+VECTOR U-22 expected_unit=19700 observed_unit=19700 line_total=492500 breakdown=cheese=50000,sauce=37500,standards=17500,half=0,modifier=105000
+VECTOR U-23 Half 10002 × quantity 3
+VECTOR U-23 expected_unit=10002 observed_unit=10002 line_total=30006 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-24 Half-all 19700 × quantity 25
+VECTOR U-24 expected_unit=19700 observed_unit=19700 line_total=492500 breakdown=cheese=50000,sauce=37500,standards=17500,half=25000,modifier=130000
+VECTOR U-25 Half 12000/12000 + surcharge 0
+VECTOR U-25 expected_unit=12000 observed_unit=12000 line_total=12000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-26 Half 10000/10000 + surcharge 5000
+VECTOR U-26 expected_unit=15000 observed_unit=15000 line_total=15000 breakdown=cheese=0,sauce=0,standards=0,half=5000,modifier=5000
+VECTOR U-27 Unit 1,000,000,000 × quantity 25
+VECTOR U-27 expected_unit=1000000000 observed_unit=1000000000 line_total=25000000000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-28 Unit i64::MAX × quantity 2 → ARITHMETIC_OVERFLOW
+VECTOR U-28 expected_error=ARITHMETIC_OVERFLOW observed=ArithmeticException code=null message=long overflow
+VECTOR Q-01 Quote 14500, GST 500, delivery 0
+VECTOR Q-01 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=0, taxableAmountPaise=14500, deliveryFeePaise=0, gstBps=500, taxPaise=725, cgstPaise=362, sgstPaise=363, totalPaise=15225) observed_quote=subtotal=14500,taxable=14500,discount=0,taxable_amount=14500,delivery=0,gst=500,tax=725,cgst=362,sgst=363,total=15225
+VECTOR Q-02 Quote 14500, 10% coupon
+VECTOR Q-02 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=1450, taxableAmountPaise=13050, deliveryFeePaise=0, gstBps=500, taxPaise=653, cgstPaise=326, sgstPaise=327, totalPaise=13703) observed_quote=subtotal=14500,taxable=14500,discount=1450,taxable_amount=13050,delivery=0,gst=500,tax=653,cgst=326,sgst=327,total=13703
+VECTOR Q-03 Quote 10001, 12.5% coupon
+VECTOR Q-03 expected_quote=ExpectedQuote(subtotalPaise=10001, taxableSubtotalPaise=10001, discountPaise=1250, taxableAmountPaise=8751, deliveryFeePaise=0, gstBps=500, taxPaise=438, cgstPaise=219, sgstPaise=219, totalPaise=9189) observed_quote=subtotal=10001,taxable=10001,discount=1250,taxable_amount=8751,delivery=0,gst=500,tax=438,cgst=219,sgst=219,total=9189
+VECTOR Q-04 Quote 14500, flat 5000 cap 3000, delivery 3000
+VECTOR Q-04 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=3000, taxableAmountPaise=11500, deliveryFeePaise=3000, gstBps=500, taxPaise=575, cgstPaise=287, sgstPaise=288, totalPaise=15075) observed_quote=subtotal=14500,taxable=14500,discount=3000,taxable_amount=11500,delivery=3000,gst=500,tax=575,cgst=287,sgst=288,total=15075
+VECTOR Q-05 19700 × 2, 10% coupon, GST 500, delivery 3000
+VECTOR Q-05 expected_quote=ExpectedQuote(subtotalPaise=39400, taxableSubtotalPaise=39400, discountPaise=3940, taxableAmountPaise=35460, deliveryFeePaise=3000, gstBps=500, taxPaise=1773, cgstPaise=886, sgstPaise=887, totalPaise=40233) observed_quote=subtotal=39400,taxable=39400,discount=3940,taxable_amount=35460,delivery=3000,gst=500,tax=1773,cgst=886,sgst=887,total=40233

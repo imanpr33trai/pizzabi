@@ -116,6 +116,10 @@ class Phase18SecurityRobolectricTest {
 
   @Test
   fun `keystore cipher uses AES-GCM, rejects tampered ciphertext and blocks plaintext fallback in production`() = runTest {
+    // Robolectric creates a fresh filesDir per test method while the preferences DataStore is a
+    // process-wide singleton bound to the first context that touched it. Rebind it here so the
+    // on-disk assertion below inspects this test's storage.
+    resetPreferencesDataStoreSingleton()
     val aesKey = generateAes256Key()
     val strictCipher = AndroidKeystoreTokenCipher(
       allowPlainFallback = false,
@@ -232,5 +236,15 @@ class Phase18SecurityRobolectricTest {
     context.resources.getXml(R.xml.data_extraction_rules).use { parser ->
       assertNotNull(parser)
     }
+  }
+
+  private fun resetPreferencesDataStoreSingleton() {
+    val tokenManagerClass = Class.forName("com.example.core.security.TokenManagerKt")
+    val delegateField = tokenManagerClass.getDeclaredField("pizzoraPrefs\$delegate")
+    delegateField.isAccessible = true
+    val delegate = delegateField.get(null)
+    val instanceField = delegate.javaClass.getDeclaredField("INSTANCE")
+    instanceField.isAccessible = true
+    instanceField.set(delegate, null)
   }
 }

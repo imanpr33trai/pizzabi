@@ -88,6 +88,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -102,10 +103,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.PizzoraApplication
 import com.example.R
 import com.example.core.database.CartItemWithToppings
 import com.example.core.domain.DomainBridge
 import com.example.core.domain.RustDomainBridge
+import com.example.core.network.PizzoraApiClient
 import com.example.ui.components.LocalReducedMotion
 import com.example.ui.components.PizzoraBannerTone
 import com.example.ui.components.PizzoraConfirmationDialog
@@ -118,16 +121,35 @@ import com.example.ui.theme.LocalPizzoraSemanticColors
 import com.example.ui.theme.PizzoraMonoBody
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.WarmParchmentText
+import com.pizzora.contracts.CartCheeseViewDto
+import com.pizzora.contracts.CartHalfAndHalfViewDto
+import com.pizzora.contracts.CartItemInputDto
+import com.pizzora.contracts.CartItemViewDto
+import com.pizzora.contracts.CartStandardToppingViewDto
+import com.pizzora.contracts.CheeseOptionDto
 import com.pizzora.contracts.CrustOptionDto
+import com.pizzora.contracts.FulfillmentType
+import com.pizzora.contracts.HalfAndHalfConfigDto
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductImageStatus
 import com.pizzora.contracts.ProductVariantDto
+import com.pizzora.contracts.PricingQuoteRequest
+import com.pizzora.contracts.SauceOptionDto
 import com.pizzora.contracts.SizeCode
+import com.pizzora.contracts.StandardToppingDto
 import com.pizzora.contracts.ToppingDto
 
 sealed interface PizzaBuilderMode {
   data object Add : PizzaBuilderMode
-  data class Edit(val cartItem: CartItemWithToppings) : PizzaBuilderMode
+
+  /**
+   * [resolvedItem] is the server-resolved cart view. It is optional so pre-Phase-8 callers keep
+   * compiling; callers that have it must pass it to restore Phase 8 modifier selections on edit.
+   */
+  data class Edit(
+    val cartItem: CartItemWithToppings,
+    val resolvedItem: CartItemViewDto? = null,
+  ) : PizzaBuilderMode
 }
 
 const val MIN_PIZZA_QTY = 1
@@ -165,6 +187,59 @@ fun defaultUnsupportedModifierSlots(): List<CustomizationSectionSlot> = listOf(
 )
 
 @Immutable
+data class PizzaBuilderModifierState(
+  val cheeseId: String? = null,
+  val sauceId: String? = null,
+  val standardToppingIds: List<String> = emptyList(),
+  val halfAndHalfConfigId: String? = null,
+  val halfAndHalfLeftToppingIds: List<String> = emptyList(),
+  val halfAndHalfRightToppingIds: List<String> = emptyList(),
+) : java.io.Serializable {
+  /** True when a modifier can change the unit price beyond the base + crust + extra toppings. */
+  fun requiresServerQuote(activeStandardToppings: List<StandardToppingDto>): Boolean {
+    if (cheeseId != null || sauceId != null || halfAndHalfConfigId != null) return true
+    val byId = activeStandardToppings.associateBy { it.id }
+    return standardToppingIds.any { byId[it]?.isDefault == false }
+  }
+}
+
+data class PizzaBuilderHalfAndHalfValidation(
+  val leftLimitExceeded: Boolean = false,
+  val rightLimitExceeded: Boolean = false,
+  val distinctLimitExceeded: Boolean = false,
+  val leftRightOverlap: Boolean = false,
+) {
+  val isValid: Boolean
+    get() = !leftLimitExceeded && !rightLimitExceeded && !distinctLimitExceeded && !leftRightOverlap
+}
+
+enum class PizzaBuilderPriceSource {
+  CATALOG,
+  SAVED_CART_ITEM,
+  SERVER_QUOTE,
+}
+
+/** Abstraction over the existing server quote endpoint; no pricing math is done in Compose. */
+fun interface PizzaBuilderQuoteSource {
+  suspend fun quote(item: CartItemInputDto): CartItemViewDto
+}
+
+class ServerPizzaBuilderQuoteSource(
+  private val apiClient: PizzoraApiClient,
+) : PizzaBuilderQuoteSource {
+  override suspend fun quote(item: CartItemInputDto): CartItemViewDto {
+    val response = apiClient.quotePricing(
+      PricingQuoteRequest(
+        items = listOf(item.copy(id = null, clientUnitPricePaise = null)),
+        fulfillmentType = FulfillmentType.PICKUP,
+      ),
+    )
+    return response.items.firstOrNull()
+      ?: error("Pricing quote returned no items for the builder selection.")
+  }
+}
+
+@Immutable
 data class PizzaBuilderBreakdown(
   val variant: ProductVariantDto?,
   val crust: CrustOptionDto?,
@@ -176,6 +251,17 @@ data class PizzaBuilderBreakdown(
   val unitPricePaise: Long,
   val itemTotalPaise: Long,
   val hasRequiredSelections: Boolean,
+  // Phase 8 additions are defaulted so existing constructor calls remain source-compatible.
+  val cheese: CheeseOptionDto? = null,
+  val sauce: SauceOptionDto? = null,
+  val selectedStandardToppings: List<StandardToppingDto> = emptyList(),
+  val removedStandardToppings: List<StandardToppingDto> = emptyList(),
+  val halfAndHalfConfig: HalfAndHalfConfigDto? = null,
+  val halfAndHalfLeftToppingIds: List<String> = emptyList(),
+  val halfAndHalfRightToppingIds: List<String> = emptyList(),
+  val quotedItem: CartItemViewDto? = null,
+  val priceSource: PizzaBuilderPriceSource = PizzaBuilderPriceSource.CATALOG,
+  val isAwaitingServerQuote: Boolean = false,
 )
 
 @Immutable
@@ -197,6 +283,120 @@ fun firstActiveVariantId(variants: List<ProductVariantDto>): String =
 fun firstActiveCrustId(crusts: List<CrustOptionDto>): String =
   crusts.firstOrNull { it.isActive }?.id.orEmpty()
 
+fun activeCheeseOptions(product: ProductDto): List<CheeseOptionDto> =
+  product.cheeses.filter { it.isActive }.sortedBy { it.sortOrder }
+
+fun activeSauceOptions(product: ProductDto): List<SauceOptionDto> =
+  product.sauces.filter { it.isActive }.sortedBy { it.sortOrder }
+
+fun activeStandardToppingOptions(product: ProductDto): List<StandardToppingDto> =
+  product.standardToppings.filter { it.isActive }.sortedBy { it.sortOrder }
+
+fun activeHalfAndHalfConfigs(product: ProductDto): List<HalfAndHalfConfigDto> =
+  product.halfAndHalfConfigs.filter { it.isActive }.sortedBy { it.sortOrder }
+
+fun defaultSelectedStandardToppingIds(product: ProductDto): List<String> =
+  activeStandardToppingOptions(product).filter { it.isDefault }.map { it.id }.distinct().sorted()
+
+/** Resolves selections from the server cart view in edit mode, and defaults in add mode. */
+fun initialPizzaBuilderModifierState(
+  product: ProductDto,
+  resolvedItem: CartItemViewDto?,
+): PizzaBuilderModifierState {
+  val cheeses = activeCheeseOptions(product)
+  val sauces = activeSauceOptions(product)
+  val standards = activeStandardToppingOptions(product)
+  val configs = activeHalfAndHalfConfigs(product)
+  val defaults = defaultSelectedStandardToppingIds(product)
+  if (resolvedItem == null) {
+    return PizzaBuilderModifierState(standardToppingIds = defaults)
+  }
+
+  // Resolved views are authoritative. An empty standards array is a legacy cart item, so keep
+  // the defaults whose price is already included in the recorded base price.
+  val standardIds = if (resolvedItem.standardToppings.isEmpty()) {
+    defaults
+  } else {
+    resolvedItem.standardToppings
+      .filter { !it.isRemoved && it.isAvailable && it.standardToppingId in standards.map { s -> s.id } }
+      .map { it.standardToppingId }
+      .distinct()
+      .sorted()
+  }
+  val configId = resolvedItem.halfAndHalf?.halfAndHalfConfigId
+    ?.takeIf { id -> configs.any { it.id == id } }
+
+  return PizzaBuilderModifierState(
+    cheeseId = resolvedItem.cheese?.cheeseId?.takeIf { id -> cheeses.any { it.id == id } },
+    sauceId = resolvedItem.sauce?.sauceId?.takeIf { id -> sauces.any { it.id == id } },
+    standardToppingIds = standardIds,
+    halfAndHalfConfigId = configId,
+    halfAndHalfLeftToppingIds = if (configId == null) {
+      emptyList()
+    } else {
+      resolvedItem.halfAndHalf?.leftToppingIds.orEmpty().distinct()
+    },
+    halfAndHalfRightToppingIds = if (configId == null) {
+      emptyList()
+    } else {
+      resolvedItem.halfAndHalf?.rightToppingIds.orEmpty().distinct()
+    },
+  )
+}
+
+fun validateHalfAndHalfSelection(
+  state: PizzaBuilderModifierState,
+): PizzaBuilderHalfAndHalfValidation {
+  if (state.halfAndHalfConfigId == null) {
+    return PizzaBuilderHalfAndHalfValidation()
+  }
+  val left = state.halfAndHalfLeftToppingIds.distinct()
+  val right = state.halfAndHalfRightToppingIds.distinct()
+  return PizzaBuilderHalfAndHalfValidation(
+    leftLimitExceeded = left.size > 10,
+    rightLimitExceeded = right.size > 10,
+    distinctLimitExceeded = (left.toSet() + right.toSet()).size > 15,
+    leftRightOverlap = left.toSet().intersect(right.toSet()).isNotEmpty(),
+  )
+}
+
+fun hasBuilderModifierChanges(
+  current: PizzaBuilderModifierState,
+  initial: PizzaBuilderModifierState,
+): Boolean =
+  current.cheeseId != initial.cheeseId ||
+    current.sauceId != initial.sauceId ||
+    current.standardToppingIds.toSet() != initial.standardToppingIds.toSet() ||
+    current.halfAndHalfConfigId != initial.halfAndHalfConfigId ||
+    current.halfAndHalfLeftToppingIds.toSet() != initial.halfAndHalfLeftToppingIds.toSet() ||
+    current.halfAndHalfRightToppingIds.toSet() != initial.halfAndHalfRightToppingIds.toSet()
+
+/** Builds the exact cart payload; every Phase 8 ID is emitted, including explicit empty arrays. */
+fun buildPizzaBuilderCartItemInput(
+  productId: String,
+  variant: ProductVariantDto,
+  crust: CrustOptionDto,
+  extraToppings: List<ToppingDto>,
+  quantity: Int,
+  modifiers: PizzaBuilderModifierState,
+  itemId: String? = null,
+  clientUnitPricePaise: Long? = null,
+): CartItemInputDto = CartItemInputDto(
+  id = itemId,
+  productId = productId,
+  variantId = variant.id,
+  crustId = crust.id,
+  toppingIds = extraToppings.filter { it.isActive }.map { it.id }.distinct().sorted(),
+  quantity = quantity.coerceIn(MIN_PIZZA_QTY, MAX_PIZZA_QTY),
+  clientUnitPricePaise = clientUnitPricePaise,
+  cheeseId = modifiers.cheeseId,
+  sauceId = modifiers.sauceId,
+  standardToppingIds = modifiers.standardToppingIds.distinct().sorted(),
+  halfAndHalfConfigId = modifiers.halfAndHalfConfigId,
+  halfAndHalfLeftToppingIds = modifiers.halfAndHalfLeftToppingIds.distinct(),
+  halfAndHalfRightToppingIds = modifiers.halfAndHalfRightToppingIds.distinct(),
+)
+
 fun hasBuilderUnsavedChanges(
   selectedVariantId: String,
   selectedCrustId: String,
@@ -206,11 +406,14 @@ fun hasBuilderUnsavedChanges(
   initialCrustId: String,
   initialToppingIds: Collection<String> = emptyList(),
   initialQuantity: Int = MIN_PIZZA_QTY,
+  modifierState: PizzaBuilderModifierState = PizzaBuilderModifierState(),
+  initialModifierState: PizzaBuilderModifierState = PizzaBuilderModifierState(),
 ): Boolean =
   selectedVariantId != initialVariantId ||
     selectedCrustId != initialCrustId ||
     selectedToppingIds.toSet() != initialToppingIds.toSet() ||
-    quantity != initialQuantity
+    quantity != initialQuantity ||
+    hasBuilderModifierChanges(modifierState, initialModifierState)
 
 fun calculatePizzaBuilderBreakdown(
   sortedVariants: List<ProductVariantDto>,
@@ -221,6 +424,14 @@ fun calculatePizzaBuilderBreakdown(
   selectedToppingIds: Collection<String>,
   quantity: Int,
   domainBridge: DomainBridge = RustDomainBridge,
+  cheeses: List<CheeseOptionDto> = emptyList(),
+  sauces: List<SauceOptionDto> = emptyList(),
+  standardToppings: List<StandardToppingDto> = emptyList(),
+  halfAndHalfConfigs: List<HalfAndHalfConfigDto> = emptyList(),
+  modifiers: PizzaBuilderModifierState = PizzaBuilderModifierState(),
+  quotedItem: CartItemViewDto? = null,
+  savedUnitPricePaise: Long? = null,
+  isAwaitingServerQuote: Boolean = false,
 ): PizzaBuilderBreakdown {
   val variant = sortedVariants.firstOrNull { it.isActive && it.id == selectedVariantId }
   val crust = crusts.firstOrNull { it.isActive && it.id == selectedCrustId }
@@ -231,8 +442,29 @@ fun calculatePizzaBuilderBreakdown(
   val basePaise = variant?.pricePaise ?: 0L
   val crustPaise = crust?.extraPricePaise ?: 0L
   val toppingsPaise = activeSelectedToppings.sumOf { it.extraPricePaise }
-  val unitPrice = basePaise + crustPaise + toppingsPaise
+  val catalogUnitPrice = basePaise + crustPaise + toppingsPaise
   val hasRequired = variant != null && crust != null
+
+  val activeStandards = standardToppings.filter { it.isActive }
+  val selectedStandardIds = modifiers.standardToppingIds.toSet()
+  val selectedStandardOptions = activeStandards
+    .filter { it.id in selectedStandardIds }
+    .distinctBy { it.id }
+    .sortedBy { it.sortOrder }
+  val removedStandardOptions = activeStandards
+    .filter { it.isDefault && it.id !in selectedStandardIds }
+    .distinctBy { it.id }
+    .sortedBy { it.sortOrder }
+
+  // Unit price always comes from the server quote when an extended modifier can change pricing.
+  // The catalog sum is kept only for the legacy no-modifier/default-only path.
+  val needsServerQuote = modifiers.requiresServerQuote(activeStandards)
+  val (unitPrice, priceSource) = when {
+    quotedItem != null -> quotedItem.unitPricePaise to PizzaBuilderPriceSource.SERVER_QUOTE
+    needsServerQuote && savedUnitPricePaise != null ->
+      savedUnitPricePaise to PizzaBuilderPriceSource.SAVED_CART_ITEM
+    else -> catalogUnitPrice to PizzaBuilderPriceSource.CATALOG
+  }
   val totalPaise = if (hasRequired) {
     domainBridge.calculateLineTotalPaise(unitPrice, safeQty)
   } else {
@@ -250,6 +482,26 @@ fun calculatePizzaBuilderBreakdown(
     unitPricePaise = unitPrice,
     itemTotalPaise = totalPaise,
     hasRequiredSelections = hasRequired,
+    cheese = cheeses.filter { it.isActive && it.id == modifiers.cheeseId }.firstOrNull(),
+    sauce = sauces.filter { it.isActive && it.id == modifiers.sauceId }.firstOrNull(),
+    selectedStandardToppings = selectedStandardOptions,
+    removedStandardToppings = removedStandardOptions,
+    halfAndHalfConfig = halfAndHalfConfigs
+      .filter { it.isActive && it.id == modifiers.halfAndHalfConfigId }
+      .firstOrNull(),
+    halfAndHalfLeftToppingIds = if (modifiers.halfAndHalfConfigId == null) {
+      emptyList()
+    } else {
+      modifiers.halfAndHalfLeftToppingIds.distinct()
+    },
+    halfAndHalfRightToppingIds = if (modifiers.halfAndHalfConfigId == null) {
+      emptyList()
+    } else {
+      modifiers.halfAndHalfRightToppingIds.distinct()
+    },
+    quotedItem = quotedItem,
+    priceSource = priceSource,
+    isAwaitingServerQuote = isAwaitingServerQuote,
   )
 }
 
@@ -273,8 +525,14 @@ fun PizzaBuilderScreen(
   isFromOfflineCache: Boolean = false,
   modifierSlots: List<CustomizationSectionSlot> = defaultUnsupportedModifierSlots(),
   domainBridge: DomainBridge = RustDomainBridge,
+  quoteSource: PizzaBuilderQuoteSource? = null,
+  onConfirmAddWithModifiers: ((
+    input: CartItemInputDto,
+    onResult: (success: Boolean, errorMessage: String?) -> Unit,
+  ) -> Unit)? = null,
 ) {
   val editCartEntry = (mode as? PizzaBuilderMode.Edit)?.cartItem
+  val resolvedCartItem = (mode as? PizzaBuilderMode.Edit)?.resolvedItem
   val isEditMode = editCartEntry != null
 
   if (editCartEntry != null) {
@@ -334,6 +592,18 @@ fun PizzaBuilderScreen(
     (editCartEntry?.item?.quantity ?: MIN_PIZZA_QTY).coerceIn(MIN_PIZZA_QTY, MAX_PIZZA_QTY)
   }
 
+  val activeCheeses = remember(activeProduct.cheeses) { activeCheeseOptions(activeProduct) }
+  val activeSauces = remember(activeProduct.sauces) { activeSauceOptions(activeProduct) }
+  val activeStandardToppings = remember(activeProduct.standardToppings) {
+    activeStandardToppingOptions(activeProduct)
+  }
+  val activeHalfConfigs = remember(activeProduct.halfAndHalfConfigs) {
+    activeHalfAndHalfConfigs(activeProduct)
+  }
+  val initialModifiers = remember(activeProduct.id, editCartEntry?.item?.id, resolvedCartItem) {
+    initialPizzaBuilderModifierState(activeProduct, resolvedCartItem)
+  }
+
   val stateKey = remember(activeProduct.id, editCartEntry?.item?.id) {
     if (editCartEntry != null) "edit_${editCartEntry.item.id}" else "add_${activeProduct.id}"
   }
@@ -347,6 +617,7 @@ fun PizzaBuilderScreen(
   var isSubmitting by remember(stateKey) { mutableStateOf(false) }
   var submissionError by remember(stateKey) { mutableStateOf<String?>(null) }
   var showDiscardConfirm by rememberSaveable(stateKey) { mutableStateOf(false) }
+  var modifiers by rememberSaveable(stateKey) { mutableStateOf(initialModifiers) }
 
   // Keep defaults hydrated strictly from active options in Add Mode if catalog updates after mount
   LaunchedEffect(isEditMode, initialVariantId, sortedVariants) {
@@ -372,6 +643,122 @@ fun PizzaBuilderScreen(
       selectedToppingIds = sanitized
     }
   }
+  // Deactivate modifiers silently disappear; they are never replaced with another option.
+  LaunchedEffect(
+    activeCheeses,
+    activeSauces,
+    activeStandardToppings,
+    activeHalfConfigs,
+    activeToppingIds,
+  ) {
+    val cheeseIds = activeCheeses.map { it.id }.toSet()
+    val sauceIds = activeSauces.map { it.id }.toSet()
+    val standardIds = activeStandardToppings.map { it.id }.toSet()
+    val configIds = activeHalfConfigs.map { it.id }.toSet()
+    val sanitized = modifiers.copy(
+      cheeseId = modifiers.cheeseId?.takeIf { it in cheeseIds },
+      sauceId = modifiers.sauceId?.takeIf { it in sauceIds },
+      standardToppingIds = modifiers.standardToppingIds.filter { it in standardIds },
+      halfAndHalfConfigId = modifiers.halfAndHalfConfigId?.takeIf { it in configIds },
+      halfAndHalfLeftToppingIds = modifiers.halfAndHalfLeftToppingIds.filter { it in activeToppingIds },
+      halfAndHalfRightToppingIds = modifiers.halfAndHalfRightToppingIds.filter { it in activeToppingIds },
+    )
+    if (sanitized != modifiers) {
+      modifiers = sanitized
+    }
+  }
+
+  val halfAndHalfValidation = remember(modifiers) { validateHalfAndHalfSelection(modifiers) }
+  val needsServerQuote = remember(activeStandardToppings, modifiers) {
+    modifiers.requiresServerQuote(activeStandardToppings)
+  }
+  val chosenVariant = sortedVariants.firstOrNull { it.isActive && it.id == selectedVariantId }
+  val chosenCrust = crusts.firstOrNull { it.isActive && it.id == selectedCrustId }
+
+  val context = LocalContext.current
+  val inferredQuoteSource = remember(context) {
+    (context.applicationContext as? PizzoraApplication)
+      ?.appContainer
+      ?.apiClient
+      ?.let(::ServerPizzaBuilderQuoteSource)
+  }
+  val effectiveQuoteSource = quoteSource ?: inferredQuoteSource
+  val savedUnitPricePaise = resolvedCartItem?.unitPricePaise ?: editCartEntry?.item?.unitPricePaise
+
+  val quoteInput = remember(
+    activeProduct.id,
+    chosenVariant,
+    chosenCrust,
+    selectedToppingIds,
+    quantity,
+    modifiers,
+    editCartEntry?.item?.id,
+  ) {
+    if (chosenVariant == null || chosenCrust == null) {
+      null
+    } else {
+      buildPizzaBuilderCartItemInput(
+        productId = activeProduct.id,
+        variant = chosenVariant,
+        crust = chosenCrust,
+        extraToppings = toppings.filter { it.isActive && it.id in selectedToppingIds.toSet() },
+        quantity = quantity,
+        modifiers = modifiers,
+        itemId = editCartEntry?.item?.id,
+        clientUnitPricePaise = null,
+      ).copy(id = null, clientUnitPricePaise = null)
+    }
+  }
+  val quoteKey = quoteInput?.toString().orEmpty()
+
+  var quotedItem by remember(stateKey) { mutableStateOf<CartItemViewDto?>(null) }
+  var quotedKey by remember(stateKey) { mutableStateOf<String?>(null) }
+  var quoteError by remember(stateKey) { mutableStateOf<String?>(null) }
+  var isQuotePending by remember(stateKey) { mutableStateOf(false) }
+  val displayedQuoteError = quoteError ?: if (!isEditMode && needsServerQuote && effectiveQuoteSource == null) {
+    "Live price is unavailable. Please try again later."
+  } else {
+    null
+  }
+
+  LaunchedEffect(
+    effectiveQuoteSource,
+    quoteKey,
+    needsServerQuote,
+    halfAndHalfValidation.isValid,
+  ) {
+    val source = effectiveQuoteSource
+    val input = quoteInput
+    if (
+      source == null || input == null || !needsServerQuote || !halfAndHalfValidation.isValid
+    ) {
+      return@LaunchedEffect
+    }
+    isQuotePending = true
+    quoteError = null
+    try {
+      val result = source.quote(input)
+      quotedItem = result
+      quotedKey = quoteKey
+    } catch (cancelled: java.util.concurrent.CancellationException) {
+      throw cancelled
+    } catch (error: Throwable) {
+      quotedItem = null
+      quotedKey = null
+      quoteError = error.message?.takeIf { it.isNotBlank() }
+        ?: "Live price is unavailable. Please try again."
+    } finally {
+      isQuotePending = false
+    }
+  }
+
+  val effectiveQuote = quoteInput?.let { input ->
+    if (needsServerQuote && halfAndHalfValidation.isValid && quotedKey == quoteKey && quoteKey == input.toString()) {
+      quotedItem
+    } else {
+      null
+    }
+  }
 
   val breakdown = remember(
     sortedVariants,
@@ -382,6 +769,13 @@ fun PizzaBuilderScreen(
     selectedToppingIds,
     quantity,
     domainBridge,
+    activeCheeses,
+    activeSauces,
+    activeStandardToppings,
+    activeHalfConfigs,
+    modifiers,
+    effectiveQuote,
+    savedUnitPricePaise,
   ) {
     calculatePizzaBuilderBreakdown(
       sortedVariants = sortedVariants,
@@ -392,6 +786,14 @@ fun PizzaBuilderScreen(
       selectedToppingIds = selectedToppingIds,
       quantity = quantity,
       domainBridge = domainBridge,
+      cheeses = activeCheeses,
+      sauces = activeSauces,
+      standardToppings = activeStandardToppings,
+      halfAndHalfConfigs = activeHalfConfigs,
+      modifiers = modifiers,
+      quotedItem = effectiveQuote,
+      savedUnitPricePaise = savedUnitPricePaise.takeIf { needsServerQuote },
+      isAwaitingServerQuote = needsServerQuote && effectiveQuote == null && isQuotePending,
     )
   }
 
@@ -404,6 +806,8 @@ fun PizzaBuilderScreen(
     initialCrustId = initialCrustId,
     initialToppingIds = initialToppingIds,
     initialQuantity = initialQuantity,
+    modifierState = modifiers,
+    initialModifierState = initialModifiers,
   )
 
   val heroImageUrl = remember(activeProduct.id, activeProduct.images) {
@@ -439,12 +843,12 @@ fun PizzaBuilderScreen(
   BackHandler(enabled = true, onBack = handleSystemBack)
 
   val handleConfirmAdd: () -> Unit = submit@{
-    if (isSubmitting || !isAcceptingOrders || !hasRequiredActiveOptions) {
+    if (isSubmitting || !isAcceptingOrders || !hasRequiredActiveOptions || !halfAndHalfValidation.isValid) {
       return@submit
     }
-    val chosenVariant = breakdown.variant ?: return@submit
-    val chosenCrust = breakdown.crust ?: return@submit
-    if (!chosenVariant.isActive || !chosenCrust.isActive) {
+    val variantForCart = breakdown.variant ?: return@submit
+    val crustForCart = breakdown.crust ?: return@submit
+    if (!variantForCart.isActive || !crustForCart.isActive) {
       return@submit
     }
     val safeToppings = breakdown.selectedToppings.filter { it.isActive }
@@ -452,7 +856,7 @@ fun PizzaBuilderScreen(
 
     isSubmitting = true
     submissionError = null
-    onConfirmAdd(chosenVariant, chosenCrust, safeToppings, safeQty) { success, err ->
+    val onSubmissionResult: (Boolean, String?) -> Unit = { success, err ->
       if (success) {
         onDismiss()
       } else {
@@ -464,11 +868,35 @@ fun PizzaBuilderScreen(
         }
       }
     }
+
+    val extendedSubmit = onConfirmAddWithModifiers
+    if (extendedSubmit != null) {
+      extendedSubmit(
+        buildPizzaBuilderCartItemInput(
+          productId = activeProduct.id,
+          variant = variantForCart,
+          crust = crustForCart,
+          extraToppings = safeToppings,
+          quantity = safeQty,
+          modifiers = modifiers,
+          itemId = editCartEntry?.item?.id,
+          clientUnitPricePaise = breakdown.unitPricePaise,
+        ),
+        onSubmissionResult,
+      )
+    } else {
+      onConfirmAdd(variantForCart, crustForCart, safeToppings, safeQty, onSubmissionResult)
+    }
   }
 
+  val priceReady = !needsServerQuote ||
+    effectiveQuote != null ||
+    (effectiveQuoteSource == null && isEditMode && savedUnitPricePaise != null)
   val canSubmit = isAcceptingOrders &&
     hasRequiredActiveOptions &&
     breakdown.hasRequiredSelections &&
+    halfAndHalfValidation.isValid &&
+    priceReady &&
     !isSubmitting
 
   BoxWithConstraints(
@@ -598,6 +1026,15 @@ fun PizzaBuilderScreen(
             selectedCrustId = selectedCrustId,
             onSelectCrust = { id -> selectedCrustId = id },
             modifierSlots = modifierSlots,
+            cheeses = activeCheeses,
+            sauces = activeSauces,
+            standardToppings = activeStandardToppings,
+            halfAndHalfConfigs = activeHalfConfigs,
+            modifierState = modifiers,
+            halfAndHalfValidation = halfAndHalfValidation,
+            quoteError = displayedQuoteError,
+            isQuotePending = isQuotePending,
+            onModifierStateChange = { next -> modifiers = next },
             toppings = toppings,
             selectedToppingIds = selectedToppingIds,
             onToggleTopping = { id ->
@@ -749,6 +1186,15 @@ fun PizzaBuilderScreen(
                 selectedCrustId = selectedCrustId,
                 onSelectCrust = { id -> selectedCrustId = id },
                 modifierSlots = modifierSlots,
+                cheeses = activeCheeses,
+                sauces = activeSauces,
+                standardToppings = activeStandardToppings,
+                halfAndHalfConfigs = activeHalfConfigs,
+                modifierState = modifiers,
+                halfAndHalfValidation = halfAndHalfValidation,
+                quoteError = displayedQuoteError,
+                isQuotePending = isQuotePending,
+                onModifierStateChange = { next -> modifiers = next },
                 toppings = toppings,
                 selectedToppingIds = selectedToppingIds,
                 onToggleTopping = { id ->
@@ -1128,6 +1574,15 @@ private fun BuilderCustomizationSections(
   selectedCrustId: String,
   onSelectCrust: (String) -> Unit,
   modifierSlots: List<CustomizationSectionSlot>,
+  cheeses: List<CheeseOptionDto>,
+  sauces: List<SauceOptionDto>,
+  standardToppings: List<StandardToppingDto>,
+  halfAndHalfConfigs: List<HalfAndHalfConfigDto>,
+  modifierState: PizzaBuilderModifierState,
+  halfAndHalfValidation: PizzaBuilderHalfAndHalfValidation,
+  quoteError: String?,
+  isQuotePending: Boolean,
+  onModifierStateChange: (PizzaBuilderModifierState) -> Unit,
   toppings: List<ToppingDto>,
   selectedToppingIds: List<String>,
   onToggleTopping: (String) -> Unit,
@@ -1245,6 +1700,70 @@ private fun BuilderCustomizationSections(
 
   // 3. Extensible Modifier Slots (hidden when unsupported by current backend contracts)
   CustomizationSectionSlotHost(slots = modifierSlots)
+
+  // Phase 8 modifier sections. The server omits the whole array when a feature flag is off.
+  if (cheeses.isNotEmpty()) {
+    BuilderOptionalChipGroup(
+      title = "Cheese",
+      testTagPrefix = "builder_cheese",
+      options = cheeses.map {
+        BuilderModifierOption(id = it.id, label = it.name, extraPricePaise = it.extraPricePaise)
+      },
+      selectedId = modifierState.cheeseId,
+      onSelect = { id -> onModifierStateChange(modifierState.copy(cheeseId = id)) },
+      domainBridge = domainBridge,
+      enabled = !isSubmitting,
+    )
+  }
+
+  if (sauces.isNotEmpty()) {
+    BuilderOptionalChipGroup(
+      title = "Sauce",
+      testTagPrefix = "builder_sauce",
+      options = sauces.map {
+        BuilderModifierOption(id = it.id, label = it.name, extraPricePaise = it.extraPricePaise)
+      },
+      selectedId = modifierState.sauceId,
+      onSelect = { id -> onModifierStateChange(modifierState.copy(sauceId = id)) },
+      domainBridge = domainBridge,
+      enabled = !isSubmitting,
+    )
+  }
+
+  if (standardToppings.isNotEmpty()) {
+    BuilderStandardToppingsSection(
+      options = standardToppings,
+      selectedIds = modifierState.standardToppingIds,
+      defaultIds = standardToppings.filter { it.isDefault }.map { it.id },
+      onSelectionChange = { ids -> onModifierStateChange(modifierState.copy(standardToppingIds = ids)) },
+      domainBridge = domainBridge,
+      enabled = !isSubmitting,
+      isQuotePending = isQuotePending,
+    )
+  }
+
+  if (halfAndHalfConfigs.isNotEmpty()) {
+    BuilderHalfAndHalfSection(
+      configs = halfAndHalfConfigs,
+      availableToppings = toppings.filter { it.isActive },
+      modifierState = modifierState,
+      validation = halfAndHalfValidation,
+      onModifierStateChange = onModifierStateChange,
+      domainBridge = domainBridge,
+      enabled = !isSubmitting,
+    )
+  }
+
+  if (quoteError != null) {
+    Text(
+      text = "Live price unavailable: $quoteError",
+      style = MaterialTheme.typography.bodySmall,
+      color = LocalPizzoraSemanticColors.current.onWarningContainer,
+      modifier = Modifier
+        .fillMaxWidth()
+        .testTag("builder_quote_error"),
+    )
+  }
 
   // 4. Extra Toppings Section (Optional)
   if (toppings.isNotEmpty()) {
@@ -1389,6 +1908,365 @@ private fun BuilderCustomizationSections(
     }
   }
 }
+
+private data class BuilderModifierOption(
+  val id: String,
+  val label: String,
+  val extraPricePaise: Long,
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BuilderOptionalChipGroup(
+  title: String,
+  testTagPrefix: String,
+  options: List<BuilderModifierOption>,
+  selectedId: String?,
+  onSelect: (String?) -> Unit,
+  domainBridge: DomainBridge,
+  enabled: Boolean,
+) {
+  val semantic = LocalPizzoraSemanticColors.current
+  val chipColors = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = semantic.selectedSurface,
+    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+    selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
+  )
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("${testTagPrefix}_section"),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    SectionHeaderRow(
+      title = title,
+      requirementLabel = stringResource(R.string.builder_optional_tag),
+      isRequired = false,
+    )
+    FlowRow(
+      modifier = Modifier
+        .fillMaxWidth()
+        .selectableGroup(),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+      FilterChip(
+        selected = selectedId == null,
+        onClick = { onSelect(null) },
+        label = { Text("None") },
+        enabled = enabled,
+        colors = chipColors,
+        border = FilterChipDefaults.filterChipBorder(
+          enabled = enabled,
+          selected = selectedId == null,
+          borderColor = semantic.outlineInteractive,
+          selectedBorderColor = MaterialTheme.colorScheme.primary,
+          selectedBorderWidth = 1.5.dp,
+        ),
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("${testTagPrefix}_none"),
+      )
+      options.forEach { option ->
+        val priceLabel = if (option.extraPricePaise == 0L) {
+          "Included"
+        } else {
+          "+ ${domainBridge.formatInr(option.extraPricePaise)}"
+        }
+        FilterChip(
+          selected = selectedId == option.id,
+          onClick = { onSelect(option.id) },
+          label = { Text("${option.label} · $priceLabel") },
+          enabled = enabled,
+          colors = chipColors,
+          border = FilterChipDefaults.filterChipBorder(
+            enabled = enabled,
+            selected = selectedId == option.id,
+            borderColor = semantic.outlineInteractive,
+            selectedBorderColor = MaterialTheme.colorScheme.primary,
+            selectedBorderWidth = 1.5.dp,
+          ),
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("${testTagPrefix}_option_${option.id}"),
+        )
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BuilderStandardToppingsSection(
+  options: List<StandardToppingDto>,
+  selectedIds: List<String>,
+  defaultIds: List<String>,
+  onSelectionChange: (List<String>) -> Unit,
+  domainBridge: DomainBridge,
+  enabled: Boolean,
+  isQuotePending: Boolean,
+) {
+  val semantic = LocalPizzoraSemanticColors.current
+  val chipColors = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = semantic.selectedSurface,
+    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+    selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
+  )
+  val selectedSet = selectedIds.toSet()
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("builder_standard_toppings_section"),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+      SectionHeaderRow(
+        title = "Standard toppings",
+        requirementLabel = stringResource(R.string.builder_optional_tag),
+        isRequired = false,
+        modifier = Modifier.weight(1f),
+      )
+      TextButton(
+        onClick = { onSelectionChange(defaultIds) },
+        enabled = enabled,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("builder_standard_toppings_reset_defaults"),
+      ) {
+        Text("Keep defaults")
+      }
+      TextButton(
+        onClick = { onSelectionChange(emptyList()) },
+        enabled = enabled,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("builder_standard_toppings_remove_all"),
+      ) {
+        Text(stringResource(R.string.action_clear))
+      }
+    }
+    FlowRow(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+      options.forEach { option ->
+        val isSelected = option.id in selectedSet
+        // U8-01/U8-06: keeping a default is included; removing it is a zero-credit change.
+        val priceSuffix = when {
+          option.isDefault && isSelected -> "Included"
+          option.isDefault -> "No charge"
+          option.extraPricePaise == 0L -> "Included"
+          else -> "+ ${domainBridge.formatInr(option.extraPricePaise)}"
+        }
+        FilterChip(
+          selected = isSelected,
+          onClick = {
+            onSelectionChange(
+              if (isSelected) selectedIds - option.id else (selectedIds + option.id).distinct(),
+            )
+          },
+          label = { Text("${option.name} · $priceSuffix") },
+          enabled = enabled,
+          colors = chipColors,
+          border = FilterChipDefaults.filterChipBorder(
+            enabled = enabled,
+            selected = isSelected,
+            borderColor = semantic.outlineInteractive,
+            selectedBorderColor = MaterialTheme.colorScheme.primary,
+            selectedBorderWidth = 1.5.dp,
+          ),
+          modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag("builder_standard_topping_${option.id}"),
+        )
+      }
+    }
+    if (isQuotePending) {
+      Text(
+        text = "Updating price…",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag("builder_price_pending_inline"),
+      )
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BuilderHalfAndHalfSection(
+  configs: List<HalfAndHalfConfigDto>,
+  availableToppings: List<ToppingDto>,
+  modifierState: PizzaBuilderModifierState,
+  validation: PizzaBuilderHalfAndHalfValidation,
+  onModifierStateChange: (PizzaBuilderModifierState) -> Unit,
+  domainBridge: DomainBridge,
+  enabled: Boolean,
+) {
+  val semantic = LocalPizzoraSemanticColors.current
+  val chipColors = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = semantic.selectedSurface,
+    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+    selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
+  )
+  val config = configs.firstOrNull { it.id == modifierState.halfAndHalfConfigId }
+  val leftIds = modifierState.halfAndHalfLeftToppingIds.toSet()
+  val rightIds = modifierState.halfAndHalfRightToppingIds.toSet()
+  val distinctCount = (leftIds + rightIds).size
+
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("builder_half_and_half_section"),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    BuilderOptionalChipGroup(
+      title = "Half and half",
+      testTagPrefix = "builder_half_config",
+      options = configs.map {
+        BuilderModifierOption(
+          id = it.id,
+          label = it.name,
+          extraPricePaise = it.halfAndHalfSurchargePaise,
+        )
+      },
+      selectedId = config?.id,
+      onSelect = { id ->
+        val chosen = configs.firstOrNull { it.id == id }
+        onModifierStateChange(
+          modifierState.copy(
+            halfAndHalfConfigId = chosen?.id,
+            // Seed from catalog arrays only; never substitute an unavailable topping.
+            halfAndHalfLeftToppingIds = chosen?.leftToppingIds
+              ?.filter { toppingId -> availableToppings.any { it.id == toppingId } }
+              .orEmpty(),
+            halfAndHalfRightToppingIds = chosen?.rightToppingIds
+              ?.filter { toppingId -> availableToppings.any { it.id == toppingId } }
+              .orEmpty(),
+          ),
+        )
+      },
+      domainBridge = domainBridge,
+      enabled = enabled,
+    )
+
+    if (config != null) {
+      Text(
+        text = "Left half (${leftIds.size}/10)",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag("builder_half_left_count"),
+      )
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+      ) {
+        availableToppings.forEach { topping ->
+          val isSelected = topping.id in leftIds
+          FilterChip(
+            selected = isSelected,
+            onClick = {
+              onModifierStateChange(
+                modifierState.copy(
+                  halfAndHalfLeftToppingIds = if (isSelected) {
+                    modifierState.halfAndHalfLeftToppingIds - topping.id
+                  } else {
+                    modifierState.halfAndHalfLeftToppingIds + topping.id
+                  },
+                ),
+              )
+            },
+            label = { Text("${topping.name} · + ${domainBridge.formatInr(topping.extraPricePaise)}") },
+            enabled = enabled,
+            colors = chipColors,
+            border = FilterChipDefaults.filterChipBorder(
+              enabled = enabled,
+              selected = isSelected,
+              borderColor = semantic.outlineInteractive,
+              selectedBorderColor = MaterialTheme.colorScheme.primary,
+              selectedBorderWidth = 1.5.dp,
+            ),
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("builder_half_left_topping_${topping.id}"),
+          )
+        }
+      }
+
+      Text(
+        text = "Right half (${rightIds.size}/10)",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag("builder_half_right_count"),
+      )
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+      ) {
+        availableToppings.forEach { topping ->
+          val isSelected = topping.id in rightIds
+          FilterChip(
+            selected = isSelected,
+            onClick = {
+              onModifierStateChange(
+                modifierState.copy(
+                  halfAndHalfRightToppingIds = if (isSelected) {
+                    modifierState.halfAndHalfRightToppingIds - topping.id
+                  } else {
+                    modifierState.halfAndHalfRightToppingIds + topping.id
+                  },
+                ),
+              )
+            },
+            label = { Text("${topping.name} · + ${domainBridge.formatInr(topping.extraPricePaise)}") },
+            enabled = enabled,
+            colors = chipColors,
+            border = FilterChipDefaults.filterChipBorder(
+              enabled = enabled,
+              selected = isSelected,
+              borderColor = semantic.outlineInteractive,
+              selectedBorderColor = MaterialTheme.colorScheme.primary,
+              selectedBorderWidth = 1.5.dp,
+            ),
+            modifier = Modifier
+              .minimumInteractiveComponentSize()
+              .testTag("builder_half_right_topping_${topping.id}"),
+          )
+        }
+      }
+
+      Text(
+        text = "$distinctCount/15 distinct toppings",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag("builder_half_distinct_count"),
+      )
+
+      if (!validation.isValid) {
+        PizzoraStatusBanner(
+          message = halfAndHalfValidationMessage(validation),
+          tone = PizzoraBannerTone.ERROR,
+          modifier = Modifier.testTag("builder_half_and_half_validation"),
+        )
+      }
+    }
+  }
+}
+
+private fun halfAndHalfValidationMessage(validation: PizzaBuilderHalfAndHalfValidation): String =
+  buildList {
+    if (validation.leftLimitExceeded) add("Left half cannot have more than 10 toppings.")
+    if (validation.rightLimitExceeded) add("Right half cannot have more than 10 toppings.")
+    if (validation.distinctLimitExceeded) add("Half-and-half cannot have more than 15 distinct toppings.")
+    if (validation.leftRightOverlap) add("Left and right halves cannot share a topping.")
+  }.joinToString(" ")
 
 @Composable
 private fun CustomizationSectionSlotHost(slots: List<CustomizationSectionSlot>) {
@@ -2217,6 +3095,64 @@ private fun PriceBreakdownContent(
       },
     )
 
+    breakdown.cheese?.let { cheese ->
+      BreakdownLineRow(
+        label = "Cheese (${cheese.name})",
+        value = if (cheese.extraPricePaise == 0L) {
+          stringResource(R.string.builder_included)
+        } else {
+          "+ ${domainBridge.formatInr(cheese.extraPricePaise)}"
+        },
+        testTag = "builder_breakdown_cheese",
+      )
+    }
+    breakdown.sauce?.let { sauce ->
+      BreakdownLineRow(
+        label = "Sauce (${sauce.name})",
+        value = if (sauce.extraPricePaise == 0L) {
+          stringResource(R.string.builder_included)
+        } else {
+          "+ ${domainBridge.formatInr(sauce.extraPricePaise)}"
+        },
+        testTag = "builder_breakdown_sauce",
+      )
+    }
+    breakdown.selectedStandardToppings.forEach { standard ->
+      BreakdownLineRow(
+        label = "  • ${standard.name}",
+        value = if (standard.isDefault) {
+          stringResource(R.string.builder_included)
+        } else if (standard.extraPricePaise == 0L) {
+          stringResource(R.string.builder_included)
+        } else {
+          "+ ${domainBridge.formatInr(standard.extraPricePaise)}"
+        },
+        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        testTag = "builder_breakdown_standard_${standard.id}",
+      )
+    }
+    breakdown.removedStandardToppings.forEach { standard ->
+      BreakdownLineRow(
+        label = "  • ${standard.name} (removed)",
+        value = "No charge",
+        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        testTag = "builder_breakdown_standard_removed_${standard.id}",
+      )
+    }
+    breakdown.halfAndHalfConfig?.let { config ->
+      BreakdownLineRow(
+        label = "Half and half (${config.name})",
+        value = if (config.halfAndHalfSurchargePaise == 0L) {
+          stringResource(R.string.builder_included)
+        } else {
+          "+ ${domainBridge.formatInr(config.halfAndHalfSurchargePaise)}"
+        },
+        testTag = "builder_breakdown_half_and_half",
+      )
+    }
+
     if (breakdown.selectedToppings.isNotEmpty()) {
       BreakdownLineRow(
         label = "${stringResource(R.string.customizer_extra_toppings)} (${breakdown.selectedToppings.size})",
@@ -2240,6 +3176,22 @@ private fun PriceBreakdownContent(
       labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
       valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    if (breakdown.priceSource == PizzaBuilderPriceSource.SERVER_QUOTE) {
+      Text(
+        text = "Live server price",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.secondary,
+        modifier = Modifier.testTag("builder_price_source_server"),
+      )
+    }
+    if (breakdown.isAwaitingServerQuote) {
+      Text(
+        text = "Updating price…",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag("builder_price_pending"),
+      )
+    }
 
     Row(
       modifier = Modifier
@@ -2282,9 +3234,12 @@ private fun BreakdownLineRow(
   value: String,
   labelColor: Color = MaterialTheme.colorScheme.onSurface,
   valueColor: Color = MaterialTheme.colorScheme.onSurface,
+  testTag: String? = null,
 ) {
   Row(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier
+      .fillMaxWidth()
+      .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically,
   ) {

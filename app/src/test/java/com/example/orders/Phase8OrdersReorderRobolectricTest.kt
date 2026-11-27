@@ -345,7 +345,7 @@ class Phase8OrdersReorderRobolectricTest {
     composeTestRule.onNodeWithTag("reorder_warning_0")
       .assertTextContains("Seasonal toppings may differ from the original order.")
     composeTestRule.onNodeWithTag("reorder_confirm_button")
-      .assertTextContains("Add available items to cart")
+      .assertTextContains("Add available items only")
     composeTestRule.onNodeWithTag("reorder_cancel_button").assertTextContains("Cancel")
   }
 

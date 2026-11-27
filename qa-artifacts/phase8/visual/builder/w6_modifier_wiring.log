@@ -1,0 +1,613 @@
+Phase 8 W6 modifier wiring — fresh full Android unit test run
+Command: source ~/.cargo/env && ./gradlew --init-script /tmp/opencode/pizzora-w7-init-no-exclusions.gradle :app:testDebugUnitTest --dependency-verification=off -PpizzoraRequireRust=true --no-daemon --rerun-tasks
+Init wrapper: /tmp/opencode/pizzora-w7-init-no-exclusions.gradle (W7 environment-only wrapper; exclusion of Phase8PizzaBuilderRobolectricTest.kt removed)
+Started (UTC): 2026-11-27T13:22:29Z
+--- GRADLE OUTPUT BEGIN ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :app:processDebugNavigationResources
+> Task :app:parseDebugLocalResources
+
+> Task :app:buildHostRustLib
+    Finished `release` profile [optimized] target(s) in 0.13s
+
+> Task :app:generateDebugRFile
+
+> Task :app:generateUniFfiKotlinBindings
+   Compiling pizzora-uniffi v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-uniffi)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.83s
+     Running `target/debug/uniffi-bindgen generate --library /workspace/pizzabi/rust/target/release/libpizzora_uniffi.so --language kotlin --out-dir /workspace/pizzabi/app/build/generated/uniffi/kotlin`
+Code generation complete, formatting with ktlint (use --no-format to disable)
+Warning: Unable to auto-format pizzora_uniffi.kt using ktlint: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+> Task :app:javaPreCompileDebug
+> Task :app:mapDebugSourceSetPaths
+> Task :app:checkDebugAarMetadata
+> Task :app:compileDebugNavigationResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:processDebugMainManifest
+> Task :app:mergeDebugResources
+> Task :app:processDebugManifest
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:mergeDebugAssets
+
+> Task :app:processDebugUnitTestManifest
+/workspace/pizzabi/app/src/main/AndroidManifest.xml:42:13-45:39 Warning:
+	meta-data#androidx.work.WorkManagerInitializer was tagged at AndroidManifest.xml:42 to remove other declarations but no other declaration present
+
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+> Task :app:packageDebugUnitTestForUnitTest
+> Task :app:generateDebugUnitTestConfig
+> Task :shared:contracts:compileKotlin
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+> Task :app:kspDebugKotlin
+> Task :app:compileDebugKotlin
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:900:48 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:921:23 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:949:39 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:949:67 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:1007:39 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:1049:34 Condition is always 'true'.
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:kspDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestKotlin
+w: file:///workspace/pizzabi/app/src/test/java/com/example/cart/Phase8BuilderCartViewModelRobolectricTest.kt:204:38 The corresponding parameter in the supertype 'TokenStorage' is named 'session'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/pizzabi/app/src/test/java/com/example/cart/Phase8BuilderCartViewModelRobolectricTest.kt:211:43 The corresponding parameter in the supertype 'TokenStorage' is named 'muted'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/pizzabi/app/src/test/java/com/example/navigation/Phase8BuilderNavWiringRobolectricTest.kt:183:38 The corresponding parameter in the supertype 'TokenStorage' is named 'session'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/pizzabi/app/src/test/java/com/example/navigation/Phase8BuilderNavWiringRobolectricTest.kt:190:43 The corresponding parameter in the supertype 'TokenStorage' is named 'muted'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/pizzabi/app/src/test/java/com/example/orders/Phase8ReorderCartPopulationRobolectricTest.kt:214:38 The corresponding parameter in the supertype 'TokenStorage' is named 'session'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/pizzabi/app/src/test/java/com/example/orders/Phase8ReorderCartPopulationRobolectricTest.kt:221:43 The corresponding parameter in the supertype 'TokenStorage' is named 'muted'. This may cause problems when calling this function with named arguments.
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+
+> Task :app:testDebugUnitTest
+
+Phase18SecurityRobolectricTest > keystore cipher uses AES-GCM, rejects tampered ciphertext and blocks plaintext fallback in production FAILED
+    java.lang.AssertionError at Phase18SecurityRobolectricTest.kt:118
+
+Phase19EndToEndRobolectricTest > full_multi_role_end_to_end_journey_customer_to_kds_to_owner FAILED
+    androidx.compose.ui.test.ComposeTimeoutException at Phase19EndToEndRobolectricTest.kt:804
+
+Phase5CheckoutQuoteIntegrityRobolectricTest > staleQuoteDisablesSubmissionUntilRefreshCompletes FAILED
+    java.lang.AssertionError at Phase5CheckoutQuoteIntegrityRobolectricTest.kt:1110
+
+Phase7CartAndMenuRobolectricTest > Customer browses menu, filters veg, customizes pizza, adds to offline cart, and views CartScreen FAILED
+    androidx.compose.ui.test.ComposeTimeoutException at Phase7CartAndMenuRobolectricTest.kt:413
+
+Phase4CartAndReEditRobolectricTest > reEditDuplicateMergeCapsAt25AndEmitsSnackbar FAILED
+    java.lang.AssertionError at Phase4CartAndReEditRobolectricTest.kt:544
+
+Phase4CartAndReEditRobolectricTest > customPizzaReEditEndToEndInShellRestoresConfigUpdatesCartAndRestoresFocus FAILED
+    java.lang.AssertionError at Phase4CartAndReEditRobolectricTest.kt:544
+
+Phase4CartAndReEditRobolectricTest > repeatedEditSubmissionLockAndMenuAddModeContinueToWorkInSameShell FAILED
+    java.lang.AssertionError at Phase4CartAndReEditRobolectricTest.kt:544
+
+Phase4CartAndReEditRobolectricTest > editModeUnavailableSavedToppingShowsWarningBannerAndSavesCleanActiveToppings FAILED
+    java.lang.AssertionError at Phase4CartAndReEditRobolectricTest.kt:544
+
+Phase4CartAndReEditRobolectricTest > reEditMergeUnder25CombinesWithoutCapAndShowsStandardMergeSnackbar FAILED
+    java.lang.AssertionError at Phase4CartAndReEditRobolectricTest.kt:544
+
+Phase8OrdersReorderRobolectricTest > reconciliation dialog shows available lines caveat unavailable modifiers and verbatim warnings FAILED
+    java.lang.AssertionError at Phase8OrdersReorderRobolectricTest.kt:348
+
+230 tests completed, 10 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///workspace/pizzabi/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 6m 31s
+36 actionable tasks: 36 executed
+--- GRADLE OUTPUT END ---
+Exit status: 1
+Finished (UTC): 2026-11-27T13:29:01Z
+
+=== FRESH FULL RERUN AFTER LEGACY-PATH GATING FIX ===
+Command: source ~/.cargo/env && ./gradlew --init-script /tmp/opencode/pizzora-final-init.gradle :app:testDebugUnitTest --dependency-verification=off -PpizzoraRequireRust=true --no-daemon --rerun-tasks
+Started (UTC): 2026-11-27T13:33:35Z
+--- GRADLE OUTPUT BEGIN ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :app:generateDebugResources
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :app:packageDebugResources
+> Task :app:processDebugNavigationResources
+> Task :app:parseDebugLocalResources
+
+> Task :app:buildHostRustLib
+    Finished `release` profile [optimized] target(s) in 0.15s
+
+> Task :app:generateDebugRFile
+
+> Task :app:generateUniFfiKotlinBindings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/uniffi-bindgen generate --library /workspace/pizzabi/rust/target/release/libpizzora_uniffi.so --language kotlin --out-dir /workspace/pizzabi/app/build/generated/uniffi/kotlin`
+Code generation complete, formatting with ktlint (use --no-format to disable)
+Warning: Unable to auto-format pizzora_uniffi.kt using ktlint: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+> Task :app:javaPreCompileDebug
+> Task :app:mapDebugSourceSetPaths
+> Task :app:checkDebugAarMetadata
+> Task :app:compileDebugNavigationResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:processDebugMainManifest
+> Task :app:mergeDebugResources
+> Task :app:processDebugManifest
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:mergeDebugAssets
+
+> Task :app:processDebugUnitTestManifest
+/workspace/pizzabi/app/src/main/AndroidManifest.xml:42:13-45:39 Warning:
+	meta-data#androidx.work.WorkManagerInitializer was tagged at AndroidManifest.xml:42 to remove other declarations but no other declaration present
+
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+> Task :app:packageDebugUnitTestForUnitTest
+> Task :app:generateDebugUnitTestConfig
+> Task :shared:contracts:compileKotlin
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+
+> Task :app:kspDebugKotlin
+WARN: Could not read file: /workspace/pizzabi/shared/contracts/build/libs/contracts.jar!/com/pizzora/contracts/KdsTicketsResponse.class; size in bytes: 8626; file type: CLASS
+java.util.zip.ZipException: zip END header not found
+	at java.base/java.util.zip.ZipFile$Source.findEND(ZipFile.java:1649)
+	at java.base/java.util.zip.ZipFile$Source.initCEN(ZipFile.java:1657)
+	at java.base/java.util.zip.ZipFile$Source.<init>(ZipFile.java:1495)
+	at java.base/java.util.zip.ZipFile$Source.get(ZipFile.java:1458)
+	at java.base/java.util.zip.ZipFile$CleanableResource.<init>(ZipFile.java:724)
+	at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:251)
+	at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:180)
+	at java.base/java.util.zip.ZipFile.<init>(ZipFile.java:194)
+	at ksp.com.intellij.openapi.vfs.impl.JavaZipFileWrapper.<init>(JavaZipFileWrapper.java:22)
+	at ksp.com.intellij.openapi.vfs.impl.ZipHandlerBase.getZipFileWrapper(ZipHandlerBase.java:33)
+	at ksp.com.intellij.openapi.vfs.impl.ZipHandler$1.createAccessor(ZipHandler.java:22)
+	at ksp.com.intellij.openapi.vfs.impl.ZipHandler$1.createAccessor(ZipHandler.java:15)
+	at ksp.com.intellij.util.io.FileAccessorCache.createHandle(FileAccessorCache.java:77)
+	at ksp.com.intellij.util.io.FileAccessorCache.lambda$get$0(FileAccessorCache.java:66)
+	at ksp.com.intellij.util.io.FileAccessorCache.withUpdateLock(FileAccessorCache.java:142)
+	at ksp.com.intellij.util.io.FileAccessorCache.get(FileAccessorCache.java:62)
+	at ksp.com.intellij.openapi.vfs.impl.ZipHandler.acquireZipHandle(ZipHandler.java:46)
+	at ksp.com.intellij.openapi.vfs.impl.ZipHandlerBase.contentsToByteArray(ZipHandlerBase.java:81)
+	at ksp.com.intellij.openapi.vfs.impl.jar.CoreJarVirtualFile.contentsToByteArray(CoreJarVirtualFile.java:101)
+	at ksp.com.intellij.openapi.vfs.VirtualFile.contentsToByteArray(VirtualFile.java:631)
+	at ksp.org.jetbrains.kotlin.load.kotlin.VirtualFileKotlinClass$Factory.create$lambda$0(VirtualFileKotlinClass.kt:77)
+	at ksp.org.jetbrains.kotlin.util.PerformanceManagerKt.tryMeasureSideTime(PerformanceManager.kt:436)
+	at ksp.org.jetbrains.kotlin.load.kotlin.VirtualFileKotlinClass$Factory.create$frontend_common_jvm(VirtualFileKotlinClass.kt:73)
+	at ksp.org.jetbrains.kotlin.load.kotlin.KotlinBinaryClassCache$Companion.getKotlinBinaryClassOrClassFileContent$lambda$0(KotlinBinaryClassCache.kt:82)
+	at ksp.com.intellij.mock.MockApplication.runReadAction(MockApplication.java:200)
+	at ksp.org.jetbrains.kotlin.load.kotlin.KotlinBinaryClassCache$Companion.getKotlinBinaryClassOrClassFileContent(KotlinBinaryClassCache.kt:81)
+	at ksp.org.jetbrains.kotlin.load.kotlin.KotlinBinaryClassCache$Companion.getKotlinBinaryClassOrClassFileContent$default(KotlinBinaryClassCache.kt:62)
+	at ksp.org.jetbrains.kotlin.load.kotlin.VirtualFileFinder.findKotlinClassOrContent(VirtualFileFinder.kt:39)
+	at ksp.org.jetbrains.kotlin.fir.java.deserialization.JvmClassFileBasedSymbolProvider.extractClassMetadata(JvmClassFileBasedSymbolProvider.kt:172)
+	at ksp.org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.findAndDeserializeClass(AbstractFirDeserializedSymbolProvider.kt:255)
+	at ksp.org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.classCache$lambda$0(AbstractFirDeserializedSymbolProvider.kt:162)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.caches.FirThreadSafeCacheWithPostCompute.getValue$lambda$0$0(FirThreadSafeCacheWithPostCompute.kt:22)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.caches.ValueWithPostCompute.computeValueWithoutLock(ValueWithPostCompute.kt:103)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.caches.ValueWithPostCompute.getValue(ValueWithPostCompute.kt:77)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.caches.FirThreadSafeCacheWithPostCompute.getValue(FirThreadSafeCacheWithPostCompute.kt:25)
+	at ksp.org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.getClass(AbstractFirDeserializedSymbolProvider.kt:342)
+	at ksp.org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.getClass$default(AbstractFirDeserializedSymbolProvider.kt:325)
+	at ksp.org.jetbrains.kotlin.fir.deserialization.AbstractFirDeserializedSymbolProvider.getClassLikeSymbolByClassId(AbstractFirDeserializedSymbolProvider.kt:419)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.symbolProviders.LLDependenciesSymbolProvider.getClassLikeSymbolByClassId(LLModuleWithDependenciesSymbolProvider.kt:180)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.symbolProviders.LLModuleWithDependenciesSymbolProvider.getClassLikeSymbolByClassId(LLModuleWithDependenciesSymbolProvider.kt:79)
+	at ksp.org.jetbrains.kotlin.fir.scopes.impl.FirAbstractImportingScope.processClassifiersFromImportsByName(FirAbstractImportingScope.kt:54)
+	at ksp.org.jetbrains.kotlin.fir.scopes.impl.FirAbstractSimpleImportingScope.processClassifiersByNameWithSubstitution(FirAbstractSimpleImportingScope.kt:32)
+	at ksp.org.jetbrains.kotlin.fir.resolve.providers.impl.FirTypeResolverImpl.resolveUserTypeToSymbol(FirTypeResolverImpl.kt:116)
+	at ksp.org.jetbrains.kotlin.fir.resolve.providers.impl.FirTypeResolverImpl.resolveType(FirTypeResolverImpl.kt:392)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirSpecificTypeResolverTransformer.resolveType(FirSpecificTypeResolverTransformer.kt:116)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirSpecificTypeResolverTransformer.transformTypeRef(FirSpecificTypeResolverTransformer.kt:77)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirSpecificTypeResolverTransformer.transformTypeRef(FirSpecificTypeResolverTransformer.kt:35)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirDefaultTransformer.transformUnresolvedTypeRef(FirDefaultTransformer.kt:31)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirDefaultTransformer.transformUserTypeRef(FirDefaultTransformer.kt:43)
+	at ksp.org.jetbrains.kotlin.fir.types.FirUserTypeRef.transform(FirUserTypeRef.kt:32)
+	at ksp.org.jetbrains.kotlin.fir.types.impl.FirTypeProjectionWithVarianceImpl.transformChildren(FirTypeProjectionWithVarianceImpl.kt:31)
+	at ksp.org.jetbrains.kotlin.fir.types.impl.FirTypeProjectionWithVarianceImpl.transformChildren(FirTypeProjectionWithVarianceImpl.kt:20)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirAbstractTreeTransformer.transformElement(FirAbstractTreeTransformer.kt:14)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirTransformer.transformTypeProjectionWithVariance(FirTransformer.kt:1215)
+	at ksp.org.jetbrains.kotlin.fir.types.FirTypeProjectionWithVariance.transform(FirTypeProjectionWithVariance.kt:30)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirTransformerUtilKt.transformInplace(FirTransformerUtil.kt:20)
+	at ksp.org.jetbrains.kotlin.fir.types.impl.FirUserTypeRefImpl.transformChildren(FirUserTypeRefImpl.kt:37)
+	at ksp.org.jetbrains.kotlin.fir.types.impl.FirUserTypeRefImpl.transformChildren(FirUserTypeRefImpl.kt:19)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirSpecificTypeResolverTransformer.transformTypeRef(FirSpecificTypeResolverTransformer.kt:75)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirSpecificTypeResolverTransformer.transformTypeRef(FirSpecificTypeResolverTransformer.kt:35)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirDefaultTransformer.transformUnresolvedTypeRef(FirDefaultTransformer.kt:31)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirDefaultTransformer.transformUserTypeRef(FirDefaultTransformer.kt:43)
+	at ksp.org.jetbrains.kotlin.fir.types.FirUserTypeRef.transform(FirUserTypeRef.kt:32)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirTypeResolveTransformer.transformTypeRef(FirTypeResolveTransformer.kt:366)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirTypeResolveTransformer.transformTypeRef(FirTypeResolveTransformer.kt:73)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirDefaultTransformer.transformUnresolvedTypeRef(FirDefaultTransformer.kt:31)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirDefaultTransformer.transformUserTypeRef(FirDefaultTransformer.kt:43)
+	at ksp.org.jetbrains.kotlin.fir.types.FirUserTypeRef.transform(FirUserTypeRef.kt:32)
+	at ksp.org.jetbrains.kotlin.fir.declarations.impl.FirNamedFunctionImpl.transformReturnTypeRef(FirNamedFunctionImpl.kt:97)
+	at ksp.org.jetbrains.kotlin.fir.declarations.impl.FirNamedFunctionImpl.transformChildren(FirNamedFunctionImpl.kt:79)
+	at ksp.org.jetbrains.kotlin.fir.declarations.impl.FirNamedFunctionImpl.transformChildren(FirNamedFunctionImpl.kt:32)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirAbstractTreeTransformer.transformElement(FirAbstractTreeTransformer.kt:14)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirTransformer.transformDeclaration(FirTransformer.kt:95)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirTypeResolveTransformer.transformNamedFunction(FirTypeResolveTransformer.kt:307)
+	at ksp.org.jetbrains.kotlin.fir.resolve.transformers.FirTypeResolveTransformer.transformNamedFunction(FirTypeResolveTransformer.kt:73)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirTransformer.visitNamedFunction(FirTransformer.kt:523)
+	at ksp.org.jetbrains.kotlin.fir.visitors.FirTransformer.visitNamedFunction(FirTransformer.kt:22)
+	at ksp.org.jetbrains.kotlin.fir.declarations.FirNamedFunction.accept(FirNamedFunction.kt:71)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTypeTargetResolver.rawResolve(LLFirTypeLazyResolver.kt:124)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTypeTargetResolver.resolve(LLFirTypeLazyResolver.kt:106)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTypeTargetResolver.doLazyResolveUnderLock(LLFirTypeLazyResolver.kt:86)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTargetResolver.performResolve(LLFirTargetResolver.kt:309)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTargetResolver.performAction(LLFirTargetResolver.kt:272)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirClassWithAllCallablesResolveTarget.visitMembers(LLFirClassWithAllCallablesResolveTarget.kt:21)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirRegularClassResolveTarget.visitTargetElement$lambda$0(LLFirRegularClassResolveTarget.kt:37)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTypeTargetResolver.withContainingRegularClass(LLFirTypeLazyResolver.kt:383)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTargetResolver.withRegularClass(LLFirTargetResolver.kt:234)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirRegularClassResolveTarget.visitTargetElement(LLFirRegularClassResolveTarget.kt:36)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirResolveTarget.goToTarget(LLFirResolveTarget.kt:83)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirResolveTarget.goToTarget$lambda$2(LLFirResolveTarget.kt:76)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTypeTargetResolver.withContainingFile(LLFirTypeLazyResolver.kt:211)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTargetResolver.withFile(LLFirTargetResolver.kt:205)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirResolveTarget.goToTarget(LLFirResolveTarget.kt:76)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirResolveTarget.goToTarget(LLFirResolveTarget.kt:65)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.api.targets.LLFirResolveTarget.visit(LLFirResolveTarget.kt:60)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirTargetResolver.resolveDesignation(LLFirTargetResolver.kt:268)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirLazyResolver.resolve(LLFirLazyResolver.kt:35)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.transformers.LLFirLazyResolverRunner.runLazyResolverByPhase(LLFirLazyResolverRunner.kt:29)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.lazy.resolve.LLFirModuleLazyDeclarationResolver.lazyResolveTargets(LLFirModuleLazyDeclarationResolver.kt:146)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.lazy.resolve.LLFirModuleLazyDeclarationResolver.lazyResolveWithCallableMembers(LLFirModuleLazyDeclarationResolver.kt:242)
+	at ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.LLFirLazyDeclarationResolver.lazyResolveToPhaseWithCallableMembers(LLFirLazyDeclarationResolver.kt:37)
+	at ksp.org.jetbrains.kotlin.fir.symbols.FirLazyDeclarationResolverKt.lazyResolveToPhaseWithCallableMembers(FirLazyDeclarationResolver.kt:168)
+	at ksp.org.jetbrains.kotlin.fir.scopes.FirKotlinScopeProvider.getUseSiteMemberScope(FirKotlinScopeProvider.kt:45)
+	at ksp.org.jetbrains.kotlin.fir.scopes.FirKotlinScopeProviderKt.unsubstitutedScope(FirKotlinScopeProvider.kt:217)
+	at ksp.org.jetbrains.kotlin.analysis.api.fir.components.KaFirScopeProvider.getMemberScope(KaFirScopeProvider.kt:75)
+	at ksp.org.jetbrains.kotlin.analysis.api.impl.base.KaBaseSession.getMemberScope(KaBaseSession.kt)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSClassDeclarationImpl$primaryConstructor$2.invoke(KSClassDeclarationImpl.kt:67)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSClassDeclarationImpl$primaryConstructor$2.invoke(KSClassDeclarationImpl.kt:62)
+	at kotlin.SynchronizedLazyImpl.getValue(LazyJVM.kt:86)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSClassDeclarationImpl.getPrimaryConstructor(KSClassDeclarationImpl.kt:62)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSPropertyDeclarationImpl$special$$inlined$lazyMemoizedSequence$1.invoke(PsiUtils.kt:111)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSPropertyDeclarationImpl$special$$inlined$lazyMemoizedSequence$1.invoke(PsiUtils.kt:98)
+	at kotlin.SynchronizedLazyImpl.getValue(LazyJVM.kt:86)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSPropertyDeclarationImpl.getAnnotations(KSPropertyDeclarationImpl.kt:62)
+	at ksp.com.google.devtools.ksp.common.visitor.CollectAnnotatedSymbolsVisitor.visitAnnotated(CollectAnnotatedSymbolsVisitor.kt:37)
+	at ksp.com.google.devtools.ksp.common.visitor.CollectAnnotatedSymbolsVisitor.visitPropertyDeclaration(CollectAnnotatedSymbolsVisitor.kt:81)
+	at ksp.com.google.devtools.ksp.common.visitor.CollectAnnotatedSymbolsVisitor.visitPropertyDeclaration(CollectAnnotatedSymbolsVisitor.kt:33)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSPropertyDeclarationImpl.accept(KSPropertyDeclarationImpl.kt:184)
+	at ksp.com.google.devtools.ksp.common.visitor.CollectAnnotatedSymbolsVisitor.visitClassDeclaration(CollectAnnotatedSymbolsVisitor.kt:53)
+	at ksp.com.google.devtools.ksp.common.visitor.CollectAnnotatedSymbolsVisitor.visitClassDeclaration(CollectAnnotatedSymbolsVisitor.kt:33)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSClassDeclarationImpl.accept(KSClassDeclarationImpl.kt:179)
+	at ksp.com.google.devtools.ksp.common.visitor.CollectAnnotatedSymbolsVisitor.visitFile(CollectAnnotatedSymbolsVisitor.kt:43)
+	at ksp.com.google.devtools.ksp.common.visitor.CollectAnnotatedSymbolsVisitor.visitFile(CollectAnnotatedSymbolsVisitor.kt:33)
+	at com.google.devtools.ksp.impl.symbol.kotlin.KSFileImpl.accept(KSFileImpl.kt:85)
+	at com.google.devtools.ksp.impl.ResolverAAImpl.collectAnnotatedSymbols(ResolverAAImpl.kt:563)
+	at com.google.devtools.ksp.impl.ResolverAAImpl.mapAnnotatedSymbols(ResolverAAImpl.kt:578)
+	at com.google.devtools.ksp.impl.ResolverAAImpl.access$mapAnnotatedSymbols(ResolverAAImpl.kt:66)
+	at com.google.devtools.ksp.impl.ResolverAAImpl$annotationToSymbolsMap$2.invoke(ResolverAAImpl.kt:570)
+	at com.google.devtools.ksp.impl.ResolverAAImpl$annotationToSymbolsMap$2.invoke(ResolverAAImpl.kt:569)
+	at kotlin.SynchronizedLazyImpl.getValue(LazyJVM.kt:86)
+	at com.google.devtools.ksp.impl.ResolverAAImpl.getAnnotationToSymbolsMap(ResolverAAImpl.kt:569)
+	at com.google.devtools.ksp.impl.ResolverAAImpl.getSymbolsWithAnnotation(ResolverAAImpl.kt:556)
+	at com.google.devtools.ksp.processing.Resolver.getSymbolsWithAnnotation$default(Resolver.kt:50)
+	at androidx.room.compiler.processing.ksp.KspRoundEnv.getElementsAnnotatedWith(KspRoundEnv.kt:53)
+	at androidx.room.compiler.processing.CommonProcessorDelegate.processRound(XBasicAnnotationProcessor.kt:95)
+	at androidx.room.compiler.processing.ksp.KspBasicAnnotationProcessor.process(KspBasicAnnotationProcessor.kt:62)
+	at com.google.devtools.ksp.impl.KotlinSymbolProcessing$execute$1$1.invoke(KotlinSymbolProcessing.kt:566)
+	at com.google.devtools.ksp.impl.KotlinSymbolProcessing$execute$1$1.invoke(KotlinSymbolProcessing.kt:564)
+	at ksp.com.google.devtools.ksp.common.IncrementalContextBase.closeFilesOnException(IncrementalContextBase.kt:403)
+	at com.google.devtools.ksp.impl.KotlinSymbolProcessing.execute(KotlinSymbolProcessing.kt:564)
+	at com.google.devtools.ksp.impl.KSPLoader$Companion.loadAndRunKSP(KSPLoader.kt:37)
+	at com.google.devtools.ksp.impl.KSPLoader.loadAndRunKSP(KSPLoader.kt)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at com.google.devtools.ksp.gradle.KspAAWorkerAction.execute(KspAATask.kt:704)
+	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:68)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:64)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:61)
+	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:102)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:61)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:58)
+	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:176)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:194)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:127)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:169)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$withLocksAcquired$0(DefaultWorkerLeaseService.java:269)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:42)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:267)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:259)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:132)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:164)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:133)
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+e: [ksp] ksp.org.jetbrains.kotlin.utils.exceptions.KotlinIllegalArgumentExceptionWithAttachments: Error while resolving ksp.org.jetbrains.kotlin.fir.declarations.impl.FirRegularClassImpl
+from RAW_FIR to STATUS
+current declaration phase TYPES
+origin: Source
+session: class ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.sessions.LLFirSourcesSession (Kotlin reflection is not available)
+module data: class ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.projectStructure.LLFirModuleData (Kotlin reflection is not available)
+KaModule: class ksp.org.jetbrains.kotlin.analysis.project.structure.impl.KaSourceModuleImpl (Kotlin reflection is not available)
+platform: JVM (11)
+
+
+> Task :app:kspDebugKotlin FAILED
+w: Detected multiple Kotlin daemon sessions at
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:kspDebugKotlin'.
+> A failure occurred while executing com.google.devtools.ksp.gradle.KspAAWorkerAction
+   > Error while resolving ksp.org.jetbrains.kotlin.fir.declarations.impl.FirRegularClassImpl
+     from RAW_FIR to STATUS
+     current declaration phase TYPES
+     origin: Source
+     session: class ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.sessions.LLFirSourcesSession (Kotlin reflection is not available)
+     module data: class ksp.org.jetbrains.kotlin.analysis.low.level.api.fir.projectStructure.LLFirModuleData (Kotlin reflection is not available)
+     KaModule: class ksp.org.jetbrains.kotlin.analysis.project.structure.impl.KaSourceModuleImpl (Kotlin reflection is not available)
+     platform: JVM (11)
+
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 42s
+27 actionable tasks: 27 executed
+--- GRADLE OUTPUT END ---
+Exit status: 1
+Finished (UTC): 2026-11-27T13:34:18Z
+
+=== CLEAN FULL RERUN (no --rerun-tasks; avoids KSP/contracts.jar race) ===
+Command: source ~/.cargo/env && ./gradlew --init-script /tmp/opencode/pizzora-final-init.gradle clean :app:testDebugUnitTest --dependency-verification=off -PpizzoraRequireRust=true --no-daemon
+Started (UTC): 2026-11-27T13:34:31Z
+--- GRADLE OUTPUT BEGIN ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :backend:clean
+> Task :shared:contracts:clean
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:clean
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig FROM-CACHE
+> Task :app:generateDebugResources FROM-CACHE
+> Task :app:packageDebugResources FROM-CACHE
+> Task :shared:contracts:compileKotlin FROM-CACHE
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+> Task :app:processDebugNavigationResources FROM-CACHE
+> Task :app:parseDebugLocalResources FROM-CACHE
+> Task :app:generateDebugRFile FROM-CACHE
+> Task :app:buildHostRustLib UP-TO-DATE
+
+> Task :app:generateUniFfiKotlinBindings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/uniffi-bindgen generate --library /workspace/pizzabi/rust/target/release/libpizzora_uniffi.so --language kotlin --out-dir /workspace/pizzabi/app/build/generated/uniffi/kotlin`
+Code generation complete, formatting with ktlint (use --no-format to disable)
+Warning: Unable to auto-format pizzora_uniffi.kt using ktlint: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+> Task :app:kspDebugKotlin FROM-CACHE
+> Task :app:compileDebugKotlin FROM-CACHE
+> Task :app:javaPreCompileDebug FROM-CACHE
+> Task :app:compileDebugJavaWithJavac FROM-CACHE
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:compileDebugNavigationResources FROM-CACHE
+> Task :app:mergeDebugResources FROM-CACHE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug FROM-CACHE
+> Task :app:processDebugMainManifest FROM-CACHE
+> Task :app:processDebugManifest FROM-CACHE
+> Task :app:processDebugManifestForPackage FROM-CACHE
+> Task :app:processDebugResources FROM-CACHE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:mergeDebugAssets
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:packageDebugUnitTestForUnitTest
+> Task :app:kspDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin FROM-CACHE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+
+> Task :app:processDebugUnitTestManifest
+/workspace/pizzabi/app/src/main/AndroidManifest.xml:42:13-45:39 Warning:
+	meta-data#androidx.work.WorkManagerInitializer was tagged at AndroidManifest.xml:42 to remove other declarations but no other declaration present
+
+> Task :app:generateDebugUnitTestConfig
+> Task :app:processDebugJavaRes
+> Task :app:processDebugUnitTestJavaRes
+
+> Task :app:testDebugUnitTest
+
+Phase18SecurityRobolectricTest > keystore cipher uses AES-GCM, rejects tampered ciphertext and blocks plaintext fallback in production FAILED
+    java.lang.AssertionError at Phase18SecurityRobolectricTest.kt:118
+
+230 tests completed, 1 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///workspace/pizzabi/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 4m 37s
+39 actionable tasks: 17 executed, 20 from cache, 2 up-to-date
+--- GRADLE OUTPUT END ---
+Exit status: 1
+Finished (UTC): 2026-11-27T13:39:09Z
+
+=== FINAL FULL VERIFICATION (fixes applied; final init script; no exclusions) ===
+Command: source ~/.cargo/env && ./gradlew --init-script /tmp/opencode/pizzora-final-init.gradle clean :app:testDebugUnitTest --dependency-verification=off -PpizzoraRequireRust=true --no-daemon
+Init wrapper: /tmp/opencode/pizzora-final-init.gradle (does not exclude Phase8PizzaBuilderRobolectricTest.kt)
+Started (UTC): 2026-11-27T13:56:43Z
+--- GRADLE OUTPUT BEGIN ---
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :shared:contracts:clean
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :backend:clean
+> Task :app:clean
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig FROM-CACHE
+> Task :app:generateDebugResources FROM-CACHE
+> Task :app:packageDebugResources FROM-CACHE
+> Task :shared:contracts:compileKotlin FROM-CACHE
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+> Task :app:processDebugNavigationResources FROM-CACHE
+> Task :app:parseDebugLocalResources FROM-CACHE
+> Task :app:generateDebugRFile FROM-CACHE
+> Task :app:buildHostRustLib UP-TO-DATE
+
+> Task :app:generateUniFfiKotlinBindings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running `target/debug/uniffi-bindgen generate --library /workspace/pizzabi/rust/target/release/libpizzora_uniffi.so --language kotlin --out-dir /workspace/pizzabi/app/build/generated/uniffi/kotlin`
+Code generation complete, formatting with ktlint (use --no-format to disable)
+Warning: Unable to auto-format pizzora_uniffi.kt using ktlint: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+> Task :app:kspDebugKotlin FROM-CACHE
+> Task :app:compileDebugKotlin FROM-CACHE
+> Task :app:javaPreCompileDebug FROM-CACHE
+> Task :app:compileDebugJavaWithJavac FROM-CACHE
+> Task :app:mapDebugSourceSetPaths
+> Task :app:checkDebugAarMetadata
+> Task :app:compileDebugNavigationResources FROM-CACHE
+> Task :app:mergeDebugResources FROM-CACHE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug FROM-CACHE
+> Task :app:processDebugMainManifest FROM-CACHE
+> Task :app:processDebugManifest FROM-CACHE
+> Task :app:processDebugManifestForPackage FROM-CACHE
+> Task :app:processDebugResources FROM-CACHE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:packageDebugUnitTestForUnitTest
+> Task :app:kspDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin FROM-CACHE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+
+> Task :app:processDebugUnitTestManifest
+/workspace/pizzabi/app/src/main/AndroidManifest.xml:42:13-45:39 Warning:
+	meta-data#androidx.work.WorkManagerInitializer was tagged at AndroidManifest.xml:42 to remove other declarations but no other declaration present
+
+> Task :app:generateDebugUnitTestConfig
+> Task :app:processDebugJavaRes
+> Task :app:processDebugUnitTestJavaRes
+> Task :app:testDebugUnitTest
+
+BUILD SUCCESSFUL in 4m 35s
+39 actionable tasks: 17 executed, 20 from cache, 2 up-to-date
+--- GRADLE OUTPUT END ---
+Exit code: 0
+Finished (UTC): 2026-11-27T14:01:18Z
+--- XML-DERIVED TEST COUNTS ---
+tests=230 failures=0 errors=0 skipped=0
+com.example.ExampleRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.ExampleUnitTest: tests=1 failures=0 errors=0 skipped=0
+com.example.Phase10CheckoutAndOrdersRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.Phase11PaymentsRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.Phase12OrderTrackingRobolectricTest: tests=3 failures=0 errors=0 skipped=0
+com.example.Phase13KdsRobolectricTest: tests=2 failures=0 errors=0 skipped=0
+com.example.Phase14OwnerRobolectricTest: tests=2 failures=0 errors=0 skipped=0
+com.example.Phase15ZonesAddressesSlotsRobolectricTest: tests=3 failures=0 errors=0 skipped=0
+com.example.Phase16NotificationsRobolectricTest: tests=5 failures=0 errors=0 skipped=0
+com.example.Phase17ReportsAndAuditRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.Phase18SecurityRobolectricTest: tests=4 failures=0 errors=0 skipped=0
+com.example.Phase19EndToEndRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.Phase1RoomMigrationTest: tests=1 failures=0 errors=0 skipped=0
+com.example.Phase1SessionCartIsolationRobolectricTest: tests=6 failures=0 errors=0 skipped=0
+com.example.Phase4UniFfiDomainBridgeRobolectricTest: tests=4 failures=0 errors=0 skipped=0
+com.example.Phase5CheckoutQuoteIntegrityRobolectricTest: tests=37 failures=0 errors=0 skipped=0
+com.example.Phase5NetworkAndViewModelTest: tests=2 failures=0 errors=0 skipped=0
+com.example.Phase5RoomAndUiRobolectricTest: tests=3 failures=0 errors=0 skipped=0
+com.example.Phase6MediaAndCatalogTest: tests=4 failures=0 errors=0 skipped=0
+com.example.Phase6OrderTrackingRobolectricTest: tests=5 failures=0 errors=0 skipped=0
+com.example.Phase6OrdersHistoryRobolectricTest: tests=3 failures=0 errors=0 skipped=0
+com.example.Phase6PaymentSheetRobolectricTest: tests=10 failures=0 errors=0 skipped=0
+com.example.Phase7CartAndMenuRobolectricTest: tests=5 failures=0 errors=0 skipped=0
+com.example.Phase7NotificationDeepLinkRobolectricTest: tests=2 failures=0 errors=0 skipped=0
+com.example.Phase7ProfileNotificationsUpdatesRobolectricTest: tests=14 failures=0 errors=0 skipped=0
+com.example.Phase8PricingAndCouponsRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.RazorpayCheckoutIntegrationTest: tests=3 failures=0 errors=0 skipped=0
+com.example.cart.Phase4CartAndReEditRobolectricTest: tests=19 failures=0 errors=0 skipped=0
+com.example.cart.Phase4CartDaoAndRepositoryTest: tests=10 failures=0 errors=0 skipped=0
+com.example.cart.Phase8BuilderCartViewModelRobolectricTest: tests=6 failures=0 errors=0 skipped=0
+com.example.catalog.Phase3PizzaBuilderRobolectricTest: tests=14 failures=0 errors=0 skipped=0
+com.example.catalog.Phase8PizzaBuilderRobolectricTest: tests=9 failures=0 errors=0 skipped=0
+com.example.catalog.PizzaBuilderPricingTest: tests=5 failures=0 errors=0 skipped=0
+com.example.navigation.Phase8BuilderNavWiringRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.orders.Phase8OrdersReorderRobolectricTest: tests=6 failures=0 errors=0 skipped=0
+com.example.orders.Phase8ReorderCartPopulationRobolectricTest: tests=1 failures=0 errors=0 skipped=0
+com.example.ui.OrderDisplayFormattersTest: tests=7 failures=0 errors=0 skipped=0
+com.example.ui.Phase2AuthShellMenuUiTest: tests=10 failures=0 errors=0 skipped=0
+com.example.ui.PizzoraDesignSystemTest: tests=7 failures=0 errors=0 skipped=0
+com.example.update.Phase20UpdateRobolectricTest: tests=4 failures=0 errors=0 skipped=0
+com.example.update.Phase20UpdateUnitTest: tests=6 failures=0 errors=0 skipped=0
+--- END XML-DERIVED TEST COUNTS ---

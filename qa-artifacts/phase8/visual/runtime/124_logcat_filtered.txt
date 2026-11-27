@@ -1,0 +1,57 @@
+11-27 14:45:05.727  1577  1600 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:05.750  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:06.831 12728 12728 D AndroidRuntime: Shutting down VM
+11-27 14:45:06.834  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:10.778 12749 12749 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 0 <<<<<<
+11-27 14:45:10.782 12749 12749 I AndroidRuntime: Using default boot image
+11-27 14:45:10.782 12749 12749 I AndroidRuntime: Leaving lock profiling enabled
+11-27 14:45:10.867 12749 12749 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+11-27 14:45:10.876  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:10.893  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:11.983  1577  1963 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:11.983 12749 12749 D AndroidRuntime: Shutting down VM
+11-27 14:45:17.383 12764 12764 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 0 <<<<<<
+11-27 14:45:17.386 12764 12764 I AndroidRuntime: Using default boot image
+11-27 14:45:17.386 12764 12764 I AndroidRuntime: Leaving lock profiling enabled
+11-27 14:45:17.477 12764 12764 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+11-27 14:45:17.485  1577  1963 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:17.489  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:18.557  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:18.557 12764 12764 D AndroidRuntime: Shutting down VM
+11-27 14:45:23.588 12788 12788 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 0 <<<<<<
+11-27 14:45:23.609 12788 12788 I AndroidRuntime: Using default boot image
+11-27 14:45:23.609 12788 12788 I AndroidRuntime: Leaving lock profiling enabled
+11-27 14:45:23.814 12788 12788 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+11-27 14:45:23.869  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:23.879  1577  1963 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:24.493   664  1330 D CoreBackPreview: Window{a5df15e u0 com.aistudio.pizzora.xkqzmw/com.example.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@91260a9, mPriority=-1, mIsAnimationCallback=false, mOverrideBehavior=0}
+11-27 14:45:25.041 12788 12788 D AndroidRuntime: Shutting down VM
+11-27 14:45:25.042  1577  1963 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:38.109 12809 12809 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 0 <<<<<<
+11-27 14:45:38.112 12809 12809 I AndroidRuntime: Using default boot image
+11-27 14:45:38.112 12809 12809 I AndroidRuntime: Leaving lock profiling enabled
+11-27 14:45:38.198 12809 12809 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+11-27 14:45:38.208  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:38.236  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:39.284  1577  1963 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:39.285 12809 12809 D AndroidRuntime: Shutting down VM
+11-27 14:45:40.163   664  1406 D CoreBackPreview: Window{a5df15e u0 com.aistudio.pizzora.xkqzmw/com.example.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@b67c619, mPriority=0, mIsAnimationCallback=true, mOverrideBehavior=0}
+11-27 14:45:40.185 12610 12616 I .pizzora.xkqzmw: Compiler allocated 8370KB to compile void com.example.catalog.PizzaBuilderScreenKt.PizzaBuilderScreen(com.pizzora.contracts.ProductDto, java.util.List, java.util.List, kotlin.jvm.functions.Function0, kotlin.jvm.functions.Function5, androidx.compose.ui.Modifier, com.example.catalog.PizzaBuilderMode, boolean, boolean, boolean, java.util.List, com.example.core.domain.DomainBridge, com.example.catalog.PizzaBuilderQuoteSource, kotlin.jvm.functions.Function2, androidx.compose.runtime.Composer, int, int, int)
+11-27 14:45:40.200 12610 12616 I .pizzora.xkqzmw: Compiler allocated 8280KB to compile void com.example.catalog.PizzaBuilderScreenKt.BuilderCustomizationSections(boolean, boolean, java.lang.String, java.util.List, java.lang.String, kotlin.jvm.functions.Function1, java.util.List, java.lang.String, kotlin.jvm.functions.Function1, java.util.List, java.util.List, java.util.List, java.util.List, java.util.List, com.example.catalog.PizzaBuilderModifierState, com.example.catalog.PizzaBuilderHalfAndHalfValidation, java.lang.String, boolean, kotlin.jvm.functions.Function1, java.util.List, java.util.List, kotlin.jvm.functions.Function1, kotlin.jvm.functions.Function0, boolean, kotlin.jvm.functions.Function1, boolean, boolean, com.example.core.domain.DomainBridge, androidx.compose.runtime.Composer, int, int, int)
+11-27 14:45:42.239 12830 12830 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 0 <<<<<<
+11-27 14:45:42.242 12830 12830 I AndroidRuntime: Using default boot image
+11-27 14:45:42.242 12830 12830 I AndroidRuntime: Leaving lock profiling enabled
+11-27 14:45:42.331 12830 12830 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+11-27 14:45:42.340  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:42.352  1577  1963 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:43.407  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:43.408 12830 12830 D AndroidRuntime: Shutting down VM
+11-27 14:45:44.339   664  1330 D CoreBackPreview: Window{a5df15e u0 com.aistudio.pizzora.xkqzmw/com.example.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@7dca8b7, mPriority=-1, mIsAnimationCallback=false, mOverrideBehavior=0}
+11-27 14:45:46.405 12850 12850 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 0 <<<<<<
+11-27 14:45:46.408 12850 12850 I AndroidRuntime: Using default boot image
+11-27 14:45:46.408 12850 12850 I AndroidRuntime: Leaving lock profiling enabled
+11-27 14:45:46.495 12850 12850 D AndroidRuntime: Calling main entry com.android.commands.uiautomator.Launcher
+11-27 14:45:46.512  1577  4507 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:46.517  1577  1600 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:47.556  1577  1600 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+11-27 14:45:47.557 12850 12850 D AndroidRuntime: Shutting down VM

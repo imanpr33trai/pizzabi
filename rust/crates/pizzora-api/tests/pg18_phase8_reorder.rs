@@ -452,3 +452,211 @@ async fn pg18_reorder_historical_order_warning_path_is_reported() {
     assert_eq!(reorder.items.len(), 1);
     assert!(reorder.items[0].is_available);
 }
+
+#[tokio::test]
+#[ignore = "Requires live PostgreSQL 18.6 at DATABASE_URL"]
+async fn pg18_checkout_accepts_and_persists_phase8_modifiers() {
+    let pool = setup_pool().await;
+    let srv = TestServer::spawn_default(pool.clone()).await;
+    let uid = new_uuid_v4();
+    let tag = &uid.simple().to_string()[..8];
+    let pincode = unique_pincode(&uid);
+    let (_, owner) = srv.bootstrap_and_login_owner(tag).await;
+    let (_, _, customer) = srv
+        .register_and_verify_customer(&format!("checkout-modifiers-{tag}"))
+        .await;
+    let seeded = seed_full_storefront_via_owner_api(&srv, &owner.access_token, tag, &pincode).await;
+
+    let second_topping_resp = srv
+        .client
+        .post(srv.url("/api/v1/owner/toppings"))
+        .bearer_auth(&owner.access_token)
+        .json(&CreateToppingRequest {
+            name: format!("Split-Topping-{tag}"),
+            is_veg: true,
+            extra_price_paise: 3_000,
+            is_active: true,
+        })
+        .send()
+        .await
+        .expect("create half-and-half topping");
+    assert_eq!(second_topping_resp.status(), StatusCode::CREATED);
+    let second_topping: ToppingDto = second_topping_resp.json().await.expect("ToppingDto");
+
+    let product_id = uuid::Uuid::parse_str(&seeded.product.id).expect("product id");
+    let left_topping_id = uuid::Uuid::parse_str(&seeded.topping.id).expect("left topping id");
+    let right_topping_id = uuid::Uuid::parse_str(&second_topping.id).expect("right topping id");
+    let cheese_id = new_uuid_v4();
+    let sauce_id = new_uuid_v4();
+    let second_sauce_id = new_uuid_v4();
+    let standard_topping_id = new_uuid_v4();
+    let half_config_id = new_uuid_v4();
+
+    sqlx::query(
+        "INSERT INTO product_toppings (product_id, topping_id, sort_order) VALUES ($1, $2, 0), ($1, $3, 1)",
+    )
+    .bind(product_id)
+    .bind(left_topping_id)
+    .bind(right_topping_id)
+    .execute(&pool)
+    .await
+    .expect("link half-and-half toppings to product");
+
+    sqlx::query(
+        r#"
+        INSERT INTO cheeses (id, product_id, name, extra_price_paise, is_active, sort_order)
+        VALUES ($1, $2, 'Checkout Cheese', 2000, TRUE, 0)
+        "#,
+    )
+    .bind(cheese_id)
+    .bind(product_id)
+    .execute(&pool)
+    .await
+    .expect("insert cheese");
+    sqlx::query(
+        r#"
+        INSERT INTO sauces (id, product_id, name, extra_price_paise, is_active, sort_order)
+        VALUES ($1, $2, 'Checkout Sauce', 1500, TRUE, 0)
+        "#,
+    )
+    .bind(sauce_id)
+    .bind(product_id)
+    .execute(&pool)
+    .await
+    .expect("insert sauce");
+    sqlx::query(
+        r#"
+        INSERT INTO sauces (id, product_id, name, extra_price_paise, is_active, sort_order)
+        VALUES ($1, $2, 'Checkout Conflict Sauce', 500, TRUE, 1)
+        "#,
+    )
+    .bind(second_sauce_id)
+    .bind(product_id)
+    .execute(&pool)
+    .await
+    .expect("insert second sauce");
+    sqlx::query(
+        r#"
+        INSERT INTO standard_toppings (
+            id, product_id, name, is_veg, extra_price_paise, is_default, is_active, sort_order
+        )
+        VALUES ($1, $2, 'Checkout Standard', TRUE, 900, FALSE, TRUE, 0)
+        "#,
+    )
+    .bind(standard_topping_id)
+    .bind(product_id)
+    .execute(&pool)
+    .await
+    .expect("insert standard topping");
+    sqlx::query(
+        r#"
+        INSERT INTO half_and_half_configs (
+            id, product_id, name, left_topping_ids, right_topping_ids,
+            half_and_half_surcharge_paise, is_active, sort_order
+        )
+        VALUES ($1, $2, 'Checkout Split', $3::jsonb, $4::jsonb, 4000, TRUE, 0)
+        "#,
+    )
+    .bind(half_config_id)
+    .bind(product_id)
+    .bind(serde_json::json!([left_topping_id]))
+    .bind(serde_json::json!([right_topping_id]))
+    .execute(&pool)
+    .await
+    .expect("insert half-and-half config");
+
+    let mut item = cart_item(&seeded, &seeded.topping.id, 1);
+    item.cheese_id = Some(cheese_id.to_string());
+    item.sauce_id = Some(sauce_id.to_string());
+    item.standard_topping_ids = vec![standard_topping_id.to_string()];
+    item.half_and_half_config_id = Some(half_config_id.to_string());
+    item.half_and_half_left_topping_ids = vec![left_topping_id.to_string()];
+    item.half_and_half_right_topping_ids = vec![right_topping_id.to_string()];
+
+    put_cart(&srv, &customer.access_token, vec![item.clone()]).await;
+    let cart = get_cart(&srv, &customer.access_token).await;
+    let view = &cart.items[0];
+    assert_eq!(
+        view.cheese.as_ref().unwrap().cheese_id,
+        cheese_id.to_string()
+    );
+    assert_eq!(view.sauce.as_ref().unwrap().sauce_id, sauce_id.to_string());
+    assert_eq!(
+        view.standard_toppings[0].standard_topping_id,
+        standard_topping_id.to_string()
+    );
+    assert_eq!(
+        view.half_and_half.as_ref().unwrap().half_and_half_config_id,
+        half_config_id.to_string()
+    );
+
+    let checkout = checkout_cod_pickup(
+        &srv,
+        &customer.access_token,
+        vec![item.clone()],
+        &seeded.pickup_slot.id,
+        &format!("checkout-modifiers-{tag}"),
+    )
+    .await;
+    let order_item = &checkout.order.items[0];
+    assert_eq!(
+        order_item.cheese_id.as_deref(),
+        Some(cheese_id.to_string().as_str())
+    );
+    assert_eq!(
+        order_item.sauce_id.as_deref(),
+        Some(sauce_id.to_string().as_str())
+    );
+    assert_eq!(
+        order_item.standard_topping_ids,
+        vec![standard_topping_id.to_string()]
+    );
+    assert_eq!(
+        order_item.half_and_half_config_id.as_deref(),
+        Some(half_config_id.to_string().as_str())
+    );
+    assert_eq!(
+        order_item.half_and_half_left_topping_ids,
+        vec![left_topping_id.to_string()]
+    );
+    assert_eq!(
+        order_item.half_and_half_right_topping_ids,
+        vec![right_topping_id.to_string()]
+    );
+
+    // 30000 variant + 5000 crust; split average of (40000, 38000) = 39000;
+    // surcharge 4000 + cheese 2000 + sauce 1500 + non-default standard 900.
+    assert_eq!(order_item.unit_price_paise, 47_400);
+
+    // The same idempotency key with a different Phase 8 modifier must conflict rather than
+    // replaying the first order. The request hash therefore includes every modifier ID.
+    let mut conflict_item = item;
+    conflict_item.sauce_id = Some(second_sauce_id.to_string());
+    let conflict_resp = srv
+        .client
+        .post(srv.url("/api/v1/checkout"))
+        .bearer_auth(&customer.access_token)
+        .header("Idempotency-Key", format!("checkout-modifiers-{tag}"))
+        .json(&CheckoutRequest {
+            items: vec![conflict_item],
+            fulfillment_type: FulfillmentType::Pickup,
+            schedule_type: ScheduleType::Scheduled,
+            scheduled_slot_id: Some(seeded.pickup_slot.id.clone()),
+            address_id: None,
+            payment_method: PaymentMethod::Cod,
+            coupon_code: None,
+            clear_cart: false,
+        })
+        .send()
+        .await
+        .expect("idempotency conflict checkout request");
+    assert_eq!(conflict_resp.status(), StatusCode::CONFLICT);
+    let conflict_body = conflict_resp
+        .text()
+        .await
+        .expect("idempotency conflict checkout body");
+    assert!(
+        conflict_body.contains("IDEMPOTENCY_CONFLICT"),
+        "expected idempotency conflict, got {conflict_body}"
+    );
+}

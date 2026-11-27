@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.Phase19EndToEndRobolectricTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-27T13:57:37.776Z" hostname="ip-10-0-138-216" time="1.891">
+  <properties/>
+  <testcase name="full_multi_role_end_to_end_journey_customer_to_kds_to_owner" classname="com.example.Phase19EndToEndRobolectricTest" time="1.888"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.contracts.GoldenVectorParityExportTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:19:05.177Z" hostname="ip-10-0-138-216" time="0.156">
+  <properties/>
+  <testcase name="export and verify golden vectors from Kotlin shared contracts" classname="com.pizzora.contracts.GoldenVectorParityExportTest" time="0.156"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

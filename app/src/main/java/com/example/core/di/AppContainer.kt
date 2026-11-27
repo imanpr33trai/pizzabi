@@ -10,6 +10,7 @@ import com.example.auth.NetworkAuthRepository
 import com.example.cart.CartRepository
 import com.example.cart.CartViewModel
 import com.example.cart.NetworkCartRepository
+import com.example.cart.Phase8ApiLocator
 import com.example.catalog.CatalogRepository
 import com.example.catalog.CustomerCatalogViewModel
 import com.example.catalog.NetworkCatalogRepository
@@ -113,6 +114,12 @@ class AppContainer(
         sessionCoordinatorProvider = { sessionCoordinator },
       )
     }
+  }
+
+  init {
+    // Phase 8 builder/reorder paths need the authenticated client on normal startup, not only
+    // after the Orders screen has been visited. OrdersScreen re-publishes the same instance.
+    Phase8ApiLocator.current = apiClient
   }
 
   val webSocketEventClient: WebSocketEventClient by lazy {
@@ -276,7 +283,10 @@ class AppContainer(
       require(modelClass.isAssignableFrom(CartViewModel::class.java)) {
         "Unknown ViewModel class: ${modelClass.name}"
       }
-      return CartViewModel(cartRepository) as T
+      return CartViewModel(
+        cartRepository = cartRepository,
+        reorderApiClientProvider = { apiClient },
+      ) as T
     }
   }
 

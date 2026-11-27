@@ -855,24 +855,31 @@ impl CartValidation {
                 let crust_extra = crust.map_or(0, |c| c.extra_price_paise);
                 let mut left_sum: i64 = 0;
                 for extra in &left_extras {
-                    left_sum = left_sum.saturating_add(*extra);
+                    left_sum = left_sum
+                        .checked_add(*extra)
+                        .ok_or(DomainError::ArithmeticOverflow("view_left_sum"))?;
                 }
                 let mut right_sum: i64 = 0;
                 for extra in &right_extras {
-                    right_sum = right_sum.saturating_add(*extra);
+                    right_sum = right_sum
+                        .checked_add(*extra)
+                        .ok_or(DomainError::ArithmeticOverflow("view_right_sum"))?;
                 }
                 let left_half_base = base_price
-                    .saturating_add(crust_extra)
-                    .saturating_add(left_sum);
+                    .checked_add(crust_extra)
+                    .and_then(|v| v.checked_add(left_sum))
+                    .ok_or(DomainError::ArithmeticOverflow("view_left_half_base"))?;
                 let right_half_base = base_price
-                    .saturating_add(crust_extra)
-                    .saturating_add(right_sum);
+                    .checked_add(crust_extra)
+                    .and_then(|v| v.checked_add(right_sum))
+                    .ok_or(DomainError::ArithmeticOverflow("view_right_half_base"))?;
                 let average = i128::from(left_half_base)
                     .checked_add(i128::from(right_half_base))
                     .and_then(|v| v.checked_add(1))
                     .and_then(|v| v.checked_div(2))
-                    .map(|v| i64::try_from(v).unwrap_or(i64::MAX))
-                    .unwrap_or(i64::MAX);
+                    .ok_or(DomainError::ArithmeticOverflow("view_half_average"))?;
+                let average_paise = i64::try_from(average)
+                    .map_err(|_| DomainError::ArithmeticOverflow("view_half_average_i64"))?;
 
                 half_and_half_view = Some(EvaluatedHalfAndHalfView {
                     config_id: hah_config_id.to_string(),
@@ -893,7 +900,7 @@ impl CartValidation {
                     surcharge_paise: surcharge,
                     left_half_base_paise: left_half_base,
                     right_half_base_paise: right_half_base,
-                    average_paise: average,
+                    average_paise,
                     is_available: available,
                 });
             }

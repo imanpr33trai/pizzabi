@@ -1,0 +1,9 @@
+$ adb shell command -v curl
+rc=1
+
+$ adb shell command -v wget
+rc=1
+
+$ adb shell curl -sS -o /dev/null -w ...
+/system/bin/sh: curl: inaccessible or not found
+rc=127

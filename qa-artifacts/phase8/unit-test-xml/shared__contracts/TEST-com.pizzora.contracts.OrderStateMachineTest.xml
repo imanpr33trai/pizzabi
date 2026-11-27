@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.contracts.OrderStateMachineTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:19:05.341Z" hostname="ip-10-0-138-216" time="0.001">
+  <properties/>
+  <testcase name="system-only transitions from PENDING_PAYMENT reject human actors" classname="com.pizzora.contracts.OrderStateMachineTest" time="0.0"/>
+  <testcase name="customer can cancel before PREPARING and is blocked once PREPARING begins" classname="com.pizzora.contracts.OrderStateMachineTest" time="0.0"/>
+  <testcase name="nextKdsStatus follows linear delivery and pickup paths" classname="com.pizzora.contracts.OrderStateMachineTest" time="0.0"/>
+  <testcase name="owner can cancel up to READY and kitchen staff cannot cancel orders" classname="com.pizzora.contracts.OrderStateMachineTest" time="0.0"/>
+  <testcase name="dispatch transitions respect DELIVERY vs PICKUP fulfillment type" classname="com.pizzora.contracts.OrderStateMachineTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

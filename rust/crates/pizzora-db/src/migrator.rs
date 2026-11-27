@@ -394,7 +394,8 @@ async fn execute_locked_handoff(
 
 /// Strictly read-only preflight verification for Phase 9 production cutover (Step 3).
 /// Performs zero DDL or table mutations: verifies `flyway_schema_history` (and `_sqlx_migrations`
-/// if present), checks all 46 tables / 13 V3 indexes / constraints / V2 seeds, and reports
+/// if present), checks the 51-table Phase 8 inventory / V3 + Phase 8 indexes / constraints /
+/// V2 seeds, and reports
 /// outbox dead-letter backlog and active worker sessions from `pg_stat_activity`.
 pub async fn verify_migration_readiness_readonly(
     pool: &PgPool,

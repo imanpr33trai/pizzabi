@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.contracts.Phase8SerializationTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:19:05.352Z" hostname="ip-10-0-138-216" time="0.074">
+  <properties/>
+  <testcase name="ProductDto includes new modifier arrays with defaults" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.01"/>
+  <testcase name="SauceOptionDto serializes with snake_case field names" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.0"/>
+  <testcase name="OrderSummaryDto includes itemPreviewSummary field" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.005"/>
+  <testcase name="CheeseOptionDto serializes with snake_case field names" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.0"/>
+  <testcase name="CartValidationIssueCode includes new Phase 8 entries" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.001"/>
+  <testcase name="CartItemInputDto includes new modifier fields with defaults" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.007"/>
+  <testcase name="HalfAndHalfConfigDto serializes with snake_case field names" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.0"/>
+  <testcase name="OrderSummaryDto backward compatible - old JSON without itemPreviewSummary deserializes" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.001"/>
+  <testcase name="OrderItemDto includes all new modifier ID and snapshot fields" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.01"/>
+  <testcase name="ReorderResponseDto matches contract example shape" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.007"/>
+  <testcase name="ReorderUnavailableReason serializes with SCREAMING_SNAKE_CASE" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.0"/>
+  <testcase name="StandardToppingDto serializes with snake_case field names including is_default" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.0"/>
+  <testcase name="CartItemViewDto includes new resolved modifier views" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.012"/>
+  <testcase name="OrderItemDto backward compatible - historical order without new fields deserializes" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.001"/>
+  <testcase name="PublicMenuResponse includes modifier arrays in products" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.007"/>
+  <testcase name="CartItemInputDto backward compatible - old JSON without new fields deserializes" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.0"/>
+  <testcase name="ProductDto backward compatible - old JSON without new fields deserializes" classname="com.pizzora.contracts.Phase8SerializationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

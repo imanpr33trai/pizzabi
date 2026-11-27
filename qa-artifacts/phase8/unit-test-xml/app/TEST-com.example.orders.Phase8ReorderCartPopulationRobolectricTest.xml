@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.orders.Phase8ReorderCartPopulationRobolectricTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:01:16.313Z" hostname="ip-10-0-138-216" time="0.023">
+  <properties/>
+  <testcase name="reorder confirmation preserves all phase 8 ids through cart replace and repository refresh" classname="com.example.orders.Phase8ReorderCartPopulationRobolectricTest" time="0.021"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

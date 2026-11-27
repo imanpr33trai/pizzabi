@@ -1,0 +1,5 @@
+   Compiling pizzora-db v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-db)
+   Compiling pizzora-payments v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-payments)
+   Compiling pizzora-auth v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-auth)
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.74s

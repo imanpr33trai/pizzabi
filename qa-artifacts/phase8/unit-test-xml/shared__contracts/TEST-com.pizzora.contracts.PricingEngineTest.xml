@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.contracts.PricingEngineTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:19:05.476Z" hostname="ip-10-0-138-216" time="0.008">
+  <properties/>
+  <testcase name="proportional discount across mixed taxable and exempt lines computes exact GST and CGST plus SGST" classname="com.pizzora.contracts.PricingEngineTest" time="0.0"/>
+  <testcase name="overflow and invalid bounds throw ArithmeticException or IllegalArgumentException" classname="com.pizzora.contracts.PricingEngineTest" time="0.004"/>
+  <testcase name="flat and percent coupons respect min order, max discount cap, and subtotal cap" classname="com.pizzora.contracts.PricingEngineTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

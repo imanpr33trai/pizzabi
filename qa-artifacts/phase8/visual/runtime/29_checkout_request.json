@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "product_id": "3080ae51-b70d-4c8b-96ab-c3d4b0b99555",
+      "variant_id": "c9f49bf5-3da3-4fb8-a6e9-5dbd8c270460",
+      "crust_id": "8411c690-ed1d-4794-a7fc-975c55475253",
+      "topping_ids": ["7b698cc3-3714-4b06-bd6d-fe119a9cc6b7"],
+      "quantity": 1
+    },
+    {
+      "product_id": "3080ae51-b70d-4c8b-96ab-c3d4b0b99555",
+      "variant_id": "c9f49bf5-3da3-4fb8-a6e9-5dbd8c270460",
+      "crust_id": "8411c690-ed1d-4794-a7fc-975c55475253",
+      "topping_ids": [],
+      "quantity": 1
+    }
+  ],
+  "fulfillment_type": "PICKUP",
+  "schedule_type": "ASAP",
+  "payment_method": "COD",
+  "clear_cart": false
+}

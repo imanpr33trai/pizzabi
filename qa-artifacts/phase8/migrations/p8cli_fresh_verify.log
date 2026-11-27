@@ -1,0 +1,101 @@
+=== post-migration verification: pizzora_p8cli_fresh ===
+timestamp_utc: 2026-11-27T13:24:41Z
+command: docker exec pizzora-pg18 psql -U pizzora -d pizzora_p8cli_fresh -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'"
+ public_base_tables
+--------------------
+                 52
+(1 row)
+
+command: SELECT version, success FROM _sqlx_migrations ORDER BY version
+ version | success
+---------+---------
+       1 | t
+       2 | t
+       3 | t
+       4 | t
+       5 | t
+       6 | t
+       7 | t
+       8 | t
+       9 | t
+      10 | t
+      11 | t
+(11 rows)
+
+command: five new Phase 8 tables
+      table_name
+-----------------------
+ cheeses
+ half_and_half_configs
+ product_toppings
+ sauces
+ standard_toppings
+(5 rows)
+
+command: all public base table names
+_sqlx_migrations
+addresses
+audit_logs
+cart_item_toppings
+cart_items
+carts
+categories
+cheeses
+coupon_redemptions
+coupon_reservations
+coupons
+crust_options
+crust_recipes
+delivery_zones
+email_verification_tokens
+event_stream_cursor
+half_and_half_configs
+ingredients
+inventory
+inventory_ledger
+inventory_reservations
+notification_inbox
+notification_preferences
+order_items
+order_status_history
+orders
+outbox_events
+password_reset_tokens
+payment_attempts
+payment_events
+payments
+permissions
+product_images
+product_toppings
+product_variants
+products
+refresh_tokens
+refunds
+restaurant_settings
+role_permissions
+roles
+sauces
+scheduled_slot_reservations
+scheduled_slots
+staff
+standard_toppings
+topping_recipes
+toppings
+user_sessions
+users
+variant_recipes
+ws_tickets
+
+=== canonical 51-table check (application tables; excludes migration bookkeeping) ===
+timestamp_utc: 2026-11-27T13:25:07Z
+command: docker exec pizzora-pg18 psql -U pizzora -d pizzora_p8cli_fresh -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name NOT IN ('_sqlx_migrations','flyway_schema_history')"
+ phase8_expected_tables
+------------------------
+                     51
+(1 row)
+
+command: raw count including bookkeeping tables (for transparency)
+    table_name
+------------------
+ _sqlx_migrations
+(1 row)

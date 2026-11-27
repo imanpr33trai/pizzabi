@@ -88,6 +88,7 @@ import com.example.ui.components.PizzoraStatusBanner
 import com.example.ui.theme.LocalPizzoraSemanticColors
 import com.example.ui.theme.PizzoraMonoTitle
 import com.example.ui.theme.WarmParchmentText
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.ProductDto
@@ -108,6 +109,10 @@ fun CustomerMenuScreen(
   onAddCustomizedToCart: (ProductDto, ProductVariantDto, CrustOptionDto, List<ToppingDto>, Int) -> Unit,
   modifier: Modifier = Modifier,
   useStandaloneBuilderHost: Boolean = true,
+  onConfirmAddWithModifiers: ((
+    input: CartItemInputDto,
+    onResult: (success: Boolean, errorMessage: String?) -> Unit,
+  ) -> Unit)? = null,
 ) {
   val semantic = LocalPizzoraSemanticColors.current
   val focusManager = LocalFocusManager.current
@@ -449,6 +454,9 @@ fun CustomerMenuScreen(
               onAddCustomizedToCart(activeProduct, variant, crust, selectedToppings, qty)
               onResult(true, null)
             },
+            // Legacy-only callers keep the offline-first repository path; customer flows pass
+            // an extended handler so the exact builder DTO (with modifier IDs) reaches the cart.
+            onConfirmAddWithModifiers = onConfirmAddWithModifiers,
           )
         }
       }

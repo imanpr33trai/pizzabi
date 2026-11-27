@@ -421,42 +421,50 @@ impl PricingEngine {
             half_and_half,
         )?;
 
-        let breakdown = half_and_half.map(|hah| {
-            // Recompute for breakdown
+        let breakdown = if let Some(hah) = half_and_half {
+            // Recompute for breakdown with the same checked arithmetic as the
+            // authoritative unit-price path.
             let mut left_sum: i64 = 0;
             for extra in &hah.left_topping_extras {
-                left_sum = left_sum.saturating_add(*extra);
+                left_sum = left_sum
+                    .checked_add(*extra)
+                    .ok_or(DomainError::ArithmeticOverflow("breakdown_left_sum"))?;
             }
             let mut right_sum: i64 = 0;
             for extra in &hah.right_topping_extras {
-                right_sum = right_sum.saturating_add(*extra);
+                right_sum = right_sum
+                    .checked_add(*extra)
+                    .ok_or(DomainError::ArithmeticOverflow("breakdown_right_sum"))?;
             }
             let left_half_base = variant_price_paise
                 .checked_add(crust_extra_paise)
                 .and_then(|v| v.checked_add(left_sum))
-                .unwrap_or(i64::MAX);
+                .ok_or(DomainError::ArithmeticOverflow("breakdown_left_half_base"))?;
             let right_half_base = variant_price_paise
                 .checked_add(crust_extra_paise)
                 .and_then(|v| v.checked_add(right_sum))
-                .unwrap_or(i64::MAX);
+                .ok_or(DomainError::ArithmeticOverflow("breakdown_right_half_base"))?;
             let average = i128::from(left_half_base)
                 .checked_add(i128::from(right_half_base))
                 .and_then(|v| v.checked_add(1))
                 .and_then(|v| v.checked_div(2))
-                .map(|v| i64::try_from(v).unwrap_or(i64::MAX))
-                .unwrap_or(i64::MAX);
+                .ok_or(DomainError::ArithmeticOverflow("breakdown_half_average"))?;
+            let average_paise = i64::try_from(average)
+                .map_err(|_| DomainError::ArithmeticOverflow("breakdown_half_average_i64"))?;
 
-            HalfAndHalfBreakdown {
+            Some(HalfAndHalfBreakdown {
                 left_half_base_paise: left_half_base,
                 right_half_base_paise: right_half_base,
-                average_paise: average,
+                average_paise,
                 surcharge_paise: hah.surcharge_paise,
                 cheese_extra_paise,
                 sauce_extra_paise,
                 standard_toppings_extra_paise,
                 unit_price_paise: unit_price,
-            }
-        });
+            })
+        } else {
+            None
+        };
 
         Ok((unit_price, breakdown))
     }

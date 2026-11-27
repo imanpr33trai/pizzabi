@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.orders.Phase8OrdersReorderRobolectricTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:01:08.018Z" hostname="ip-10-0-138-216" time="8.292">
+  <properties/>
+  <testcase name="detail renders snapshot names for new orders and ids for historical orders" classname="com.example.orders.Phase8OrdersReorderRobolectricTest" time="0.045"/>
+  <testcase name="order list cards show compact item preview summary" classname="com.example.orders.Phase8OrdersReorderRobolectricTest" time="0.059"/>
+  <testcase name="confirmation adds only available items and keeps all phase 8 ids" classname="com.example.orders.Phase8OrdersReorderRobolectricTest" time="6.04"/>
+  <testcase name="403 and 404 reorder failures show friendly messages" classname="com.example.orders.Phase8OrdersReorderRobolectricTest" time="2.057"/>
+  <testcase name="reconciliation dialog shows available lines caveat unavailable modifiers and verbatim warnings" classname="com.example.orders.Phase8OrdersReorderRobolectricTest" time="0.047"/>
+  <testcase name="reorder action is only offered for completed orders" classname="com.example.orders.Phase8OrdersReorderRobolectricTest" time="0.041"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,170 @@
+=== local API Phase 8 smoke ===
+Started (UTC): 2026-11-27T13:12:47Z
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 18, in call
+    with urllib.request.urlopen(req, timeout=20) as resp:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 400: Bad Request
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 65, in <module>
+    status, quote = call("POST", "/api/v1/pricing/quote", {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 23, in call
+    raise RuntimeError(f"{method} {path} -> HTTP {err.code}: {raw}") from err
+RuntimeError: POST /api/v1/pricing/quote -> HTTP 400: {"error":{"code":"SAUCE_NOT_IN_PRODUCT","message":"Sauce 19352087-7747-4c63-88e7-0d058eba6579 does not belong to product 3080ae51-b70d-4c8b-96ab-c3d4b0b99555.","details":{}},"correlation_id":"bed9ee2e-aab2-4b3a-8ff7-b3e2bf3c8e13","timestamp":"2026-11-27T13:12:52.956Z"}
+smoke exit: 1
+Finished (UTC): 2026-11-27T13:12:52Z
+=== local API Phase 8 smoke (rerun with product-scoped modifiers) ===
+Started (UTC): 2026-11-27T13:13:05Z
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+quote breakdown: {'cheese_extra_paise': 2000, 'sauce_extra_paise': 0, 'standard_toppings_extra_paise': 800, 'half_and_half_surcharge_paise': 5000, 'modifier_extra_paise': 7800}
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 91, in <module>
+    "half_and_half": view["half_and_half"]["config_name"],
+                     ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyError: 'config_name'
+smoke exit: 1
+Finished (UTC): 2026-11-27T13:13:13Z
+=== local API Phase 8 smoke (final) ===
+Started (UTC): 2026-11-27T13:13:30Z
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+quote breakdown: {'cheese_extra_paise': 2000, 'sauce_extra_paise': 0, 'standard_toppings_extra_paise': 800, 'half_and_half_surcharge_paise': 5000, 'modifier_extra_paise': 7800}
+cart resolved modifiers: {'cheese': 'Mozzarella', 'sauce': 'Tomato', 'standards': ['Jalapeno'], 'half_and_half': 'Two Flavours'}
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 18, in call
+    with urllib.request.urlopen(req, timeout=20) as resp:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 400: Bad Request
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 96, in <module>
+    status, order = call("POST", "/api/v1/checkout", {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 23, in call
+    raise RuntimeError(f"{method} {path} -> HTTP {err.code}: {raw}") from err
+RuntimeError: POST /api/v1/checkout -> HTTP 400: {"error":{"code":"MISSING_IDEMPOTENCY_KEY","message":"Idempotency-Key header is required for checkout.","details":{}},"correlation_id":"f280b10c-b18d-4da4-bf2f-e93bff55e78f","timestamp":"2026-11-27T13:13:40.219Z"}
+smoke exit: 1
+Finished (UTC): 2026-11-27T13:13:40Z
+=== local API Phase 8 smoke (with checkout idempotency key) ===
+Started (UTC): 2026-11-27T13:14:01Z
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+quote breakdown: {'cheese_extra_paise': 2000, 'sauce_extra_paise': 0, 'standard_toppings_extra_paise': 800, 'half_and_half_surcharge_paise': 5000, 'modifier_extra_paise': 7800}
+cart resolved modifiers: {'cheese': 'Mozzarella', 'sauce': 'Tomato', 'standards': ['Jalapeno'], 'half_and_half': 'Two Flavours'}
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 20, in call
+    with urllib.request.urlopen(req, timeout=20) as resp:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 400: Bad Request
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 98, in <module>
+    status, order = call("POST", "/api/v1/checkout", {
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 25, in call
+    raise RuntimeError(f"{method} {path} -> HTTP {err.code}: {raw}") from err
+RuntimeError: POST /api/v1/checkout -> HTTP 400: {"error":{"code":"CHEESE_NOT_IN_PRODUCT","message":"Cheese 73bebd6c-9eb7-42a2-a5c5-a60234c68a69 does not belong to product 3080ae51-b70d-4c8b-96ab-c3d4b0b99555.","details":{}},"correlation_id":"83367859-7d47-404c-9cc5-7b53b36c9289","timestamp":"2026-11-27T13:14:11.126Z"}
+smoke exit: 1
+Finished (UTC): 2026-11-27T13:14:11Z
+=== local API Phase 8 smoke (post-fix build) ===
+Started (UTC): 2026-11-27T13:18:39Z
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+quote breakdown: {'cheese_extra_paise': 2000, 'sauce_extra_paise': 0, 'standard_toppings_extra_paise': 800, 'half_and_half_surcharge_paise': 5000, 'modifier_extra_paise': 7800}
+cart resolved modifiers: {'cheese': 'Mozzarella', 'sauce': 'Tomato', 'standards': ['Jalapeno'], 'half_and_half': 'Two Flavours'}
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 105, in <module>
+    order_id = order["order_id"] if "order_id" in order else order["id"]
+                                                             ~~~~~^^^^^^
+KeyError: 'id'
+smoke exit: 1
+Finished (UTC): 2026-11-27T13:18:50Z
+=== local API Phase 8 smoke (final response shape) ===
+Started (UTC): 2026-11-27T13:18:58Z
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+quote breakdown: {'cheese_extra_paise': 2000, 'sauce_extra_paise': 0, 'standard_toppings_extra_paise': 800, 'half_and_half_surcharge_paise': 5000, 'modifier_extra_paise': 7800}
+cart resolved modifiers: {'cheese': 'Mozzarella', 'sauce': 'Tomato', 'standards': ['Jalapeno'], 'half_and_half': 'Two Flavours'}
+checkout order: 88476c24-d1b4-4abb-9bf0-58abde771144
+reorder top-level keys: ['canReorder', 'items', 'orderId', 'unavailable', 'warnings']
+Traceback (most recent call last):
+  File "/workspace/pizzabi/qa-artifacts/phase8/regression/local_api_smoke.py", line 111, in <module>
+    assert reorder["can_reorder"] is True
+           ~~~~~~~^^^^^^^^^^^^^^^
+KeyError: 'can_reorder'
+smoke exit: 1
+Finished (UTC): 2026-11-27T13:19:09Z
+=== local API Phase 8 smoke (camelCase reorder contract) ===
+Started (UTC): 2026-11-27T13:19:17Z
+customer login: 200
+menu arrays: {'cheeses': 4, 'sauces': 4, 'standard_toppings': 4, 'half_and_half_configs': 2}
+quote breakdown: {'cheese_extra_paise': 2000, 'sauce_extra_paise': 0, 'standard_toppings_extra_paise': 800, 'half_and_half_surcharge_paise': 5000, 'modifier_extra_paise': 7800}
+cart resolved modifiers: {'cheese': 'Mozzarella', 'sauce': 'Tomato', 'standards': ['Jalapeno'], 'half_and_half': 'Two Flavours'}
+checkout order: 9cc3bc04-aa86-4917-bccf-0c1dff39e840
+reorder top-level keys: ['canReorder', 'items', 'orderId', 'unavailable', 'warnings']
+reorder item keys: ['cheeseId', 'crustId', 'halfAndHalfConfigId', 'halfAndHalfLeftToppingIds', 'halfAndHalfRightToppingIds', 'isAvailable', 'issues', 'orderItemId', 'productId', 'productName', 'quantity', 'sauceId', 'standardToppingIds', 'standardToppingRemovedIds', 'toppingIds', 'variantId']
+LOCAL API SMOKE PASS
+smoke exit: 0
+Finished (UTC): 2026-11-27T13:19:29Z

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.contracts.PaymentStateMachineTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:19:05.348Z" hostname="ip-10-0-138-216" time="0.0">
+  <properties/>
+  <testcase name="payment attempt state machine enforces attempt lifecycle" classname="com.pizzora.contracts.PaymentStateMachineTest" time="0.0"/>
+  <testcase name="payment state machine enforces normal and exceptional late-capture transitions" classname="com.pizzora.contracts.PaymentStateMachineTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.contracts.OrderCausalTrackerTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:19:05.337Z" hostname="ip-10-0-138-216" time="0.002">
+  <properties/>
+  <testcase name="deduplicates redelivered events by event_id" classname="com.pizzora.contracts.OrderCausalTrackerTest" time="0.001"/>
+  <testcase name="advances stream cursor across filtered cross-room gaps via server_high_water_seq" classname="com.pizzora.contracts.OrderCausalTrackerTest" time="0.0"/>
+  <testcase name="accepts payment gateway ready at current order version without false resync" classname="com.pizzora.contracts.OrderCausalTrackerTest" time="0.0"/>
+  <testcase name="drops stale aggregate versions and triggers resync when gap exceeds 1" classname="com.pizzora.contracts.OrderCausalTrackerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

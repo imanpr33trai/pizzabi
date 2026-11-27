@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pizzora.backend.Phase8GoldenVectorFullParityTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:20:32.004Z" hostname="ip-10-0-138-216" time="1.759">
+  <properties/>
+  <testcase name="all 33 golden vectors pass through the backend PricingService" classname="com.pizzora.backend.Phase8GoldenVectorFullParityTest" time="0.641"/>
+  <testcase name="canonical fixture digest and exactly 33 golden vectors are stable" classname="com.pizzora.backend.Phase8GoldenVectorFullParityTest" time="0.003"/>
+  <system-out><![CDATA[{"@timestamp":"2026-11-27T14:20:32.0121547Z","@version":"1","message":"The files belonging to this database system will be owned by user \"remote\".","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012351597Z","@version":"1","message":"This user must also own the server process.","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012369718Z","@version":"1","message":"","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012383199Z","@version":"1","message":"The database cluster will be initialized with locale \"C.UTF-8\".","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012388811Z","@version":"1","message":"The default text search configuration will be set to \"english\".","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012393743Z","@version":"1","message":"","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012400939Z","@version":"1","message":"Data page checksums are disabled.","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012405731Z","@version":"1","message":"","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012420738Z","@version":"1","message":"fixing permissions on existing directory /tmp/epg15993307392891461262 ... ok","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012499326Z","@version":"1","message":"creating subdirectories ... ok","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.012614781Z","@version":"1","message":"selecting dynamic shared memory implementation ... posix","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.018861878Z","@version":"1","message":"selecting default max_connections ... 100","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.02778982Z","@version":"1","message":"selecting default shared_buffers ... 128MB","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.03561027Z","@version":"1","message":"selecting default time zone ... Etc/UTC","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.036107255Z","@version":"1","message":"creating configuration files ... ok","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.107193118Z","@version":"1","message":"running bootstrap script ... ok","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.398538871Z","@version":"1","message":"performing post-bootstrap initialization ... ok","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.654153844Z","@version":"1","message":"syncing data to disk ... ok","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.654277342Z","@version":"1","message":"","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.654296545Z","@version":"1","message":"Success. You can now start the database server using:","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.654303253Z","@version":"1","message":"","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.654309048Z","@version":"1","message":"    /tmp/embedded-pg/PG-2206b1b51bb334f8406866c46fe158b3/bin/pg_ctl -D /tmp/epg15993307392891461262 -l logfile start","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.654315651Z","@version":"1","message":"","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"initdb:pid(179297)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.65622691Z","@version":"1","message":"24ab19be-d5e0-4964-a6d6-cae9fef606d2 initdb completed in 00:00:00.650","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.662836305Z","@version":"1","message":"24ab19be-d5e0-4964-a6d6-cae9fef606d2 postmaster started as Process[pid=179322, exitValue=\"not exited\"] on port 39575.  Waiting up to PT10S for server startup to finish.","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.679893145Z","@version":"1","message":"waiting for server to start....2026-11-27 14:20:32.679 UTC [179326] LOG:  starting PostgreSQL 14.15 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.680305475Z","@version":"1","message":"2026-11-27 14:20:32.680 UTC [179326] LOG:  listening on IPv6 address \"::1\", port 39575","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.680355729Z","@version":"1","message":"2026-11-27 14:20:32.680 UTC [179326] LOG:  listening on IPv4 address \"127.0.0.1\", port 39575","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.680472056Z","@version":"1","message":"2026-11-27 14:20:32.680 UTC [179326] LOG:  listening on Unix socket \"/tmp/.s.PGSQL.39575\"","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.682043352Z","@version":"1","message":"2026-11-27 14:20:32.682 UTC [179327] LOG:  database system was shut down at 2026-11-27 14:20:32 UTC","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.68880257Z","@version":"1","message":"2026-11-27 14:20:32.683 UTC [179326] LOG:  database system is ready to accept connections","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.765983818Z","@version":"1","message":" done","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.766057013Z","@version":"1","message":"server started","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.776192908Z","@version":"1","message":"24ab19be-d5e0-4964-a6d6-cae9fef606d2 postmaster startup finished in 00:00:00.119","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.776373905Z","@version":"1","message":"Running Flyway migrations against PostgreSQL","logger_name":"com.pizzora.backend.core.db.DatabaseFactory","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.795222152Z","@version":"1","message":"Database: jdbc:postgresql://localhost:39575/postgres (PostgreSQL 14.15)","logger_name":"org.flywaydb.core.FlywayExecutor","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.804598501Z","@version":"1","message":"Schema history table \"public\".\"flyway_schema_history\" does not exist yet","logger_name":"org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.804940972Z","@version":"1","message":"Successfully validated 3 migrations (execution time 00:00.004s)","logger_name":"org.flywaydb.core.internal.command.DbValidate","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.811960166Z","@version":"1","message":"Creating Schema History table \"public\".\"flyway_schema_history\" ...","logger_name":"org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.834611067Z","@version":"1","message":"Current version of schema \"public\": << Empty Schema >>","logger_name":"org.flywaydb.core.internal.command.DbMigrate","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:32.847405538Z","@version":"1","message":"Migrating schema \"public\" to version \"1 - core schema\"","logger_name":"org.flywaydb.core.internal.command.DbMigrate","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.00385794Z","@version":"1","message":"Migrating schema \"public\" to version \"2 - seed rbac and settings\"","logger_name":"org.flywaydb.core.internal.command.DbMigrate","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.020165905Z","@version":"1","message":"Migrating schema \"public\" to version \"3 - hot path indexes\"","logger_name":"org.flywaydb.core.internal.command.DbMigrate","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.068466555Z","@version":"1","message":"Successfully applied 3 migrations to schema \"public\", now at version v3 (execution time 00:00.189s)","logger_name":"org.flywaydb.core.internal.command.DbMigrate","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.076006726Z","@version":"1","message":"Flyway migration complete migrationsExecuted=3","logger_name":"com.pizzora.backend.core.db.DatabaseFactory","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+VECTOR U-01 Base 10000, no modifiers
+VECTOR U-01 expected_unit=10000 observed_unit=10000 line_total=10000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-02 + cheese 2000
+VECTOR U-02 expected_unit=12000 observed_unit=12000 line_total=12000 breakdown=cheese=2000,sauce=0,standards=0,half=0,modifier=2000
+VECTOR U-03 + sauce 1500
+VECTOR U-03 expected_unit=11500 observed_unit=11500 line_total=11500 breakdown=cheese=0,sauce=1500,standards=0,half=0,modifier=1500
+VECTOR U-04 + cheese 2000 + sauce 1500
+VECTOR U-04 expected_unit=13500 observed_unit=13500 line_total=13500 breakdown=cheese=2000,sauce=1500,standards=0,half=0,modifier=3500
+VECTOR U-05 + crust 1000
+VECTOR U-05 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-06 + non-default standard 1000
+VECTOR U-06 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=1000,half=0,modifier=1000
+VECTOR U-07 + non-default standard 1000 + 500
+VECTOR U-07 expected_unit=11500 observed_unit=11500 line_total=11500 breakdown=cheese=0,sauce=0,standards=1500,half=0,modifier=1500
+VECTOR U-08 Default standard kept (extra 1000 ignored)
+VECTOR U-08 expected_unit=10000 observed_unit=10000 line_total=10000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-09 Default standard removed (zero credit)
+VECTOR U-09 expected_unit=10000 observed_unit=10000 line_total=10000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-10 Default kept + non-default 1000
+VECTOR U-10 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=1000,half=0,modifier=1000
+VECTOR U-11 Default removed + non-default 1000
+VECTOR U-11 expected_unit=11000 observed_unit=11000 line_total=11000 breakdown=cheese=0,sauce=0,standards=1000,half=0,modifier=1000
+VECTOR U-12 Crust 1000 + cheese 2000 + sauce 1500 + standard 1000
+VECTOR U-12 expected_unit=15500 observed_unit=15500 line_total=15500 breakdown=cheese=2000,sauce=1500,standards=1000,half=0,modifier=4500
+VECTOR U-13 Half 14000/15000 + surcharge 1000
+VECTOR U-13 expected_unit=15500 observed_unit=15500 line_total=15500 breakdown=cheese=0,sauce=0,standards=0,half=1000,modifier=1000
+VECTOR U-14 Half 10001/10002 + surcharge 0 (odd HALF_UP)
+VECTOR U-14 expected_unit=10002 observed_unit=10002 line_total=10002 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-15 Half 10001/10002 + surcharge 999
+VECTOR U-15 expected_unit=11001 observed_unit=11001 line_total=11001 breakdown=cheese=0,sauce=0,standards=0,half=999,modifier=999
+VECTOR U-16 Half 15500 + cheese 2000 + sauce 1500
+VECTOR U-16 expected_unit=19000 observed_unit=19000 line_total=19000 breakdown=cheese=2000,sauce=1500,standards=0,half=1000,modifier=4500
+VECTOR U-17 Half 15500 + non-default standard 700
+VECTOR U-17 expected_unit=16200 observed_unit=16200 line_total=16200 breakdown=cheese=0,sauce=0,standards=700,half=1000,modifier=1700
+VECTOR U-18 Half 15500 + cheese 2000 + sauce 1500 + standard 700
+VECTOR U-18 expected_unit=19700 observed_unit=19700 line_total=19700 breakdown=cheese=2000,sauce=1500,standards=700,half=1000,modifier=5200
+VECTOR U-19 Half 10000/10001 (1-paise difference)
+VECTOR U-19 expected_unit=10001 observed_unit=10001 line_total=10001 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-20 Half 10000/10003 (3-paise difference)
+VECTOR U-20 expected_unit=10002 observed_unit=10002 line_total=10002 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-21 Base 10000 × quantity 2
+VECTOR U-21 expected_unit=10000 observed_unit=10000 line_total=20000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-22 All-modifier 19700 × quantity 25
+VECTOR U-22 expected_unit=19700 observed_unit=19700 line_total=492500 breakdown=cheese=50000,sauce=37500,standards=17500,half=0,modifier=105000
+VECTOR U-23 Half 10002 × quantity 3
+VECTOR U-23 expected_unit=10002 observed_unit=10002 line_total=30006 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-24 Half-all 19700 × quantity 25
+VECTOR U-24 expected_unit=19700 observed_unit=19700 line_total=492500 breakdown=cheese=50000,sauce=37500,standards=17500,half=25000,modifier=130000
+VECTOR U-25 Half 12000/12000 + surcharge 0
+VECTOR U-25 expected_unit=12000 observed_unit=12000 line_total=12000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-26 Half 10000/10000 + surcharge 5000
+VECTOR U-26 expected_unit=15000 observed_unit=15000 line_total=15000 breakdown=cheese=0,sauce=0,standards=0,half=5000,modifier=5000
+VECTOR U-27 Unit 1,000,000,000 × quantity 25
+VECTOR U-27 expected_unit=1000000000 observed_unit=1000000000 line_total=25000000000 breakdown=cheese=0,sauce=0,standards=0,half=0,modifier=0
+VECTOR U-28 Unit i64::MAX × quantity 2 → ARITHMETIC_OVERFLOW
+VECTOR U-28 expected_error=ARITHMETIC_OVERFLOW observed=ArithmeticException code=null message=long overflow
+VECTOR Q-01 Quote 14500, GST 500, delivery 0
+VECTOR Q-01 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=0, taxableAmountPaise=14500, deliveryFeePaise=0, gstBps=500, taxPaise=725, cgstPaise=362, sgstPaise=363, totalPaise=15225) observed_quote=subtotal=14500,taxable=14500,discount=0,taxable_amount=14500,delivery=0,gst=500,tax=725,cgst=362,sgst=363,total=15225
+VECTOR Q-02 Quote 14500, 10% coupon
+VECTOR Q-02 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=1450, taxableAmountPaise=13050, deliveryFeePaise=0, gstBps=500, taxPaise=653, cgstPaise=326, sgstPaise=327, totalPaise=13703) observed_quote=subtotal=14500,taxable=14500,discount=1450,taxable_amount=13050,delivery=0,gst=500,tax=653,cgst=326,sgst=327,total=13703
+VECTOR Q-03 Quote 10001, 12.5% coupon
+VECTOR Q-03 expected_quote=ExpectedQuote(subtotalPaise=10001, taxableSubtotalPaise=10001, discountPaise=1250, taxableAmountPaise=8751, deliveryFeePaise=0, gstBps=500, taxPaise=438, cgstPaise=219, sgstPaise=219, totalPaise=9189) observed_quote=subtotal=10001,taxable=10001,discount=1250,taxable_amount=8751,delivery=0,gst=500,tax=438,cgst=219,sgst=219,total=9189
+VECTOR Q-04 Quote 14500, flat 5000 cap 3000, delivery 3000
+VECTOR Q-04 expected_quote=ExpectedQuote(subtotalPaise=14500, taxableSubtotalPaise=14500, discountPaise=3000, taxableAmountPaise=11500, deliveryFeePaise=3000, gstBps=500, taxPaise=575, cgstPaise=287, sgstPaise=288, totalPaise=15075) observed_quote=subtotal=14500,taxable=14500,discount=3000,taxable_amount=11500,delivery=3000,gst=500,tax=575,cgst=287,sgst=288,total=15075
+VECTOR Q-05 19700 × 2, 10% coupon, GST 500, delivery 3000
+VECTOR Q-05 expected_quote=ExpectedQuote(subtotalPaise=39400, taxableSubtotalPaise=39400, discountPaise=3940, taxableAmountPaise=35460, deliveryFeePaise=3000, gstBps=500, taxPaise=1773, cgstPaise=886, sgstPaise=887, totalPaise=40233) observed_quote=subtotal=39400,taxable=39400,discount=3940,taxable_amount=35460,delivery=3000,gst=500,tax=1773,cgst=886,sgst=887,total=40233
+VERIFIED_VECTOR_COUNT=33
+VERIFIED_VECTOR_IDS=U-01,U-02,U-03,U-04,U-05,U-06,U-07,U-08,U-09,U-10,U-11,U-12,U-13,U-14,U-15,U-16,U-17,U-18,U-19,U-20,U-21,U-22,U-23,U-24,U-25,U-26,U-27,U-28,Q-01,Q-02,Q-03,Q-04,Q-05
+FIXTURE=/workspace/pizzabi/tools/golden-vectors/pizzora_phase8_modifier_vectors.json
+FIXTURE_SHA256=a1e6f596d14c9a74ea820d20fbe7a349bbbcfab29bb02cf7464598ea9fc61623
+MODIFIER_FIXTURE_VECTOR_COUNT=33
+WROTE_FIXTURE_DIGEST=/workspace/pizzabi/qa-artifacts/phase8/parity/kotlin_parity_fixture_sha256.txt
+{"@timestamp":"2026-11-27T14:20:33.765424768Z","@version":"1","message":"2026-11-27 14:20:33.765 UTC [179326] LOG:  received fast shutdown request","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.765500189Z","@version":"1","message":"2026-11-27 14:20:33.765 UTC [179326] LOG:  aborting any active transactions","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"postgres:pid(179322)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.865624559Z","@version":"1","message":"waiting for server to shut down.... done","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"pg_ctl:pid(179420)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.865834576Z","@version":"1","message":"server stopped","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"pg_ctl:pid(179420)","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+{"@timestamp":"2026-11-27T14:20:33.866073803Z","@version":"1","message":"24ab19be-d5e0-4964-a6d6-cae9fef606d2 shut down postmaster in 00:00:00.102","logger_name":"io.zonky.test.db.postgres.embedded.EmbeddedPostgres","thread_name":"Test worker","level":"INFO","level_value":20000,"service":"pizzora-backend"}
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

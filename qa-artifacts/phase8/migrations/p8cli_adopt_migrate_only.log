@@ -1,0 +1,13 @@
+=== PHASE 8 MIGRATION CLI EVIDENCE ===
+label: adopt migrate-only (handoff)
+timestamp_utc_start: 2026-11-27T13:24:41Z
+binary: /workspace/pizzabi/rust/target/debug/pizzora-api
+database: pizzora_p8cli_adopt
+exact_command: env DATABASE_URL='postgres://pizzora:<redacted-local-db-password>@127.0.0.1:5432/pizzora_p8cli_adopt' '/workspace/pizzabi/rust/target/debug/pizzora-api' --migrate-only
+--- stdout+stderr BEGIN ---
+[2m2026-11-27T13:24:41.436830Z[0m [32m INFO[0m [2msqlx::postgres::notice[0m[2m:[0m relation "_sqlx_migrations" already exists, skipping
+[2m2026-11-27T13:24:41.508669Z[0m [32m INFO[0m [2mpizzora_db::migrator[0m[2m:[0m Completed advisory-locked Flyway V1-V3 to SQLx handoff [3mbackend_pid[0m[2m=[0m1677 [3mversions[0m[2m=[0m[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+[2m2026-11-27T13:24:41.509063Z[0m [32m INFO[0m [2mpizzora_api[0m[2m:[0m Pre-deploy migration step completed [3mmode[0m[2m=[0mAdoptedExistingFlyway [3mbackend_pid[0m[2m=[0m1677 [3mapplied_or_verified_versions[0m[2m=[0m[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+--- stdout+stderr END ---
+exit_code: 0
+timestamp_utc_end: 2026-11-27T13:24:41Z

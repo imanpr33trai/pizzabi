@@ -1,0 +1,14 @@
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.52s
+     Running unittests src/lib.rs (rust/target/debug/deps/pizzora_api-ea6fc7dff626eee8)
+
+running 7 tests
+test unit_tests::openapi_document_contains_version_bearer_security_and_contract_paths ... ok
+test unit_tests::rate_limiter_classification_and_redis_unavailable_fallback_work ... ok
+test unit_tests::dto_round_trips_and_wire_field_names_match_ktor_and_android_contracts ... ok
+test unit_tests::storage_key_validation_unavailable_client_sigv4_and_magic_bytes ... ok
+test unit_tests::realtime_hub_rooms_filtering_fanout_and_monotonic_dedup ... ok
+test unit_tests::http_middleware_health_openapi_correlation_errors_and_security_headers ... ok
+test unit_tests::http_body_size_limits_chunked_overflow_and_rate_limit_429 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s

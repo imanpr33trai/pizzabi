@@ -136,6 +136,7 @@ import com.example.ui.theme.PizzoraTheme
 import com.example.update.UpdateHostOverlay
 import com.example.update.UpdateUiState
 import com.example.update.UpdateViewModel
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.PaymentMethod
@@ -424,6 +425,7 @@ fun CustomerRoleShell(
   val shellScope = rememberCoroutineScope()
   val menuState = catalogViewModel?.uiState?.collectAsStateWithLifecycle()?.value
   val cartState = cartViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+  val serverCartItemViews = cartViewModel?.serverCartItems?.collectAsStateWithLifecycle()?.value
   val quoteState = checkoutQuoteViewModel?.uiState?.collectAsStateWithLifecycle()?.value
   val ordersShellState = ordersViewModel?.uiState?.collectAsStateWithLifecycle()?.value
 
@@ -474,6 +476,13 @@ fun CustomerRoleShell(
   LaunchedEffect(isEditBuilderOverlayOpen, catalogViewModel) {
     if (isEditBuilderOverlayOpen) {
       catalogViewModel?.ensureLoaded()
+    }
+  }
+
+  // Restore Phase 8 modifier selections from the authenticated server cart before edit submits.
+  LaunchedEffect(isEditBuilderOverlayOpen, activeEditingCartItem?.item?.id, cartViewModel) {
+    if (isEditBuilderOverlayOpen) {
+      cartViewModel?.refreshServerCartItems()
     }
   }
 
@@ -716,6 +725,13 @@ fun CustomerRoleShell(
                 onAddCustomizedToCart = { prod, variant, crust, toppings, qty ->
                   cartViewModel?.addCustomizedPizza(prod, variant, crust, toppings, qty)
                 },
+                onConfirmAddWithModifiers = if (cartViewModel?.usesAuthenticatedModifierApi == true) {
+                  { input: CartItemInputDto, onResult: (Boolean, String?) -> Unit ->
+                    cartViewModel.addCartItemWithModifiers(input, onResult)
+                  }
+                } else {
+                  null
+                },
                 modifier = Modifier.weight(1f),
                 useStandaloneBuilderHost = false,
               )
@@ -852,6 +868,7 @@ fun CustomerRoleShell(
           it.id == editEntry.item.productId
         }
         val catalogLoading = currentMenuState?.isLoading == true || currentMenuState?.isRefreshing == true
+        val resolvedEditItem = serverCartItemViews?.firstOrNull { it.id == editEntry.item.id }
         Surface(
           modifier = Modifier
             .fillMaxSize()
@@ -862,42 +879,61 @@ fun CustomerRoleShell(
           tonalElevation = 0.dp,
         ) {
           Box(modifier = Modifier.fillMaxSize()) {
-            PizzaBuilderScreen(
-              product = resolvedProduct,
-              crusts = currentMenuState?.crusts ?: emptyList(),
-              toppings = currentMenuState?.toppings ?: emptyList(),
-              mode = PizzaBuilderMode.Edit(editEntry),
-              isCatalogLoading = catalogLoading,
-              isAcceptingOrders = currentMenuState?.isAcceptingOrders ?: true,
-              isFromOfflineCache = currentMenuState?.isFromOfflineCache ?: false,
-              onDismiss = {
-                editingCartItem = null
-                savedEditingCartItemId = null
-              },
-              onConfirmAdd = { variant, crust, selectedToppings, qty, onResult ->
-                val targetProduct = resolvedProduct
-                val activeCartVm = cartViewModel
-                if (targetProduct != null && activeCartVm != null) {
-                  activeCartVm.updateEditedPizza(
-                    existingItemId = editEntry.item.id,
-                    product = targetProduct,
-                    variant = variant,
-                    crust = crust,
-                    toppings = selectedToppings,
-                    quantity = qty,
-                    onResult = onResult,
-                    onEditCommitted = { editResult ->
-                      editResult.resultingItemId?.let { targetId ->
-                        lastEditedCartItemId = targetId
-                      }
-                    },
-                  )
+            // Remount once the read-only server view arrives so modifier selections hydrate
+            // from the saved cart line instead of catalog defaults.
+            key(resolvedEditItem?.id) {
+              PizzaBuilderScreen(
+                product = resolvedProduct,
+                crusts = currentMenuState?.crusts ?: emptyList(),
+                toppings = currentMenuState?.toppings ?: emptyList(),
+                mode = PizzaBuilderMode.Edit(editEntry, resolvedItem = resolvedEditItem),
+                isCatalogLoading = catalogLoading,
+                isAcceptingOrders = currentMenuState?.isAcceptingOrders ?: true,
+                isFromOfflineCache = currentMenuState?.isFromOfflineCache ?: false,
+                onDismiss = {
+                  editingCartItem = null
+                  savedEditingCartItemId = null
+                },
+                onConfirmAdd = { variant, crust, selectedToppings, qty, onResult ->
+                  val targetProduct = resolvedProduct
+                  val activeCartVm = cartViewModel
+                  if (targetProduct != null && activeCartVm != null) {
+                    activeCartVm.updateEditedPizza(
+                      existingItemId = editEntry.item.id,
+                      product = targetProduct,
+                      variant = variant,
+                      crust = crust,
+                      toppings = selectedToppings,
+                      quantity = qty,
+                      onResult = onResult,
+                      onEditCommitted = { editResult ->
+                        editResult.resultingItemId?.let { targetId ->
+                          lastEditedCartItemId = targetId
+                        }
+                      },
+                    )
+                  } else {
+                    onResult(false, "Unable to update this item right now.")
+                  }
+                },
+                onConfirmAddWithModifiers = if (cartViewModel?.usesAuthenticatedModifierApi == true) {
+                  { input: CartItemInputDto, onResult: (Boolean, String?) -> Unit ->
+                    cartViewModel.updateCartItemWithModifiers(
+                      input = input.copy(id = input.id ?: editEntry.item.id),
+                      onResult = onResult,
+                      onEditCommitted = { editResult ->
+                        editResult.resultingItemId?.let { targetId ->
+                          lastEditedCartItemId = targetId
+                        }
+                      },
+                    )
+                  }
                 } else {
-                  onResult(false, "Unable to update this item right now.")
-                }
-              },
-              modifier = Modifier.fillMaxSize(),
-            )
+                  null
+                },
+                modifier = Modifier.fillMaxSize(),
+              )
+            }
             SnackbarHost(
               hostState = overlaySnackbarHostState,
               modifier = Modifier
@@ -943,6 +979,13 @@ fun CustomerRoleShell(
                   } else {
                     onResult(false, "Cart is unavailable right now.")
                   }
+                },
+                onConfirmAddWithModifiers = if (cartViewModel?.usesAuthenticatedModifierApi == true) {
+                  { input: CartItemInputDto, onResult: (Boolean, String?) -> Unit ->
+                    cartViewModel.addCartItemWithModifiers(input, onResult)
+                  }
+                } else {
+                  null
                 },
                 modifier = Modifier.fillMaxSize(),
               )

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.cart.Phase8BuilderCartViewModelRobolectricTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-27T14:01:05.980Z" hostname="ip-10-0-138-216" time="0.154">
+  <properties/>
+  <testcase name="edit without an existing item id fails before any network call" classname="com.example.cart.Phase8BuilderCartViewModelRobolectricTest" time="0.021"/>
+  <testcase name="add with modifiers preserves every phase 8 id in replace request" classname="com.example.cart.Phase8BuilderCartViewModelRobolectricTest" time="0.042"/>
+  <testcase name="get cart failure reports an error and never mutates the server cart" classname="com.example.cart.Phase8BuilderCartViewModelRobolectricTest" time="0.018"/>
+  <testcase name="missing api client fails clearly without touching the cart repository" classname="com.example.cart.Phase8BuilderCartViewModelRobolectricTest" time="0.018"/>
+  <testcase name="edit with modifiers replaces only the matching server line" classname="com.example.cart.Phase8BuilderCartViewModelRobolectricTest" time="0.039"/>
+  <testcase name="app container publishes authenticated api client on startup" classname="com.example.cart.Phase8BuilderCartViewModelRobolectricTest" time="0.014"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

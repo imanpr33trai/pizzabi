@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -45,12 +46,15 @@ data class CartUndoPrompt(
 /**
  * The API client is created by AppContainer (outside W7's write scope). The orders screen records
  * the container's client here so reorder can use the same authenticated instance; tests inject
- * their own client through [CartViewModel.reorderApiClientProvider] instead.
+ * their own client through [CartViewModel]'s provider parameter instead.
  */
 object Phase8ApiLocator {
   @Volatile
   var current: PizzoraApiClient? = null
 }
+
+private const val CART_UNAVAILABLE_MESSAGE = "Your cart is unavailable right now. Please try again."
+private const val EDIT_UNAVAILABLE_MESSAGE = "Unable to update this item right now."
 
 /** Cart-side entry point used by the reorder confirmation dialog. */
 interface ReorderCartSink {
@@ -99,8 +103,20 @@ internal fun cartItemViewToInput(view: CartItemViewDto): CartItemInputDto = Cart
 
 class CartViewModel(
   private val cartRepository: CartRepository,
-  private val reorderApiClientProvider: () -> PizzoraApiClient? = { Phase8ApiLocator.current },
+  /**
+   * Explicit provider signals that this ViewModel is wired to the authenticated server API.
+   * Pre-Phase-8 callers that omit it keep the offline-first Room path through [addCustomizedPizza]
+   * and [updateEditedPizza]; production AppContainer supplies the provider so main customer flows
+   * use the modifier-preserving extended path.
+   */
+  private val reorderApiClientProvider: (() -> PizzoraApiClient?)? = null,
 ) : ViewModel(), ReorderCartSink {
+
+  private val apiClientProvider: () -> PizzoraApiClient? =
+    reorderApiClientProvider ?: { Phase8ApiLocator.current }
+
+  /** True when the builder can safely forward full DTOs to the authenticated server cart. */
+  val usesAuthenticatedModifierApi: Boolean = reorderApiClientProvider != null
 
   private data class SyncStatusState(
     val isSyncing: Boolean = false,
@@ -109,6 +125,12 @@ class CartViewModel(
   )
 
   private val syncState = MutableStateFlow(SyncStatusState())
+  /**
+   * Read-only snapshot of the authenticated server cart. The builder uses it to restore Phase 8
+   * modifier selections when editing an existing line; it never mutates the server cart.
+   */
+  private val _serverCartItems = MutableStateFlow<List<CartItemViewDto>>(emptyList())
+  val serverCartItems: StateFlow<List<CartItemViewDto>> = _serverCartItems.asStateFlow()
   private val _events = MutableSharedFlow<String>(extraBufferCapacity = 4)
   val events: SharedFlow<String> = _events.asSharedFlow()
   private val _undoPrompts = MutableSharedFlow<CartUndoPrompt>(extraBufferCapacity = 4)
@@ -199,6 +221,140 @@ class CartViewModel(
   }
 
   /**
+   * Phase 8 builder add path. Unlike [addCustomizedPizza], this forwards the exact
+   * [CartItemInputDto] emitted by the builder (including every modifier ID) through the
+   * authenticated server cart replace. Existing lines are preserved verbatim.
+   */
+  fun addCartItemWithModifiers(
+    input: CartItemInputDto,
+    onResult: (success: Boolean, errorMessage: String?) -> Unit = { _, _ -> },
+  ) {
+    viewModelScope.launch {
+      syncState.update { it.copy(isSyncing = true, statusMessage = null) }
+      val api = apiClientProvider()
+      if (api == null) {
+        syncState.update { it.copy(isSyncing = false, statusMessage = CART_UNAVAILABLE_MESSAGE) }
+        onResult(false, CART_UNAVAILABLE_MESSAGE)
+        return@launch
+      }
+      try {
+        val existingInputs = api.getCart().items.map(::cartItemViewToInput)
+        val serverCart = api.replaceCart(ReplaceCartRequest(existingInputs + input.copy(id = null)))
+        val localRefresh = refreshLocalCartAfterServerReplace()
+        syncState.update {
+          it.copy(
+            isSyncing = false,
+            isOffline = localRefresh.isOffline,
+            statusMessage = cartStatusMessage(serverCart.unavailableCount, localRefresh),
+          )
+        }
+        onResult(true, null)
+        _events.tryEmit("Pizza added to cart")
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (t: Throwable) {
+        val message = t.message?.takeIf { it.isNotBlank() } ?: "Unable to add item to cart."
+        syncState.update { it.copy(isSyncing = false, isOffline = true, statusMessage = message) }
+        onResult(false, message)
+      }
+    }
+  }
+
+  /**
+   * Phase 8 builder edit path. The builder must supply the existing cart line id; the server
+   * replace swaps only that line and leaves every other line (and its modifier IDs) untouched.
+   */
+  fun updateCartItemWithModifiers(
+    input: CartItemInputDto,
+    onResult: (success: Boolean, errorMessage: String?) -> Unit = { _, _ -> },
+    onEditCommitted: (CartEditResult) -> Unit = {},
+  ) {
+    val existingItemId = input.id
+    if (existingItemId.isNullOrBlank()) {
+      syncState.update { it.copy(statusMessage = EDIT_UNAVAILABLE_MESSAGE) }
+      onResult(false, EDIT_UNAVAILABLE_MESSAGE)
+      return
+    }
+    if (!editingItemIdsInFlight.add(existingItemId)) {
+      return
+    }
+    viewModelScope.launch {
+      try {
+        syncState.update { it.copy(isSyncing = true, statusMessage = null) }
+        val api = apiClientProvider()
+        if (api == null) {
+          syncState.update { it.copy(isSyncing = false, statusMessage = CART_UNAVAILABLE_MESSAGE) }
+          onResult(false, CART_UNAVAILABLE_MESSAGE)
+          return@launch
+        }
+        val existingInputs = api.getCart().items.map(::cartItemViewToInput)
+        if (existingInputs.none { it.id == existingItemId }) {
+          val message = "This item is no longer in your cart. Please refresh and try again."
+          syncState.update { it.copy(isSyncing = false, statusMessage = message) }
+          onResult(false, message)
+          return@launch
+        }
+        val replacedInputs = existingInputs.map { line ->
+          if (line.id == existingItemId) input else line
+        }
+        val serverCart = api.replaceCart(ReplaceCartRequest(replacedInputs))
+        val localRefresh = refreshLocalCartAfterServerReplace()
+        syncState.update {
+          it.copy(
+            isSyncing = false,
+            isOffline = localRefresh.isOffline,
+            statusMessage = cartStatusMessage(serverCart.unavailableCount, localRefresh),
+          )
+        }
+        onEditCommitted(
+          CartEditResult(
+            isOffline = localRefresh.isOffline,
+            unavailableCount = serverCart.unavailableCount,
+            finalQuantity = input.quantity,
+            resultingItemId = existingItemId,
+            errorMessage = localRefresh.errorMessage,
+          ),
+        )
+        onResult(true, null)
+        _events.tryEmit("Pizza updated")
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (t: Throwable) {
+        val message = t.message?.takeIf { it.isNotBlank() } ?: EDIT_UNAVAILABLE_MESSAGE
+        syncState.update { it.copy(isSyncing = false, isOffline = true, statusMessage = message) }
+        onResult(false, message)
+      } finally {
+        editingItemIdsInFlight.remove(existingItemId)
+      }
+    }
+  }
+
+  /** Refreshes Room from the server after the user confirms a builder add/edit. */
+  private suspend fun refreshLocalCartAfterServerReplace(): CartSyncResult = try {
+    cartRepository.bootstrapFromServer()
+  } catch (t: Throwable) {
+    CartSyncResult(isOffline = true, unavailableCount = 0, errorMessage = t.message)
+  }
+
+  private fun cartStatusMessage(unavailableCount: Int, localRefresh: CartSyncResult): String? =
+    localRefresh.errorMessage?.let { "Cart updated online; local refresh pending." }
+      ?: unavailableCount.takeIf { it > 0 }?.let { "$it cart item(s) need attention." }
+
+  /** Loads the read-only server cart view used to restore modifier selections in edit mode. */
+  fun refreshServerCartItems() {
+    viewModelScope.launch {
+      val api = apiClientProvider() ?: return@launch
+      try {
+        _serverCartItems.value = api.getCart().items
+      } catch (ce: CancellationException) {
+        throw ce
+      } catch (t: Throwable) {
+        _serverCartItems.value = emptyList()
+      }
+    }
+  }
+
+  /**
    * Phase 8 reorder confirmation path. Keeps any existing cart lines (with their Phase 8 IDs),
    * appends only the available reconstructed lines, then submits the existing server-side cart
    * replace for validation and refreshes Room through the existing repository bootstrap path.
@@ -209,7 +365,7 @@ class CartViewModel(
       return CartSyncResult(isOffline = false, unavailableCount = 0)
     }
     syncState.update { it.copy(isSyncing = true, statusMessage = null) }
-    val api = reorderApiClientProvider()
+    val api = apiClientProvider()
     if (api == null) {
       syncState.update {
         it.copy(isSyncing = false, statusMessage = "Your cart is unavailable right now. Please try again.")
@@ -446,6 +602,7 @@ class CartViewModel(
     pendingUndoPrompt = null
     isClearingCart = false
     editingItemIdsInFlight.clear()
+    _serverCartItems.value = emptyList()
     syncState.value = SyncStatusState()
   }
 
