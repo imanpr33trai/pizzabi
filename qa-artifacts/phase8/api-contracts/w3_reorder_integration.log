@@ -1,0 +1,87 @@
+W3 Phase 8 reorder API integration verification log (fresh)
+Started (UTC): 2026-11-27T12:30:25Z
+
+$ cd /workspace/pizzabi && git status --short  # before formatting
+ M .opencode/opencode.jsonc
+ M app/src/main/java/com/example/cart/CartViewModel.kt
+ M app/src/main/java/com/example/catalog/PizzaBuilderScreen.kt
+ M app/src/main/java/com/example/core/network/PizzoraApiClient.kt
+ M app/src/main/java/com/example/orders/OrdersScreen.kt
+ M app/src/main/java/com/example/orders/OrdersViewModel.kt
+ M backend/src/main/kotlin/com/pizzora/backend/Application.kt
+ M backend/src/main/kotlin/com/pizzora/backend/cart/CartService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/catalog/CatalogService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/checkout/CheckoutService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/core/config/AppConfig.kt
+ M backend/src/main/kotlin/com/pizzora/backend/orders/OrderService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/orders/OrdersRoutes.kt
+ M backend/src/main/kotlin/com/pizzora/backend/pricing/PricingService.kt
+ M docs/PHASE8_IMPLEMENTATION_PROGRESS_REPORT.md
+ M rust/crates/pizzora-api/src/services/checkout.rs
+ M rust/crates/pizzora-db/src/orders.rs
+?? app/src/test/java/com/example/catalog/Phase8PizzaBuilderRobolectricTest.kt
+?? app/src/test/java/com/example/orders/
+?? backend/src/main/kotlin/com/pizzora/backend/core/config/Phase8FeatureFlags.kt
+?? backend/src/main/kotlin/com/pizzora/backend/modifiers/
+?? backend/src/test/kotlin/com/pizzora/backend/Phase8ModifierPersistenceTest.kt
+?? backend/src/test/kotlin/com/pizzora/backend/Phase8PricingParityTest.kt
+?? backend/src/test/kotlin/com/pizzora/backend/Phase8TestSupport.kt
+?? qa-artifacts/phase8/api-contracts/w3_reorder_integration.log
+?? qa-artifacts/phase8/visual/
+?? rust/crates/pizzora-api/tests/pg18_phase8_reorder.rs
+
+$ source ~/.cargo/env && cd /workspace/pizzabi/rust && cargo fmt --all
+exit: 0
+
+$ source ~/.cargo/env && cd /workspace/pizzabi/rust && cargo fmt --all -- --check
+exit: 0
+
+$ cd /workspace/pizzabi && git status --short  # after formatting
+ M .opencode/opencode.jsonc
+ M app/src/main/java/com/example/cart/CartViewModel.kt
+ M app/src/main/java/com/example/catalog/PizzaBuilderScreen.kt
+ M app/src/main/java/com/example/core/network/PizzoraApiClient.kt
+ M app/src/main/java/com/example/orders/OrdersScreen.kt
+ M app/src/main/java/com/example/orders/OrdersViewModel.kt
+ M backend/src/main/kotlin/com/pizzora/backend/Application.kt
+ M backend/src/main/kotlin/com/pizzora/backend/cart/CartService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/catalog/CatalogService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/checkout/CheckoutService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/core/config/AppConfig.kt
+ M backend/src/main/kotlin/com/pizzora/backend/orders/OrderService.kt
+ M backend/src/main/kotlin/com/pizzora/backend/orders/OrdersRoutes.kt
+ M backend/src/main/kotlin/com/pizzora/backend/pricing/PricingService.kt
+ M docs/PHASE8_IMPLEMENTATION_PROGRESS_REPORT.md
+ M rust/crates/pizzora-api/src/services/checkout.rs
+ M rust/crates/pizzora-db/src/orders.rs
+?? app/src/test/java/com/example/catalog/Phase8PizzaBuilderRobolectricTest.kt
+?? app/src/test/java/com/example/orders/
+?? backend/src/main/kotlin/com/pizzora/backend/core/config/Phase8FeatureFlags.kt
+?? backend/src/main/kotlin/com/pizzora/backend/modifiers/
+?? backend/src/test/kotlin/com/pizzora/backend/Phase8ModifierPersistenceTest.kt
+?? backend/src/test/kotlin/com/pizzora/backend/Phase8PricingParityTest.kt
+?? backend/src/test/kotlin/com/pizzora/backend/Phase8TestSupport.kt
+?? qa-artifacts/phase8/api-contracts/w3_reorder_integration.log
+?? qa-artifacts/phase8/visual/
+?? rust/crates/pizzora-api/tests/pg18_phase8_reorder.rs
+
+$ diff -u before-format-status after-format-status  # workspace-wide fmt side effects
+(no git status changes)
+exit: 0
+
+$ DATABASE_URL='postgres://pizzora:pizzora_dev_password@127.0.0.1:5432/pizzora' TEST_POSTGRES_URL='postgres://pizzora:pizzora_dev_password@127.0.0.1:5432/pizzora' cargo test -p pizzora-api --test pg18_phase8_reorder -- --ignored --nocapture --test-threads=1
+Test start (UTC): 2026-11-27T12:30:27Z
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.23s
+     Running tests/pg18_phase8_reorder.rs (target/debug/deps/pg18_phase8_reorder-8d8bac0580001034)
+
+running 4 tests
+test pg18_reorder_historical_order_warning_path_is_reported ... ok
+test pg18_reorder_owner_customer_returns_contract_shape_without_cart_mutation ... ok
+test pg18_reorder_rejects_other_customer_and_nonexistent_order ... ok
+test pg18_reorder_unavailable_topping_has_reason_and_no_substitution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.86s
+
+exit: 0
+Finished (UTC): 2026-11-27T12:30:40Z

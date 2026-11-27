@@ -571,6 +571,7 @@ pub enum ReorderUnavailableReason {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReorderItemDto {
     pub order_item_id: String,
     pub product_id: String,
@@ -602,6 +603,7 @@ pub struct ReorderItemDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReorderUnavailableDto {
     pub order_item_id: String,
     pub product_name: String,
@@ -612,6 +614,7 @@ pub struct ReorderUnavailableDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReorderResponseDto {
     pub order_id: String,
     pub can_reorder: bool,

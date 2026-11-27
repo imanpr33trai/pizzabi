@@ -470,12 +470,115 @@ impl CheckoutService {
             let topping_names: Vec<String> = item.toppings.iter().map(|t| t.name.clone()).collect();
             let toppings_json =
                 serde_json::to_value(&topping_names).map_err(|_| ApiError::internal())?;
+
+            // Persist every Phase 8 modifier ID so reorder can reconstruct the
+            // exact configuration instead of treating a fresh order as historical.
+            let variant_uuid = parse_uuid_param(&item.variant_id, "variant_id")?;
+            let crust_uuid = parse_uuid_param(&item.crust_id, "crust_id")?;
+            let cheese_uuid = item
+                .cheese
+                .as_ref()
+                .map(|cheese| parse_uuid_param(&cheese.cheese_id, "cheese_id"))
+                .transpose()?;
+            let sauce_uuid = item
+                .sauce
+                .as_ref()
+                .map(|sauce| parse_uuid_param(&sauce.sauce_id, "sauce_id"))
+                .transpose()?;
+            let half_and_half_uuid = item
+                .half_and_half
+                .as_ref()
+                .map(|hah| parse_uuid_param(&hah.config_id, "half_and_half_config_id"))
+                .transpose()?;
+
+            let topping_id_values = item
+                .toppings
+                .iter()
+                .map(|topping| topping.topping_id.clone())
+                .collect::<Vec<_>>();
+            let standard_topping_id_values = item
+                .standard_toppings
+                .iter()
+                .filter(|topping| !topping.is_removed)
+                .map(|topping| topping.standard_topping_id.clone())
+                .collect::<Vec<_>>();
+            let standard_topping_removed_id_values = item
+                .standard_toppings
+                .iter()
+                .filter(|topping| topping.is_removed)
+                .map(|topping| topping.standard_topping_id.clone())
+                .collect::<Vec<_>>();
+            let half_and_half_left_values = item
+                .half_and_half
+                .as_ref()
+                .map(|hah| hah.left_topping_ids.clone())
+                .unwrap_or_default();
+            let half_and_half_right_values = item
+                .half_and_half
+                .as_ref()
+                .map(|hah| hah.right_topping_ids.clone())
+                .unwrap_or_default();
+
+            let json_ids =
+                |ids: Vec<String>| serde_json::to_value(ids).map_err(|_| ApiError::internal());
+            let topping_ids_json = json_ids(topping_id_values)?;
+            let standard_topping_ids_json = json_ids(standard_topping_id_values)?;
+            let standard_topping_removed_ids_json = json_ids(standard_topping_removed_id_values)?;
+            let half_and_half_left_json = json_ids(half_and_half_left_values)?;
+            let half_and_half_right_json = json_ids(half_and_half_right_values)?;
+
+            // This column is a string-valued map in the shared Kotlin contract;
+            // keep all values scalar strings so old and new clients can decode it.
+            let mut modifiers_snapshot = serde_json::Map::new();
+            modifiers_snapshot.insert(
+                "variant_size".to_owned(),
+                serde_json::Value::String(size_label.to_owned()),
+            );
+            modifiers_snapshot.insert(
+                "crust_name".to_owned(),
+                serde_json::Value::String(item.crust_name.clone()),
+            );
+            if let Some(cheese) = &item.cheese {
+                modifiers_snapshot.insert(
+                    "cheese_name".to_owned(),
+                    serde_json::Value::String(cheese.name.clone()),
+                );
+            }
+            if let Some(sauce) = &item.sauce {
+                modifiers_snapshot.insert(
+                    "sauce_name".to_owned(),
+                    serde_json::Value::String(sauce.name.clone()),
+                );
+            }
+            for topping in &item.standard_toppings {
+                let key = if topping.is_removed {
+                    "standard_topping_removed"
+                } else {
+                    "standard_topping"
+                };
+                modifiers_snapshot.insert(
+                    format!("{key}:{}", topping.standard_topping_id),
+                    serde_json::Value::String(topping.name.clone()),
+                );
+            }
+            if let Some(hah) = &item.half_and_half {
+                modifiers_snapshot.insert(
+                    "half_and_half_config_name".to_owned(),
+                    serde_json::Value::String(hah.config_name.clone()),
+                );
+            }
+
             sqlx::query(
                 r#"
                 INSERT INTO order_items (
                     id, order_id, product_id, product_name_snapshot, variant_size_snapshot,
-                    crust_name_snapshot, toppings_snapshot, unit_price_paise, quantity, line_total_paise
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    crust_name_snapshot, toppings_snapshot, unit_price_paise, quantity,
+                    line_total_paise, variant_id, crust_id, cheese_id, sauce_id, topping_ids,
+                    standard_topping_ids, standard_topping_removed_ids, half_and_half_config_id,
+                    half_and_half_left_topping_ids, half_and_half_right_topping_ids,
+                    modifiers_snapshot
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                          $15, $16, $17, $18, $19, $20, $21)
                 "#,
             )
             .bind(new_uuid_v4())
@@ -488,6 +591,17 @@ impl CheckoutService {
             .bind(item.unit_price_paise)
             .bind(item.quantity)
             .bind(item.line_total_paise)
+            .bind(variant_uuid)
+            .bind(crust_uuid)
+            .bind(cheese_uuid)
+            .bind(sauce_uuid)
+            .bind(topping_ids_json)
+            .bind(standard_topping_ids_json)
+            .bind(standard_topping_removed_ids_json)
+            .bind(half_and_half_uuid)
+            .bind(half_and_half_left_json)
+            .bind(half_and_half_right_json)
+            .bind(serde_json::Value::Object(modifiers_snapshot))
             .execute(&mut *tx)
             .await?;
         }

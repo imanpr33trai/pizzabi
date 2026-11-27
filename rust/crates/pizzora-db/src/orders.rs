@@ -310,6 +310,13 @@ impl OrderService {
             });
         }
 
+        // Stored order IDs are UUID strings. Bind them as UUIDs; malformed legacy
+        // values fall back to the nil UUID so reconciliation reports unavailable
+        // items instead of failing the whole request with a SQL type error.
+        fn reorder_uuid(raw: &str) -> Uuid {
+            Uuid::parse_str(raw).unwrap_or_else(|_| Uuid::nil())
+        }
+
         let mut reorder_items = Vec::new();
         let mut unavailable = Vec::new();
         let mut warnings = Vec::new();
@@ -333,6 +340,7 @@ impl OrderService {
         for item in &detail.items {
             // Try to resolve current live prices and availability
             let mut issues = Vec::new();
+            let product_uuid = reorder_uuid(&item.product_id);
 
             // Resolve variant by (productId, variantSize)
             let variant_id = if let Some(vid) = &item.variant_id {
@@ -340,8 +348,8 @@ impl OrderService {
                 let exists: Option<i32> = sqlx::query_scalar(
                     "SELECT 1 FROM product_variants WHERE id = $1 AND product_id = $2 AND is_active = TRUE",
                 )
-                .bind(vid)
-                .bind(&item.product_id)
+                .bind(reorder_uuid(vid))
+                .bind(product_uuid)
                 .fetch_optional(&mut *tx)
                 .await?;
                 if exists.is_some() {
@@ -352,7 +360,7 @@ impl OrderService {
                     let fallback: Option<Uuid> = sqlx::query_scalar(
                         "SELECT id FROM product_variants WHERE product_id = $1 AND size_code = $2 AND is_active = TRUE",
                     )
-                    .bind(&item.product_id)
+                    .bind(product_uuid)
                     .bind(&item.variant_size)
                     .fetch_optional(&mut *tx)
                     .await?;
@@ -363,7 +371,7 @@ impl OrderService {
                 let fallback: Option<Uuid> = sqlx::query_scalar(
                     "SELECT id FROM product_variants WHERE product_id = $1 AND size_code = $2 AND is_active = TRUE",
                 )
-                .bind(&item.product_id)
+                .bind(product_uuid)
                 .bind(&item.variant_size)
                 .fetch_optional(&mut *tx)
                 .await?;
@@ -375,7 +383,7 @@ impl OrderService {
                 let exists: Option<i32> = sqlx::query_scalar(
                     "SELECT 1 FROM crust_options WHERE id = $1 AND is_active = TRUE",
                 )
-                .bind(cid)
+                .bind(reorder_uuid(cid))
                 .fetch_optional(&mut *tx)
                 .await?;
                 if exists.is_some() {
@@ -405,8 +413,8 @@ impl OrderService {
                 let active: Option<bool> = sqlx::query_scalar(
                     "SELECT is_active FROM cheeses WHERE id = $1 AND product_id = $2",
                 )
-                .bind(cid)
-                .bind(&item.product_id)
+                .bind(reorder_uuid(cid))
+                .bind(product_uuid)
                 .fetch_optional(&mut *tx)
                 .await?
                 .flatten();
@@ -430,8 +438,8 @@ impl OrderService {
                 let active: Option<bool> = sqlx::query_scalar(
                     "SELECT is_active FROM sauces WHERE id = $1 AND product_id = $2",
                 )
-                .bind(sid)
-                .bind(&item.product_id)
+                .bind(reorder_uuid(sid))
+                .bind(product_uuid)
                 .fetch_optional(&mut *tx)
                 .await?
                 .flatten();
@@ -478,8 +486,8 @@ impl OrderService {
                 let active: Option<bool> = sqlx::query_scalar(
                     "SELECT is_active FROM standard_toppings WHERE id = $1 AND product_id = $2",
                 )
-                .bind(std_id)
-                .bind(&item.product_id)
+                .bind(reorder_uuid(std_id))
+                .bind(product_uuid)
                 .fetch_optional(&mut *tx)
                 .await?
                 .flatten();
@@ -507,8 +515,8 @@ impl OrderService {
                 let active: Option<bool> = sqlx::query_scalar(
                     "SELECT is_active FROM half_and_half_configs WHERE id = $1 AND product_id = $2",
                 )
-                .bind(hah_id)
-                .bind(&item.product_id)
+                .bind(reorder_uuid(hah_id))
+                .bind(product_uuid)
                 .fetch_optional(&mut *tx)
                 .await?
                 .flatten();
@@ -550,15 +558,12 @@ impl OrderService {
                 issues,
             };
 
-            if reorder_item.is_available {
-                reorder_items.push(reorder_item);
-            } else {
-                // Item has issues, still include in items but mark unavailable
-                reorder_items.push(reorder_item);
-            }
+            // Keep unavailable items in the response for reconciliation, but only
+            // available items make the order reorderable. No substitution is attempted.
+            reorder_items.push(reorder_item);
         }
 
-        let can_reorder = !reorder_items.is_empty();
+        let can_reorder = reorder_items.iter().any(|item| item.is_available);
 
         tx.commit().await?;
 
@@ -1400,6 +1405,7 @@ pub enum ReorderUnavailableReason {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReorderItemDto {
     pub order_item_id: String,
     pub product_id: String,
@@ -1431,6 +1437,7 @@ pub struct ReorderItemDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReorderUnavailableDto {
     pub order_item_id: String,
     pub product_name: String,
@@ -1441,6 +1448,7 @@ pub struct ReorderUnavailableDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReorderResponseDto {
     pub order_id: String,
     pub can_reorder: bool,

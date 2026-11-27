@@ -191,38 +191,38 @@ enum class ReorderUnavailableReason {
 
 @Serializable
 data class ReorderItemDto(
-  @SerialName("order_item_id") val orderItemId: String,
-  @SerialName("product_id") val productId: String,
-  @SerialName("product_name") val productName: String,
-  @SerialName("variant_id") val variantId: String? = null,
-  @SerialName("crust_id") val crustId: String? = null,
-  @SerialName("cheese_id") val cheeseId: String? = null,
-  @SerialName("sauce_id") val sauceId: String? = null,
-  @SerialName("topping_ids") val toppingIds: List<String> = emptyList(),
-  @SerialName("standard_topping_ids") val standardToppingIds: List<String> = emptyList(),
-  @SerialName("standard_topping_removed_ids") val standardToppingRemovedIds: List<String> = emptyList(),
-  @SerialName("half_and_half_config_id") val halfAndHalfConfigId: String? = null,
-  @SerialName("half_and_half_left_topping_ids") val halfAndHalfLeftToppingIds: List<String> = emptyList(),
-  @SerialName("half_and_half_right_topping_ids") val halfAndHalfRightToppingIds: List<String> = emptyList(),
+  @SerialName("orderItemId") val orderItemId: String,
+  @SerialName("productId") val productId: String,
+  @SerialName("productName") val productName: String,
+  @SerialName("variantId") val variantId: String? = null,
+  @SerialName("crustId") val crustId: String? = null,
+  @SerialName("cheeseId") val cheeseId: String? = null,
+  @SerialName("sauceId") val sauceId: String? = null,
+  @SerialName("toppingIds") val toppingIds: List<String> = emptyList(),
+  @SerialName("standardToppingIds") val standardToppingIds: List<String> = emptyList(),
+  @SerialName("standardToppingRemovedIds") val standardToppingRemovedIds: List<String> = emptyList(),
+  @SerialName("halfAndHalfConfigId") val halfAndHalfConfigId: String? = null,
+  @SerialName("halfAndHalfLeftToppingIds") val halfAndHalfLeftToppingIds: List<String> = emptyList(),
+  @SerialName("halfAndHalfRightToppingIds") val halfAndHalfRightToppingIds: List<String> = emptyList(),
   val quantity: Int,
-  @SerialName("is_available") val isAvailable: Boolean,
+  @SerialName("isAvailable") val isAvailable: Boolean,
   val issues: List<String> = emptyList(),
 )
 
 @Serializable
 data class ReorderUnavailableDto(
-  @SerialName("order_item_id") val orderItemId: String,
-  @SerialName("product_name") val productName: String,
-  @SerialName("modifier_type") val modifierType: String,
-  @SerialName("modifier_id") val modifierId: String,
-  @SerialName("modifier_name") val modifierName: String,
+  @SerialName("orderItemId") val orderItemId: String,
+  @SerialName("productName") val productName: String,
+  @SerialName("modifierType") val modifierType: String,
+  @SerialName("modifierId") val modifierId: String,
+  @SerialName("modifierName") val modifierName: String,
   val reason: ReorderUnavailableReason,
 )
 
 @Serializable
 data class ReorderResponseDto(
-  @SerialName("order_id") val orderId: String,
-  @SerialName("can_reorder") val canReorder: Boolean,
+  @SerialName("orderId") val orderId: String,
+  @SerialName("canReorder") val canReorder: Boolean,
   val items: List<ReorderItemDto> = emptyList(),
   val unavailable: List<ReorderUnavailableDto> = emptyList(),
   val warnings: List<String> = emptyList(),

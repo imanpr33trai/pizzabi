@@ -462,8 +462,8 @@ class Phase8SerializationTest {
     )
     val encoded = json.encodeToString(response)
     // Verify JSON shape matches contract §6.3 example
-    assertTrue(encoded.contains("\"order_id\":\"order-1\""))
-    assertTrue(encoded.contains("\"can_reorder\":true"))
+    assertTrue(encoded.contains("\"orderId\":\"order-1\""))
+    assertTrue(encoded.contains("\"canReorder\":true"))
     assertTrue(encoded.contains("\"items\":"))
     assertTrue(encoded.contains("\"unavailable\":"))
     assertTrue(encoded.contains("\"warnings\":"))

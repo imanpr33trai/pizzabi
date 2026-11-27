@@ -1,0 +1,136 @@
+Reorder wire-shape alignment evidence
+Started (UTC): 2026-11-27T12:31:41Z
+
+$ source ~/.cargo/env && cd /workspace/pizzabi/rust && cargo fmt --all && cargo fmt --all -- --check
+cargo fmt exit: 0
+cargo fmt --check exit: 0
+
+$ cargo build -p pizzora-api
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.94s
+build exit: 0
+
+$ cargo test -p pizzora-api --lib
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.55s
+     Running unittests src/lib.rs (target/debug/deps/pizzora_api-ea6fc7dff626eee8)
+
+running 7 tests
+test unit_tests::dto_round_trips_and_wire_field_names_match_ktor_and_android_contracts ... ok
+test unit_tests::openapi_document_contains_version_bearer_security_and_contract_paths ... ok
+test unit_tests::rate_limiter_classification_and_redis_unavailable_fallback_work ... ok
+test unit_tests::realtime_hub_rooms_filtering_fanout_and_monotonic_dedup ... ok
+test unit_tests::storage_key_validation_unavailable_client_sigv4_and_magic_bytes ... ok
+test unit_tests::http_middleware_health_openapi_correlation_errors_and_security_headers ... ok
+test unit_tests::http_body_size_limits_chunked_overflow_and_rate_limit_429 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+api lib test exit: 0
+
+Finished (UTC): 2026-11-27T12:32:08Z
+
+$ cd /workspace/pizzabi && ./gradlew -I /tmp/opencode/pizzora-gradle-init.gradle --dependency-verification=off :shared:contracts:test --no-daemon
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :shared:contracts:processTestResources NO-SOURCE
+> Task :shared:contracts:compileKotlin
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+> Task :shared:contracts:compileTestKotlin
+> Task :shared:contracts:compileTestJava NO-SOURCE
+> Task :shared:contracts:testClasses UP-TO-DATE
+> Task :shared:contracts:test
+
+BUILD SUCCESSFUL in 1m 13s
+4 actionable tasks: 4 executed
+shared contracts test exit: 0
+
+$ DATABASE_URL=... TEST_POSTGRES_URL=... cargo test -p pizzora-api --test pg18_phase8_reorder -- --ignored --nocapture --test-threads=1
+/bin/bash: line 12: cargo: command not found
+live reorder test exit: 127
+
+Finished (UTC): 2026-11-27T12:33:29Z
+
+$ source ~/.cargo/env && DATABASE_URL=... TEST_POSTGRES_URL=... cargo test -p pizzora-api --test pg18_phase8_reorder -- --ignored --nocapture --test-threads=1
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.59s
+     Running tests/pg18_phase8_reorder.rs (target/debug/deps/pg18_phase8_reorder-8d8bac0580001034)
+
+running 4 tests
+test pg18_reorder_historical_order_warning_path_is_reported ...
+thread 'pg18_reorder_historical_order_warning_path_is_reported' panicked at crates/pizzora-api/tests/pg18_phase8_reorder.rs:450:67:
+ReorderResponseDto: Error("missing field `orderItemId`", line: 0, column: 0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test pg18_reorder_owner_customer_returns_contract_shape_without_cart_mutation ...
+thread 'pg18_reorder_owner_customer_returns_contract_shape_without_cart_mutation' panicked at crates/pizzora-api/tests/pg18_phase8_reorder.rs:188:9:
+missing reorder field orderId
+FAILED
+test pg18_reorder_rejects_other_customer_and_nonexistent_order ... ok
+test pg18_reorder_unavailable_topping_has_reason_and_no_substitution ...
+thread 'pg18_reorder_unavailable_topping_has_reason_and_no_substitution' panicked at crates/pizzora-api/tests/pg18_phase8_reorder.rs:311:37:
+baseline ReorderResponseDto: Error("missing field `orderItemId`", line: 1, column: 623)
+FAILED
+
+failures:
+
+failures:
+    pg18_reorder_historical_order_warning_path_is_reported
+    pg18_reorder_owner_customer_returns_contract_shape_without_cart_mutation
+    pg18_reorder_unavailable_topping_has_reason_and_no_substitution
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.03s
+
+error: test failed, to rerun pass `-p pizzora-api --test pg18_phase8_reorder`
+live reorder test exit: 101
+
+Finished (UTC): 2026-11-27T12:33:56Z
+
+=== camelCase follow-up after discovering route uses pizzora-db DTOs ===
+Started (UTC): 2026-11-27T12:34:26Z
+$ source ~/.cargo/env && cd /workspace/pizzabi/rust && cargo fmt --all && cargo fmt --all -- --check
+cargo fmt exit: 0
+cargo fmt --check exit: 0
+
+$ cargo test -p pizzora-api --lib
+   Compiling pizzora-db v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-db)
+   Compiling pizzora-auth v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-auth)
+   Compiling pizzora-payments v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-payments)
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.56s
+     Running unittests src/lib.rs (target/debug/deps/pizzora_api-ea6fc7dff626eee8)
+
+running 7 tests
+test unit_tests::openapi_document_contains_version_bearer_security_and_contract_paths ... ok
+test unit_tests::dto_round_trips_and_wire_field_names_match_ktor_and_android_contracts ... ok
+test unit_tests::rate_limiter_classification_and_redis_unavailable_fallback_work ... ok
+test unit_tests::realtime_hub_rooms_filtering_fanout_and_monotonic_dedup ... ok
+test unit_tests::storage_key_validation_unavailable_client_sigv4_and_magic_bytes ... ok
+test unit_tests::http_middleware_health_openapi_correlation_errors_and_security_headers ... ok
+test unit_tests::http_body_size_limits_chunked_overflow_and_rate_limit_429 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+api lib test exit: 0
+
+$ DATABASE_URL=... TEST_POSTGRES_URL=... cargo test -p pizzora-api --test pg18_phase8_reorder -- --ignored --nocapture --test-threads=1
+    Blocking waiting for file lock on package cache
+   Compiling pizzora-api v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.74s
+     Running tests/pg18_phase8_reorder.rs (target/debug/deps/pg18_phase8_reorder-8d8bac0580001034)
+
+running 4 tests
+test pg18_reorder_historical_order_warning_path_is_reported ... ok
+test pg18_reorder_owner_customer_returns_contract_shape_without_cart_mutation ... ok
+test pg18_reorder_rejects_other_customer_and_nonexistent_order ... ok
+test pg18_reorder_unavailable_topping_has_reason_and_no_substitution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.43s
+
+live reorder test exit: 0
+
+Finished (UTC): 2026-11-27T12:35:18Z
