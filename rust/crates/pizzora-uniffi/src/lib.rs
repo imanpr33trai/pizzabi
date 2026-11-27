@@ -862,8 +862,8 @@ pub fn pricing_validate_half_and_half(
         return Err(DomainError::HalfAndHalfToppingLimitExceeded {
             code: "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
             message: format!(
-                "Half-and-half left side cannot have more than {} toppings.",
-                MAX_HALF_AND_HALF_TOPPINGS_PER_HALF
+                "Half-and-half left side cannot have more than \
+                 {MAX_HALF_AND_HALF_TOPPINGS_PER_HALF} toppings."
             ),
         }
         .into());
@@ -872,8 +872,8 @@ pub fn pricing_validate_half_and_half(
         return Err(DomainError::HalfAndHalfToppingLimitExceeded {
             code: "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
             message: format!(
-                "Half-and-half right side cannot have more than {} toppings.",
-                MAX_HALF_AND_HALF_TOPPINGS_PER_HALF
+                "Half-and-half right side cannot have more than \
+                 {MAX_HALF_AND_HALF_TOPPINGS_PER_HALF} toppings."
             ),
         }
         .into());
@@ -886,8 +886,8 @@ pub fn pricing_validate_half_and_half(
         return Err(DomainError::HalfAndHalfToppingLimitExceeded {
             code: "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
             message: format!(
-                "Half-and-half cannot have more than {} distinct toppings total.",
-                MAX_HALF_AND_HALF_DISTINCT_TOPPINGS
+                "Half-and-half cannot have more than \
+                 {MAX_HALF_AND_HALF_DISTINCT_TOPPINGS} distinct toppings total."
             ),
         }
         .into());
@@ -935,19 +935,19 @@ pub fn cart_validate_with_modifiers(
     let lookup = build_catalog_lookup(&catalog)?;
 
     // Parse and validate inputs
-    let parsed = CartValidation::validate_and_parse_inputs(&core_items)
-        .map_err(|e| UniffiDomainError::from(e))?;
+    let parsed =
+        CartValidation::validate_and_parse_inputs(&core_items).map_err(UniffiDomainError::from)?;
 
     // Merge duplicate configurations
     let merged = CartValidation::merge_duplicate_configurations(parsed);
 
     // Ensure catalog FK references (includes all Phase 8 modifier validations)
     CartValidation::ensure_catalog_fk_references(&merged, &lookup)
-        .map_err(|e| UniffiDomainError::from(e))?;
+        .map_err(UniffiDomainError::from)?;
 
     // Evaluate cart
     let evaluated =
-        CartValidation::evaluate_cart(&merged, &lookup).map_err(|e| UniffiDomainError::from(e))?;
+        CartValidation::evaluate_cart(&merged, &lookup).map_err(UniffiDomainError::from)?;
 
     // Convert to FFI format
     Ok(evaluated
@@ -1058,7 +1058,7 @@ impl From<pizzora_core::EvaluatedCartItem> for FfiEvaluatedCartItem {
             is_taxable: e.is_taxable,
             image_url: e.image_url,
             variant_id: e.variant_id,
-            size_code: e.size_code.map(|s| format!("{:?}", s)),
+            size_code: e.size_code.map(|s| format!("{s:?}")),
             base_price_paise: e.base_price_paise,
             crust_id: e.crust_id,
             crust_name: e.crust_name,
@@ -2252,10 +2252,12 @@ mod tests {
             return;
         }
 
-        let unit_price = pricing_calculate_unit_price_paise(ffi_input).expect(&format!(
-            "Vector {}: pricing_calculate_unit_price_paise failed",
-            vector.id
-        ));
+        let unit_price = pricing_calculate_unit_price_paise(ffi_input).unwrap_or_else(|_| {
+            panic!(
+                "Vector {}: pricing_calculate_unit_price_paise failed",
+                vector.id
+            )
+        });
 
         assert_eq!(
             unit_price,
@@ -2267,11 +2269,13 @@ mod tests {
         );
 
         if quantity != 1 || vector.expected_line_total_paise.is_some() {
-            let line_total =
-                pricing_calculate_line_total_paise(unit_price, quantity).expect(&format!(
-                    "Vector {}: pricing_calculate_line_total_paise failed",
-                    vector.id
-                ));
+            let line_total = pricing_calculate_line_total_paise(unit_price, quantity)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Vector {}: pricing_calculate_line_total_paise failed",
+                        vector.id
+                    )
+                });
             if let Some(expected_line_total) = vector.expected_line_total_paise {
                 assert_eq!(
                     line_total, expected_line_total,
@@ -2303,7 +2307,7 @@ mod tests {
             discount_type: match c.discount_type.as_str() {
                 "PercentBps" => FfiDiscountType::PercentBps,
                 "FlatPaise" => FfiDiscountType::FlatPaise,
-                other => panic!("Unknown discount type: {}", other),
+                other => panic!("Unknown discount type: {other}"),
             },
             discount_value: c.discount_value,
             max_discount_paise: c.max_discount_paise,
@@ -2312,9 +2316,8 @@ mod tests {
         });
 
         let breakdown =
-            pricing_calculate_quote(priced_lines, gst_bps, delivery_fee_paise, coupon_spec).expect(
-                &format!("Vector {}: pricing_calculate_quote failed", vector.id),
-            );
+            pricing_calculate_quote(priced_lines, gst_bps, delivery_fee_paise, coupon_spec)
+                .unwrap_or_else(|_| panic!("Vector {}: pricing_calculate_quote failed", vector.id));
 
         let expected = vector
             .expected_quote

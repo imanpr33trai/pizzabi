@@ -207,14 +207,16 @@ respectively. No Phase 8 blocker remains.
 | E — Reorder hardening/wire shape | `ea9bfd1` | `origin/ui-ux-changes` | VERIFIED — rustfmt, API 7 tests, shared contracts 40 tests, live reorder 4/4 PASS |
 | F — Android orders/reorder | `946d900` | `origin/ui-ux-changes` | VERIFIED — 7 new + 20 total order tests PASS |
 | G — Kotlin backend/contract parity | `bb63746` | `origin/ui-ux-changes` | VERIFIED — 84 backend + 40 shared-contract tests, full Rust workspace + full live PostgreSQL PASS |
-| H — Final integration/runtime/review | `(this commit)` | `origin/ui-ux-changes` | VERIFIED — 230 app + 86 backend + 40 shared-contract tests, 33 vectors, full Rust/live-PG suites, server-backed runtime QA, unconditional independent PASS; final verdict `PHASE 8 COMPLETE` |
+| H — Final integration/runtime/review | `5c21fa4` | `origin/ui-ux-changes` | VERIFIED — 230 app + 86 backend + 40 shared-contract tests, 33 vectors, full Rust/live-PG suites, server-backed runtime QA, unconditional independent PASS; final verdict `PHASE 8 COMPLETE` |
+| I — Clippy cleanup | `(this commit)` | pending | VERIFIED — workspace Clippy `-D warnings` clean, full Rust workspace tests PASS, reviewer addendum confirms no behavior change |
 
 ---
 
 ## 9. Remaining acceptance criteria
 
 The final independent review is **PASS** with no BLOCKER or MAJOR
-(`qa-artifacts/phase8/review/W9_FINAL_INDEPENDENT_REVIEW.md`, §10). All 11 acceptance criteria are
+(`qa-artifacts/phase8/review/W9_FINAL_INDEPENDENT_REVIEW.md`, §10; §11 confirms the post-review
+Clippy cleanup is behavior-preserving). All 11 acceptance criteria are
 verified. The conditional runtime gate was closed by
 `qa-artifacts/phase8/visual/runtime/ANDROID_RUNTIME_QA.md`; the observed FAIL rows were reclassified
 with corrected evidence and none requires a product change. The phase verdict is **PHASE 8 COMPLETE**.
@@ -250,7 +252,7 @@ release action remains in scope.
 | API/contract evidence | `qa-artifacts/phase8/api-contracts/` | CREATED — W3 PASS (API 7 tests, contracts 40 tests) |
 | UniFFI evidence | `qa-artifacts/phase8/uniffi/` | CREATED — W4 re-audit PASS (11 tests, direct bindgen, rustfmt) |
 | Kotlin backend evidence | `qa-artifacts/phase8/backend/` | CREATED — W5 PASS (84 backend + 40 shared-contract tests) |
-| Rust regression evidence | `qa-artifacts/phase8/regression/` | CREATED — full workspace + live PostgreSQL PASS before and after fixes; local API smoke PASS; final Checkpoint H logs `w8_rust_workspace_tests_checkpoint_h.log`, `w8_live_postgres_tests_checkpoint_h.log`, `checkout_modifier_regression_final.log`, `idempotency_hash_unit.log` |
+| Rust regression evidence | `qa-artifacts/phase8/regression/` | CREATED — full workspace + live PostgreSQL PASS before and after fixes; local API smoke PASS; final Checkpoint H logs `w8_rust_workspace_tests_checkpoint_h.log`, `w8_live_postgres_tests_checkpoint_h.log`, `checkout_modifier_regression_final.log`, `idempotency_hash_unit.log`; Checkpoint I Clippy/workspace logs `w9_clippy_fix_clippy.log`, `w9_clippy_fix_rust_workspace_tests.log` |
 | Unit test XML | `qa-artifacts/phase8/unit-test-xml/` | CREATED — final copied XML: 230 app + 86 backend + 40 shared-contract tests, 0 failures/errors/skipped; `README.md` records derived counts |
 | Visual QA | `qa-artifacts/phase8/visual/` | VERIFIED — API 36 `emulator-5554` server-backed runtime report, screenshots, UIAutomator XML, command log, logcat, accessibility settings and restoration evidence |
 | Android builder evidence | `qa-artifacts/phase8/visual/builder/` | CREATED — W6 28 app tests PASS; final wiring suite 230/230 PASS |

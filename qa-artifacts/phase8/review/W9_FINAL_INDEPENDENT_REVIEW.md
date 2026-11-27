@@ -128,3 +128,20 @@ The conditional item from sections 5/8 is closed by `qa-artifacts/phase8/visual/
 8. **Environment/caveats non-blocking.** TalkBack, 1.5x/2.0x font scale, density 320, final settings/root restoration, logcat with no FATAL/errors, QA catalog mutations restored (`122`/`123`). Remaining caveats (swiftshader/no `/dev/dri`, absent guest curl, intermittent input-channel loss, standalone `emulator -version` libpulse error) are environmental, with app-level reachability proven by live quote/cart/reorder responses.
 
 Criterion 10 is upgraded PARTIAL/OPEN -> **PASS**; criterion 11 is now fully **PASS**. Sections 5/8 and the MINOR-1 item in section 6 are all closed. Publication is now safe for task-related files only — continue to exclude `.opencode/opencode.jsonc`. No source, docs, QA evidence, or Git state were modified by this reviewer; only this addendum was appended.
+
+---
+
+## 11. Addendum — uncommitted Clippy fixes (read-only review, 2026-11-27)
+
+**Verdict: PASS — unconditional, unchanged. No behavior/message change; no new review blocker.**
+
+Reviewed all three diffs against the three stated transformations:
+- **Inline format args** (`cart_validation.rs:608,618,633`; `uniffi/lib.rs:862,872,886`; test assertions): line-continuation strips whitespace, so rendered strings are byte-identical. Independently compiled/ran a comparison for all three production messages (`left/right/distinct identical: true`).
+- **`map_or(false, …)` → `is_some_and`** (`cart_validation.rs:792`): identical `bool` result for `Some`/`None`; adjacent `map_or(0, …)` left intact.
+- **Removed `let`+return block** (`phase8_golden_parity_tests.rs:154`): same `std_extra` value passed to the same call.
+- **`expect(&format!(…))` → `unwrap_or_else(|_| panic!(…))`** (test code only, both files): same panic message and failure path; no production/API message touched.
+- **`map_err(|e| From::from(e))` → `map_err(From::from)`** (`uniffi/lib.rs:935-947`): identical error conversion and type inference.
+
+Evidence verified genuine and current: `w9_clippy_fix_clippy.log` (clean `-D warnings`), `w9_clippy_fix_rust_workspace_tests.log` (all suites ok). Independently re-ran `cargo clippy --workspace --all-targets -- -D warnings` (exit 0) and `cargo test --workspace` (exit 0, 0 failed) — both reproduce the reports. All 11 criteria remain satisfied; §5/§8 runtime gate stays closed. Only these three Rust files changed; no Kotlin/docs/QA source touched by this fix. No source, docs, QA evidence, or Git state modified by this reviewer — only this addendum appended.
+
+FINAL EXIT GATE: **CLOSED — PASS.** Publish task-related files only; continue excluding `.opencode/opencode.jsonc`.

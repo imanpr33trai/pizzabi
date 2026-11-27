@@ -154,12 +154,8 @@ fn test_unit_pricing_vector(vector: &GoldenVector) {
         inputs.cheese_extra_paise.unwrap_or(0),
         inputs.sauce_extra_paise.unwrap_or(0),
         // We need to calculate standard toppings extra first
-        {
-            let std_extra =
-                PricingEngine::calculate_standard_toppings_extra_paise(&standard_toppings)
-                    .expect("calculate_standard_toppings_extra_paise failed");
-            std_extra
-        },
+        PricingEngine::calculate_standard_toppings_extra_paise(&standard_toppings)
+            .expect("calculate_standard_toppings_extra_paise failed"),
         inputs.extra_topping_extras.as_deref().unwrap_or(&[]),
         half_and_half.as_ref(),
     );
@@ -199,10 +195,8 @@ fn test_unit_pricing_vector(vector: &GoldenVector) {
         return;
     }
 
-    let unit_price = unit_price_result.expect(&format!(
-        "Vector {}: calculate_unit_price_paise failed",
-        vector.id
-    ));
+    let unit_price = unit_price_result
+        .unwrap_or_else(|_| panic!("Vector {}: calculate_unit_price_paise failed", vector.id));
 
     assert_eq!(
         unit_price,
@@ -215,9 +209,8 @@ fn test_unit_pricing_vector(vector: &GoldenVector) {
 
     // Also test line total if quantity > 1 or expected_line_total_paise is provided
     if quantity != 1 || vector.expected_line_total_paise.is_some() {
-        let line_total = PricingEngine::calculate_line_total_paise(unit_price, quantity).expect(
-            &format!("Vector {}: calculate_line_total_paise failed", vector.id),
-        );
+        let line_total = PricingEngine::calculate_line_total_paise(unit_price, quantity)
+            .unwrap_or_else(|_| panic!("Vector {}: calculate_line_total_paise failed", vector.id));
         if let Some(expected_line_total) = vector.expected_line_total_paise {
             assert_eq!(
                 line_total, expected_line_total,
@@ -249,7 +242,7 @@ fn test_quote_vector(vector: &GoldenVector) {
         discount_type: match c.discount_type.as_str() {
             "PercentBps" => DiscountType::PercentBps,
             "FlatPaise" => DiscountType::FlatPaise,
-            other => panic!("Unknown discount type: {}", other),
+            other => panic!("Unknown discount type: {other}"),
         },
         discount_value: c.discount_value,
         max_discount_paise: c.max_discount_paise,
@@ -263,7 +256,7 @@ fn test_quote_vector(vector: &GoldenVector) {
         delivery_fee_paise,
         coupon_spec.as_ref(),
     )
-    .expect(&format!("Vector {}: calculate_quote failed", vector.id));
+    .unwrap_or_else(|_| panic!("Vector {}: calculate_quote failed", vector.id));
 
     let expected = vector
         .expected_quote
@@ -413,14 +406,13 @@ fn half_and_half_half_up_odd_paise() {
 fn arithmetic_overflow_detection() {
     // Test unit price overflow - adding non-zero to i64::MAX will overflow
     let result = PricingEngine::calculate_unit_price_paise(i64::MAX, 1, 0, 0, 0, &[], None);
-    eprintln!("Result: {:?}", result);
-    assert!(result.is_err(), "Expected error but got Ok({:?})", result);
+    eprintln!("Result: {result:?}");
+    assert!(result.is_err(), "Expected error but got Ok({result:?})");
     let err = result.unwrap_err();
     assert!(
         format!("{err}").contains("arithmetic overflow")
             || format!("{err}").contains("ArithmeticOverflow"),
-        "Expected ArithmeticOverflow error for unit price, got: {}",
-        err
+        "Expected ArithmeticOverflow error for unit price, got: {err}"
     );
 
     // Test line total overflow
@@ -431,8 +423,7 @@ fn arithmetic_overflow_detection() {
     assert!(
         format!("{err}").contains("arithmetic overflow")
             || format!("{err}").contains("ArithmeticOverflow"),
-        "Expected ArithmeticOverflow error for line total, got: {}",
-        err
+        "Expected ArithmeticOverflow error for line total, got: {err}"
     );
 
     // Test discount calculation with large values - verify HALF_UP rounding

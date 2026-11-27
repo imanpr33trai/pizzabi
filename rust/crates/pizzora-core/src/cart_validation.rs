@@ -608,8 +608,8 @@ impl CartValidation {
                     return Err(DomainError::HalfAndHalfToppingLimitExceeded {
                         code: "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
                         message: format!(
-                            "Half-and-half left side cannot have more than {} toppings.",
-                            MAX_HALF_AND_HALF_TOPPINGS_PER_HALF
+                            "Half-and-half left side cannot have more than \
+                             {MAX_HALF_AND_HALF_TOPPINGS_PER_HALF} toppings."
                         ),
                     });
                 }
@@ -618,8 +618,8 @@ impl CartValidation {
                     return Err(DomainError::HalfAndHalfToppingLimitExceeded {
                         code: "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
                         message: format!(
-                            "Half-and-half right side cannot have more than {} toppings.",
-                            MAX_HALF_AND_HALF_TOPPINGS_PER_HALF
+                            "Half-and-half right side cannot have more than \
+                             {MAX_HALF_AND_HALF_TOPPINGS_PER_HALF} toppings."
                         ),
                     });
                 }
@@ -633,8 +633,8 @@ impl CartValidation {
                     return Err(DomainError::HalfAndHalfToppingLimitExceeded {
                         code: "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
                         message: format!(
-                            "Half-and-half cannot have more than {} distinct toppings total.",
-                            MAX_HALF_AND_HALF_DISTINCT_TOPPINGS
+                            "Half-and-half cannot have more than \
+                             {MAX_HALF_AND_HALF_DISTINCT_TOPPINGS} distinct toppings total."
                         ),
                     });
                 }
@@ -792,7 +792,7 @@ impl CartValidation {
                         message: format!("{s_name} is currently unavailable."),
                     });
                 }
-                let is_default = std_topping.map_or(false, |s| s.is_default);
+                let is_default = std_topping.is_some_and(|s| s.is_default);
                 let extra = std_topping.map_or(0, |s| s.extra_price_paise);
                 let is_removed = false; // In cart input, removed defaults are not sent; they're just absent
                 standard_topping_views.push(EvaluatedStandardToppingView {
