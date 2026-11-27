@@ -1,0 +1,17 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/pizzora_db-1f3711f5fadc4797)
+
+running 10 tests
+test migrator::tests::canonical_v1_v3_specs_and_invalid_utf8_check ... ok
+test migrator::tests::expected_table_and_index_counts_match_canonical_schema ... ok
+test migrator::tests::flyway_crc32_matches_real_flyway_11_3_4_oracle_vectors ... ok
+test migrator::tests::pg18_locked_handoff_fresh_adopt_tamper_and_concurrency ... ignored, requires live PostgreSQL 18.6 (TEST_POSTGRES_URL / DATABASE_URL with CREATEDB)
+test migrator::tests::pg18_phase8_rollback_and_reapply_succeeds ... ignored, requires live PostgreSQL 18 (TEST_POSTGRES_URL / DATABASE_URL with CREATEDB)
+test tests::audit_cursor_round_trips ... ok
+test tests::flyway_crc32_matches_oracle_across_v1_to_v3_and_synthetic_vectors ... ok
+test tests::in_memory_cache_supports_ws_ticket_set_get_del_semantics ... ok
+test tests::pg18_fresh_and_concurrent_handoff_under_advisory_lock ... ignored, Requires live PostgreSQL 18.6 at DATABASE_URL
+test tests::sql_migrations_0001_to_0003_are_embedded_in_migrator ... ok
+
+test result: ok. 7 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

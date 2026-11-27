@@ -27,10 +27,11 @@ pub use inventory::{
     InventoryLedgerEntryDto, InventoryLedgerReason, InventoryService, UpdateIngredientRequest,
 };
 pub use migrator::{
-    flyway_crc32, run_locked_handoff, run_locked_handoff_with_hook, verify_catalog_invariants,
-    verify_migration_readiness_readonly, HandoffMode, HandoffOutcome, MigrationPreflightReport,
-    CANONICAL_V1_BYTES, CANONICAL_V2_BYTES, CANONICAL_V3_BYTES, EXPECTED_TABLES,
-    EXPECTED_V3_INDEXES, MIGRATION_ADVISORY_LOCK_KEY, MIGRATOR,
+    flyway_crc32, run_locked_handoff, run_locked_handoff_with_hook, verify_baseline_invariants,
+    verify_catalog_invariants, verify_migration_readiness_readonly, HandoffMode, HandoffOutcome,
+    MigrationPreflightReport, CANONICAL_V1_BYTES, CANONICAL_V2_BYTES, CANONICAL_V3_BYTES,
+    EXPECTED_BASELINE_TABLES, EXPECTED_PHASE8_INDEXES, EXPECTED_TABLES, EXPECTED_V3_INDEXES,
+    MIGRATION_ADVISORY_LOCK_KEY, MIGRATOR,
 };
 pub use notifications::{
     MarkAllNotificationsReadResponse, MarkNotificationReadResponse, NotificationDeliveryStatus,

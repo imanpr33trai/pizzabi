@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/pizzora_db-1f3711f5fadc4797)
+
+running 3 tests
+test migrator::tests::pg18_locked_handoff_fresh_adopt_tamper_and_concurrency ... ok
+test migrator::tests::pg18_phase8_rollback_and_reapply_succeeds ... ok
+test tests::pg18_fresh_and_concurrent_handoff_under_advisory_lock ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.41s
+

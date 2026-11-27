@@ -65,6 +65,64 @@ pub const EXPECTED_TABLES: &[&str] = &[
     "notification_inbox",
     "notification_preferences",
     "audit_logs",
+    // Phase 8 (SQLx V4+): 5 additive tables for per-product modifiers.
+    "product_toppings",
+    "cheeses",
+    "sauces",
+    "standard_toppings",
+    "half_and_half_configs",
+];
+
+/// The 46 tables that must exist after V1-V3 only (Flyway baseline profile).
+/// Kept explicit (rather than slicing EXPECTED_TABLES) because const slicing is
+/// not available in the pinned Rust toolchain.
+pub const EXPECTED_BASELINE_TABLES: &[&str] = &[
+    "roles",
+    "permissions",
+    "role_permissions",
+    "users",
+    "staff",
+    "user_sessions",
+    "refresh_tokens",
+    "email_verification_tokens",
+    "password_reset_tokens",
+    "ws_tickets",
+    "addresses",
+    "categories",
+    "products",
+    "product_variants",
+    "crust_options",
+    "toppings",
+    "product_images",
+    "ingredients",
+    "inventory",
+    "variant_recipes",
+    "crust_recipes",
+    "topping_recipes",
+    "carts",
+    "cart_items",
+    "cart_item_toppings",
+    "coupons",
+    "delivery_zones",
+    "scheduled_slots",
+    "restaurant_settings",
+    "orders",
+    "order_items",
+    "order_status_history",
+    "inventory_reservations",
+    "inventory_ledger",
+    "coupon_reservations",
+    "coupon_redemptions",
+    "scheduled_slot_reservations",
+    "payments",
+    "payment_attempts",
+    "payment_events",
+    "refunds",
+    "event_stream_cursor",
+    "outbox_events",
+    "notification_inbox",
+    "notification_preferences",
+    "audit_logs",
 ];
 
 pub const EXPECTED_V3_INDEXES: &[&str] = &[
@@ -81,6 +139,21 @@ pub const EXPECTED_V3_INDEXES: &[&str] = &[
     "idx_product_images_active_product",
     "idx_cart_items_cart_id",
     "idx_scheduled_slot_res_slot_status",
+];
+
+pub const EXPECTED_PHASE8_INDEXES: &[&str] = &[
+    "idx_product_toppings_topping",
+    "idx_cheeses_product_active",
+    "idx_sauces_product_active",
+    "idx_standard_toppings_product_active",
+    "idx_half_and_half_configs_product_active",
+    "idx_cart_items_cheese",
+    "idx_cart_items_sauce",
+    "idx_cart_items_half_and_half",
+    "idx_cart_items_standard_toppings_gin",
+    "idx_order_items_cheese",
+    "idx_order_items_sauce",
+    "idx_order_items_modifiers_gin",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,10 +330,13 @@ async fn execute_locked_handoff(
 
     if flyway_exists {
         verify_flyway_history(conn).await?;
-        verify_catalog_invariants(conn).await?;
+        // At this point only V1-V3 (46 tables) exist. Verify the immutable baseline
+        // before adopting it; full 51-table verification runs after V4+ is applied.
+        verify_baseline_invariants(conn).await?;
         ensure_sqlx_baseline_1_to_3(conn).await?;
         verify_existing_sqlx_migrations(conn).await?;
         MIGRATOR.run_direct(&mut *conn).await?;
+        verify_catalog_invariants(conn).await?;
         let versions = collect_applied_versions(conn).await?;
         info!(
             backend_pid,
@@ -362,7 +438,14 @@ pub async fn verify_migration_readiness_readonly(
         sqlx_versions = collect_applied_versions(&mut conn).await?;
     }
 
-    verify_catalog_invariants(&mut conn).await?;
+    // Invariant depth depends on migration profile: a Flyway V1-V3 DB that has not
+    // yet been handed off only has 46 tables; a SQLx DB at V4+ must have all 51.
+    let phase8_applied = sqlx_versions.iter().any(|v| *v >= 4);
+    if phase8_applied {
+        verify_catalog_invariants(&mut conn).await?;
+    } else {
+        verify_baseline_invariants(&mut conn).await?;
+    }
 
     let outbox_dead_letter_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events WHERE dispatch_status = 'DEAD_LETTER'",
@@ -495,7 +578,12 @@ async fn verify_flyway_history(conn: &mut PgConnection) -> Result<(), DbError> {
     Ok(())
 }
 
-pub async fn verify_catalog_invariants(conn: &mut PgConnection) -> Result<(), DbError> {
+async fn verify_invariants_inner(
+    conn: &mut PgConnection,
+    expected_tables: &[&str],
+    expected_indexes: &[&str],
+    phase8: bool,
+) -> Result<(), DbError> {
     let tables: HashSet<String> = sqlx::query_scalar(
         "SELECT table_name::text FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
     )
@@ -504,7 +592,7 @@ pub async fn verify_catalog_invariants(conn: &mut PgConnection) -> Result<(), Db
     .into_iter()
     .collect();
 
-    let missing_tables: Vec<&str> = EXPECTED_TABLES
+    let missing_tables: Vec<&str> = expected_tables
         .iter()
         .copied()
         .filter(|name| !tables.contains(*name))
@@ -523,27 +611,51 @@ pub async fn verify_catalog_invariants(conn: &mut PgConnection) -> Result<(), Db
             .into_iter()
             .collect();
 
-    let missing_indexes: Vec<&str> = EXPECTED_V3_INDEXES
+    let missing_indexes: Vec<&str> = expected_indexes
         .iter()
         .copied()
         .filter(|name| !indexes.contains(*name))
         .collect();
     if !missing_indexes.is_empty() {
         return Err(DbError::CatalogInvariantViolation(format!(
-            "missing required V3 hot-path index(es): {}",
+            "missing required index(es): {}",
             missing_indexes.join(", ")
         )));
     }
 
     // Verify essential constraints exist on high-integrity tables (UNIQUE/PK/FK checks)
-    let required_constraints: &[(&str, &str)] = &[
+    let mut required_constraints: Vec<(&str, &str)> = vec![
         ("users", "u"),
         ("orders", "u"),
         ("payment_attempts", "u"),
         ("notification_inbox", "u"),
         ("inventory", "c"),
     ];
-    for &(table_name, contype) in required_constraints {
+    if phase8 {
+        // Phase 8: each new table must keep its PK, product FK, and UNIQUE(name) constraints.
+        required_constraints.extend([
+            ("product_toppings", "p"),
+            ("product_toppings", "f"),
+            ("cheeses", "p"),
+            ("cheeses", "u"),
+            ("cheeses", "f"),
+            ("sauces", "p"),
+            ("sauces", "u"),
+            ("sauces", "f"),
+            ("standard_toppings", "p"),
+            ("standard_toppings", "u"),
+            ("standard_toppings", "f"),
+            ("half_and_half_configs", "p"),
+            ("half_and_half_configs", "u"),
+            ("half_and_half_configs", "f"),
+            // CHECK constraints on non-negative pricing columns.
+            ("cheeses", "c"),
+            ("sauces", "c"),
+            ("standard_toppings", "c"),
+            ("half_and_half_configs", "c"),
+        ]);
+    }
+    for &(table_name, contype) in &required_constraints {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*)
@@ -606,6 +718,23 @@ pub async fn verify_catalog_invariants(conn: &mut PgConnection) -> Result<(), Db
     }
 
     Ok(())
+}
+
+/// Verifies only the V1-V3 baseline (46 tables, V3 indexes, base constraints/seeds).
+/// Used on the Flyway adoption path BEFORE SQLx V4+ migrations are applied.
+pub async fn verify_baseline_invariants(conn: &mut PgConnection) -> Result<(), DbError> {
+    verify_invariants_inner(conn, EXPECTED_BASELINE_TABLES, EXPECTED_V3_INDEXES, false).await
+}
+
+/// Verifies the post-migration Phase 8 schema: 51 tables, V3 + Phase 8 indexes,
+/// base + Phase 8 constraints, and V2 seeds. Used after all SQLx migrations apply.
+pub async fn verify_catalog_invariants(conn: &mut PgConnection) -> Result<(), DbError> {
+    let all_indexes: Vec<&str> = EXPECTED_V3_INDEXES
+        .iter()
+        .chain(EXPECTED_PHASE8_INDEXES.iter())
+        .copied()
+        .collect();
+    verify_invariants_inner(conn, EXPECTED_TABLES, &all_indexes, true).await
 }
 
 async fn ensure_sqlx_baseline_1_to_3(conn: &mut PgConnection) -> Result<(), DbError> {
@@ -709,6 +838,9 @@ async fn collect_applied_versions(conn: &mut PgConnection) -> Result<Vec<i64>, D
 mod tests {
     use super::*;
 
+    /// Versions applied by the Phase 8 schema (V1-V3 baseline + V4-V11 modifiers).
+    const ALL_APPLIED_VERSIONS: [i64; 11] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
     fn decode_b64_fixture(b64: &str) -> Vec<u8> {
         const TABLE: [i8; 256] = {
             let mut t = [-1i8; 256];
@@ -782,10 +914,18 @@ mod tests {
 
     #[test]
     fn expected_table_and_index_counts_match_canonical_schema() {
-        assert_eq!(EXPECTED_TABLES.len(), 46);
+        assert_eq!(EXPECTED_TABLES.len(), 51);
+        assert_eq!(EXPECTED_BASELINE_TABLES.len(), 46);
         assert_eq!(EXPECTED_V3_INDEXES.len(), 13);
+        assert_eq!(EXPECTED_PHASE8_INDEXES.len(), 12);
         let unique_tables: HashSet<&str> = EXPECTED_TABLES.iter().copied().collect();
-        assert_eq!(unique_tables.len(), 46);
+        assert_eq!(unique_tables.len(), 51);
+        let all_indexes: HashSet<&str> = EXPECTED_V3_INDEXES
+            .iter()
+            .chain(EXPECTED_PHASE8_INDEXES.iter())
+            .copied()
+            .collect();
+        assert_eq!(all_indexes.len(), 25);
     }
 
     #[test]
@@ -885,14 +1025,14 @@ mod tests {
             .await
             .expect("fresh bootstrap succeeds");
         assert_eq!(fresh_outcome.mode, HandoffMode::FreshBootstrap);
-        assert_eq!(fresh_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(fresh_outcome.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
 
         let resumed_outcome = run_locked_handoff(&fresh_pool)
             .await
             .expect("subsequent run resumes cleanly");
         assert_eq!(resumed_outcome.mode, HandoffMode::ResumedSqlx);
-        assert_eq!(resumed_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(resumed_outcome.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
         drop_isolated_test_db(&admin_pool, &fresh_db, fresh_pool).await;
 
@@ -974,13 +1114,13 @@ mod tests {
             .await
             .expect("adopt Flyway V1..V3 without re-running DDL");
         assert_eq!(adopt_outcome.mode, HandoffMode::AdoptedExistingFlyway);
-        assert_eq!(adopt_outcome.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(adopt_outcome.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
         let preflight_after = verify_migration_readiness_readonly(&adopt_pool)
             .await
             .expect("read-only preflight succeeds after SQLx adoption");
         assert!(preflight_after.sqlx_table_exists);
         assert!(preflight_after.sqlx_verified);
-        assert_eq!(preflight_after.sqlx_versions, vec![1, 2, 3]);
+        assert_eq!(preflight_after.sqlx_versions, ALL_APPLIED_VERSIONS.to_vec());
         let zero_exec_rows: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM _sqlx_migrations WHERE version BETWEEN 1 AND 3 AND execution_time = 0",
         )
@@ -999,7 +1139,7 @@ mod tests {
             .await
             .expect("partial baseline recovers cleanly");
         assert_eq!(recovered.mode, HandoffMode::AdoptedExistingFlyway);
-        assert_eq!(recovered.applied_or_verified_versions, vec![1, 2, 3]);
+        assert_eq!(recovered.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
 
         // Tampered Flyway checksum -> MigrationChecksumMismatch & lock released
         let original_v2_crc = canonical_v1_v3_specs().unwrap()[1].2;
@@ -1064,5 +1204,93 @@ mod tests {
         assert!(matches!(err, DbError::UnsafeDatabaseState(_)));
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
         drop_isolated_test_db(&admin_pool, &dirty_db, dirty_pool).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live PostgreSQL 18 (TEST_POSTGRES_URL / DATABASE_URL with CREATEDB)"]
+    async fn pg18_phase8_rollback_and_reapply_succeeds() {
+        use pizzora_config::{AppConfig, DatabaseConfig, NormalizedDatabaseUrl};
+        use sqlx::postgres::PgPoolOptions;
+
+        let base_url = match std::env::var("TEST_POSTGRES_URL") {
+            Ok(v) if !v.trim().is_empty() => zeroize::Zeroizing::new(v),
+            _ => AppConfig::from_env()
+                .expect("config from env")
+                .database
+                .url
+                .normalized_postgres_url(),
+        };
+        let normalized =
+            NormalizedDatabaseUrl::parse(&base_url, None, None).expect("valid PostgreSQL URL");
+        let db_cfg = DatabaseConfig {
+            url: normalized,
+            max_pool_size: 4,
+            min_connections: 1,
+            connect_timeout_ms: 5_000,
+            run_migrations_on_startup: true,
+        };
+        let base_opts = crate::pool::build_pg_connect_options(&db_cfg).expect("pg connect opts");
+        let admin_pool = PgPoolOptions::new()
+            .max_connections(4)
+            .connect_with(base_opts.clone())
+            .await
+            .expect("admin pool");
+
+        let (db_name, pool) =
+            create_isolated_test_db(&admin_pool, &base_opts, "pizzora_it_rollback").await;
+
+        // Initial migration: all V1-V11 tables, columns, and indexes.
+        let first = run_locked_handoff(&pool).await.expect("initial handoff");
+        assert_eq!(first.mode, HandoffMode::FreshBootstrap);
+        assert_eq!(first.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        verify_catalog_invariants(&mut pool.acquire().await.unwrap())
+            .await
+            .expect("51-table invariants after initial handoff");
+
+        // Roll back V4+: drop modifier tables, columns, and migration rows.
+        sqlx::raw_sql(
+            r#"
+            DROP TABLE IF EXISTS product_toppings, cheeses, sauces, standard_toppings,
+                half_and_half_configs CASCADE;
+            ALTER TABLE cart_items
+                DROP COLUMN IF EXISTS cheese_id,
+                DROP COLUMN IF EXISTS sauce_id,
+                DROP COLUMN IF EXISTS standard_topping_ids,
+                DROP COLUMN IF EXISTS half_and_half_config_id,
+                DROP COLUMN IF EXISTS half_and_half_left_topping_ids,
+                DROP COLUMN IF EXISTS half_and_half_right_topping_ids CASCADE;
+            ALTER TABLE order_items
+                DROP COLUMN IF EXISTS variant_id,
+                DROP COLUMN IF EXISTS crust_id,
+                DROP COLUMN IF EXISTS cheese_id,
+                DROP COLUMN IF EXISTS sauce_id,
+                DROP COLUMN IF EXISTS topping_ids,
+                DROP COLUMN IF EXISTS standard_topping_ids,
+                DROP COLUMN IF EXISTS standard_topping_removed_ids,
+                DROP COLUMN IF EXISTS half_and_half_config_id,
+                DROP COLUMN IF EXISTS half_and_half_left_topping_ids,
+                DROP COLUMN IF EXISTS half_and_half_right_topping_ids,
+                DROP COLUMN IF EXISTS modifiers_snapshot CASCADE;
+            DELETE FROM _sqlx_migrations WHERE version >= 4;
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("roll back V4+ objects");
+
+        // Reapply under the same advisory lock and verify full invariants again.
+        let reapplied = run_locked_handoff(&pool).await.expect("reapply handoff");
+        assert_eq!(reapplied.mode, HandoffMode::ResumedSqlx);
+        assert_eq!(reapplied.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        verify_catalog_invariants(&mut pool.acquire().await.unwrap())
+            .await
+            .expect("51-table invariants after reapply");
+
+        // Re-applying a second time must be idempotent.
+        let again = run_locked_handoff(&pool).await.expect("idempotent reapply");
+        assert_eq!(again.mode, HandoffMode::ResumedSqlx);
+        assert_eq!(again.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
+        drop_isolated_test_db(&admin_pool, &db_name, pool).await;
     }
 }
