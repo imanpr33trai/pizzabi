@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use pizzora_core::{CartValidation, FulfillmentType, PricedLineInput, PricingEngine};
+use pizzora_core::{
+    CartValidation, EvaluatedCartItem, FulfillmentType, PricedLineInput, PricingEngine,
+};
 use pizzora_db::{AppliedCouponSummaryDto, CouponService};
 use sqlx::{PgPool, Row as _};
 use uuid::Uuid;
@@ -15,6 +17,28 @@ use crate::services::cart::{
     evaluated_summary_to_item_dtos, load_extended_catalog_ref_lookup, to_core_cart_inputs,
 };
 use crate::storage::ObjectStorageClient;
+
+fn sum_extended_modifier_paise(
+    items: &[EvaluatedCartItem],
+    extract: impl Fn(&EvaluatedCartItem) -> i64,
+) -> Result<i64, ApiError> {
+    items.iter().try_fold(0_i64, |total, item| {
+        let line_extra = extract(item)
+            .checked_mul(i64::from(item.quantity))
+            .ok_or_else(|| {
+                ApiError::validation(
+                    "ARITHMETIC_OVERFLOW",
+                    "Extended modifier total exceeds the supported range.",
+                )
+            })?;
+        total.checked_add(line_extra).ok_or_else(|| {
+            ApiError::validation(
+                "ARITHMETIC_OVERFLOW",
+                "Extended modifier total exceeds the supported range.",
+            )
+        })
+    })
+}
 
 #[derive(Clone)]
 pub struct PricingService {
@@ -169,6 +193,40 @@ impl PricingService {
             validated_coupon.as_ref().map(|c| &c.spec),
         )?;
 
+        let cheese_extra_paise = sum_extended_modifier_paise(&evaluated.items, |item| {
+            item.cheese
+                .as_ref()
+                .map_or(0, |view| view.extra_price_paise)
+        })?;
+        let sauce_extra_paise = sum_extended_modifier_paise(&evaluated.items, |item| {
+            item.sauce.as_ref().map_or(0, |view| view.extra_price_paise)
+        })?;
+        let standard_toppings_extra_paise =
+            sum_extended_modifier_paise(&evaluated.items, |item| {
+                item.standard_toppings
+                    .iter()
+                    .filter(|view| !view.is_removed)
+                    .fold(0_i64, |total, view| {
+                        total.saturating_add(view.extra_price_paise)
+                    })
+            })?;
+        let half_and_half_surcharge_paise =
+            sum_extended_modifier_paise(&evaluated.items, |item| {
+                item.half_and_half
+                    .as_ref()
+                    .map_or(0, |view| view.surcharge_paise)
+            })?;
+        let modifier_extra_paise = cheese_extra_paise
+            .checked_add(sauce_extra_paise)
+            .and_then(|total| total.checked_add(standard_toppings_extra_paise))
+            .and_then(|total| total.checked_add(half_and_half_surcharge_paise))
+            .ok_or_else(|| {
+                ApiError::validation(
+                    "ARITHMETIC_OVERFLOW",
+                    "Extended modifier total exceeds the supported range.",
+                )
+            })?;
+
         Ok(PricingQuoteResponse {
             items: evaluated_summary_to_item_dtos(&evaluated, &lookup),
             fulfillment_type: request.fulfillment_type,
@@ -183,6 +241,11 @@ impl PricingService {
                 cgst_paise: breakdown.cgst_paise,
                 sgst_paise: breakdown.sgst_paise,
                 total_paise: breakdown.total_paise,
+                cheese_extra_paise,
+                sauce_extra_paise,
+                standard_toppings_extra_paise,
+                half_and_half_surcharge_paise,
+                modifier_extra_paise,
             },
             applied_coupon: validated_coupon.map(|c| AppliedCouponSummaryDto {
                 id: c.id.to_string(),

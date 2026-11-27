@@ -113,6 +113,12 @@ data class PriceBreakdownDto(
   @SerialName("cgst_paise") val cgstPaise: Long,
   @SerialName("sgst_paise") val sgstPaise: Long,
   @SerialName("total_paise") val totalPaise: Long,
+  // Phase 8: explicit modifier breakdown (optional/defaulted for old clients).
+  @SerialName("cheese_extra_paise") val cheeseExtraPaise: Long = 0L,
+  @SerialName("sauce_extra_paise") val sauceExtraPaise: Long = 0L,
+  @SerialName("standard_toppings_extra_paise") val standardToppingsExtraPaise: Long = 0L,
+  @SerialName("half_and_half_surcharge_paise") val halfAndHalfSurchargePaise: Long = 0L,
+  @SerialName("modifier_extra_paise") val modifierExtraPaise: Long = 0L,
 )
 
 @Serializable

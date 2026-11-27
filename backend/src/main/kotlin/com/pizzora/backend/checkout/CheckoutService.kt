@@ -3,6 +3,7 @@ package com.pizzora.backend.checkout
 import com.pizzora.backend.audit.AuditContext
 import com.pizzora.backend.audit.AuditLogger
 import com.pizzora.backend.cart.CartService
+import com.pizzora.backend.core.config.Phase8FeatureFlags
 import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.error.ConflictException
 import com.pizzora.backend.core.error.ForbiddenException
@@ -11,6 +12,10 @@ import com.pizzora.backend.core.error.UnprocessableEntityException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.coupons.CouponService
 import com.pizzora.backend.inventory.InventoryService
+import com.pizzora.backend.modifiers.ModifierCatalog
+import com.pizzora.backend.modifiers.ModifierSelection
+import com.pizzora.backend.modifiers.Phase8ModifierPricing
+import com.pizzora.backend.modifiers.Phase8Schema
 import com.pizzora.backend.orders.OrderService
 import com.pizzora.backend.payments.RazorpayReceiptFormatter
 import com.pizzora.backend.recipes.RecipeDemandItem
@@ -47,6 +52,7 @@ class CheckoutService(
   private val inventoryService: InventoryService,
   private val recipeService: RecipeService,
   private val orderService: OrderService,
+  private val features: Phase8FeatureFlags = Phase8FeatureFlags(),
 ) {
   private val json = Json {
     ignoreUnknownKeys = true
@@ -87,8 +93,21 @@ class CheckoutService(
         crustId = parseUuid(raw.crustId, "crust_id"),
         toppingIds = raw.toppingIds.map { parseUuid(it, "topping_id") }.distinct().sortedBy { it.toString() },
         quantity = raw.quantity,
+        modifiers = ModifierSelection(
+          cheeseId = raw.cheeseId?.takeIf { it.isNotBlank() }?.let { parseUuid(it, "cheese_id") },
+          sauceId = raw.sauceId?.takeIf { it.isNotBlank() }?.let { parseUuid(it, "sauce_id") },
+          standardToppingIds = raw.standardToppingIds.map { parseUuid(it, "standard_topping_id") }
+            .distinct().sortedBy { it.toString() },
+          halfAndHalfConfigId = raw.halfAndHalfConfigId?.takeIf { it.isNotBlank() }
+            ?.let { parseUuid(it, "half_and_half_config_id") },
+          halfAndHalfLeftToppingIds = raw.halfAndHalfLeftToppingIds.map { parseUuid(it, "half_and_half_left_topping_id") }
+            .distinct().sortedBy { it.toString() },
+          halfAndHalfRightToppingIds = raw.halfAndHalfRightToppingIds.map { parseUuid(it, "half_and_half_right_topping_id") }
+            .distinct().sortedBy { it.toString() },
+        ),
       )
     }
+    parsedItems.forEach { Phase8ModifierPricing.rejectDisabledWrites(it.modifiers, features) }
 
     val rawAddressId = request.addressId?.takeIf { it.isNotBlank() }
     val addressUuid = rawAddressId?.let { parseUuid(it, "address_id") }
@@ -253,12 +272,27 @@ class CheckoutService(
       }
 
       // 2. Insert `order_items`
+      val schema = Phase8Schema.detect(conn)
+      val modifierColumns = if (schema.hasOrderModifierColumns) {
+        """
+        , variant_id, crust_id, cheese_id, sauce_id, topping_ids,
+          standard_topping_ids, standard_topping_removed_ids, half_and_half_config_id,
+          half_and_half_left_topping_ids, half_and_half_right_topping_ids, modifiers_snapshot
+        """.trimIndent()
+      } else {
+        ""
+      }
+      val modifierValues = if (schema.hasOrderModifierColumns) {
+        ", ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?::jsonb, ?::jsonb"
+      } else {
+        ""
+      }
       conn.prepareStatement(
         """
         INSERT INTO order_items (
           id, order_id, product_id, product_name_snapshot, variant_size_snapshot,
-          crust_name_snapshot, toppings_snapshot, unit_price_paise, quantity, line_total_paise
-        ) VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+          crust_name_snapshot, toppings_snapshot, unit_price_paise, quantity, line_total_paise$modifierColumns
+        ) VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?$modifierValues)
         """.trimIndent(),
       ).use { ps ->
         for (item in evaluatedItems) {
@@ -268,10 +302,24 @@ class CheckoutService(
           ps.setString(4, item.productName)
           ps.setString(5, item.variantSize.name)
           ps.setString(6, item.crustName)
-          ps.setString(7, json.encodeToString(item.toppingNames))
+          ps.setString(7, Phase8ModifierPricing.encodeNames(item.toppingNames))
           ps.setLong(8, item.unitPricePaise)
           ps.setInt(9, item.quantity)
           ps.setLong(10, item.lineTotalPaise)
+          if (schema.hasOrderModifierColumns) {
+            val mods = item.selection
+            ps.setObject(11, item.variantId)
+            ps.setObject(12, item.crustId)
+            setNullableUuid(ps, 13, mods.cheeseId)
+            setNullableUuid(ps, 14, mods.sauceId)
+            ps.setString(15, Phase8ModifierPricing.encodeIds(item.toppingIds))
+            ps.setString(16, Phase8ModifierPricing.encodeIds(mods.standardToppingIds))
+            ps.setString(17, Phase8ModifierPricing.encodeIds(item.removedStandardToppingIds))
+            setNullableUuid(ps, 18, mods.halfAndHalfConfigId)
+            ps.setString(19, Phase8ModifierPricing.encodeIds(mods.halfAndHalfLeftToppingIds))
+            ps.setString(20, Phase8ModifierPricing.encodeIds(mods.halfAndHalfRightToppingIds))
+            ps.setString(21, json.encodeToString(item.modifiersSnapshot))
+          }
           ps.addBatch()
         }
         ps.executeBatch()
@@ -595,6 +643,9 @@ class CheckoutService(
       }
     }
 
+    val schema = Phase8Schema.detect(conn)
+    val catalog = ModifierCatalog.load(conn, schema, features)
+
     return items.map { input ->
       val prod = productsMap[input.productId]
       if (prod == null || !prod.isActive) {
@@ -629,11 +680,44 @@ class CheckoutService(
         row
       }
 
-      val unitPrice = Math.addExact(
-        Math.addExact(variant.pricePaise, crust.extraPricePaise),
-        toppingRows.fold(0L) { acc, t -> Math.addExact(acc, t.extraPricePaise) },
+      val modifiers = Phase8ModifierPricing.evaluate(
+        productId = prod.id,
+        selection = input.modifiers,
+        extraToppingIds = input.toppingIds,
+        catalog = catalog,
+      )
+      val firstModifierIssue = modifiers.issues.firstOrNull()
+      if (firstModifierIssue != null) {
+        throw UnprocessableEntityException("CART_ITEMS_UNAVAILABLE", firstModifierIssue.message)
+      }
+
+      val unitPrice = modifiers.unitPricePaise(
+        variantPricePaise = variant.pricePaise,
+        crustExtraPaise = crust.extraPricePaise,
+        extraToppingIds = input.toppingIds,
+        catalog = catalog,
       )
       val lineTotal = PricingEngine.calculateLineTotalPaise(unitPrice, input.quantity)
+      val half = modifiers.halfAndHalfView
+      val removedStandardIds = catalog.products[prod.id]?.standardToppings?.values
+        ?.filter { row -> row.isDefault && row.id !in input.modifiers.standardToppingIds }
+        ?.map { row -> row.id }
+        .orEmpty()
+      val snapshot = buildMap {
+        put("cheese_id", input.modifiers.cheeseId?.toString().orEmpty())
+        put("cheese_name", modifiers.cheeseName.orEmpty())
+        put("sauce_id", input.modifiers.sauceId?.toString().orEmpty())
+        put("sauce_name", modifiers.sauceName.orEmpty())
+        put("standard_topping_ids", input.modifiers.standardToppingIds.joinToString(",") { it.toString() })
+        put("standard_topping_names", modifiers.standardToppingNames.joinToString(","))
+        put("standard_topping_removed_ids", removedStandardIds.joinToString(",") { it.toString() })
+        put("half_and_half_config_id", input.modifiers.halfAndHalfConfigId?.toString().orEmpty())
+        put("half_and_half_name", modifiers.halfAndHalfName.orEmpty())
+        put("half_and_half_left_topping_names", modifiers.leftToppingNames.joinToString(","))
+        put("half_and_half_right_topping_names", modifiers.rightToppingNames.joinToString(","))
+        put("half_and_half_surcharge_paise", (half?.halfAndHalfSurchargePaise ?: 0L).toString())
+        put("unit_price_paise", unitPrice.toString())
+      }
 
       EvaluatedCheckoutItem(
         productId = prod.id,
@@ -645,8 +729,18 @@ class CheckoutService(
         quantity = input.quantity,
         lineTotalPaise = lineTotal,
         lineInput = PricedLineInput(unitPrice, input.quantity, isTaxable = prod.isTaxable),
+        variantId = variant.id,
+        crustId = crust.id,
+        toppingIds = input.toppingIds,
+        removedStandardToppingIds = removedStandardIds,
+        selection = input.modifiers,
+        modifiersSnapshot = snapshot,
       )
     }
+  }
+
+  private fun setNullableUuid(ps: java.sql.PreparedStatement, index: Int, value: UUID?) {
+    if (value == null) ps.setNull(index, java.sql.Types.OTHER) else ps.setObject(index, value)
   }
 
   private fun computeRequestHash(
@@ -670,6 +764,12 @@ class CheckoutService(
         append(item.variantId).append(':')
         append(item.crustId).append(':')
         append(item.toppingIds.joinToString(",") { it.toString() }).append(':')
+        append(item.modifiers.cheeseId?.toString().orEmpty()).append(':')
+        append(item.modifiers.sauceId?.toString().orEmpty()).append(':')
+        append(item.modifiers.standardToppingIds.joinToString(",") { it.toString() }).append(':')
+        append(item.modifiers.halfAndHalfConfigId?.toString().orEmpty()).append(':')
+        append(item.modifiers.halfAndHalfLeftToppingIds.joinToString(",") { it.toString() }).append(':')
+        append(item.modifiers.halfAndHalfRightToppingIds.joinToString(",") { it.toString() }).append(':')
         append(item.quantity).append(';')
       }
     }
@@ -693,6 +793,7 @@ class CheckoutService(
     val crustId: UUID,
     val toppingIds: List<UUID>,
     val quantity: Int,
+    val modifiers: ModifierSelection = ModifierSelection(),
   )
 
   private data class EvaluatedCheckoutItem(
@@ -705,6 +806,12 @@ class CheckoutService(
     val quantity: Int,
     val lineTotalPaise: Long,
     val lineInput: PricedLineInput,
+    val variantId: UUID,
+    val crustId: UUID,
+    val toppingIds: List<UUID> = emptyList(),
+    val removedStandardToppingIds: List<UUID> = emptyList(),
+    val selection: ModifierSelection = ModifierSelection(),
+    val modifiersSnapshot: Map<String, String> = emptyMap(),
   )
 
   private data class StoreSettings(val gstBps: Int, val isAcceptingOrders: Boolean)

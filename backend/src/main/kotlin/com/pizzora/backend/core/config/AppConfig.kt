@@ -13,6 +13,7 @@ data class AppConfig(
   val worker: WorkerConfig,
   val razorpay: RazorpayConfig = RazorpayConfig(),
   val security: SecurityConfig = SecurityConfig(),
+  val phase8Features: Phase8FeatureFlags = Phase8FeatureFlags(),
 ) {
   companion object {
     fun fromEnv(env: Map<String, String> = System.getenv()): AppConfig {
@@ -91,6 +92,7 @@ data class AppConfig(
           maxWsFrameBytes = env["MAX_WS_FRAME_BYTES"]?.toLongOrNull() ?: 65_536L,
           rateLimitEnabled = env["RATE_LIMIT_ENABLED"]?.toBooleanStrictOrNull() ?: true,
         ),
+        phase8Features = Phase8FeatureFlags.fromEnv(env),
       )
     }
 

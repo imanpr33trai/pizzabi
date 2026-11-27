@@ -2,23 +2,29 @@ package com.pizzora.backend.catalog
 
 import com.pizzora.backend.audit.AuditContext
 import com.pizzora.backend.audit.AuditLogger
+import com.pizzora.backend.core.config.Phase8FeatureFlags
 import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.error.ConflictException
 import com.pizzora.backend.core.error.NotFoundException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.core.redis.EphemeralCacheStore
+import com.pizzora.backend.modifiers.Phase8Schema
 import com.pizzora.contracts.CategoryDto
+import com.pizzora.contracts.CheeseOptionDto
 import com.pizzora.contracts.CreateCrustRequest
 import com.pizzora.contracts.CreateProductRequest
 import com.pizzora.contracts.CreateToppingRequest
 import com.pizzora.contracts.CreateVariantRequest
 import com.pizzora.contracts.CrustOptionDto
+import com.pizzora.contracts.HalfAndHalfConfigDto
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductImageDto
 import com.pizzora.contracts.ProductImageStatus
 import com.pizzora.contracts.ProductVariantDto
 import com.pizzora.contracts.PublicMenuResponse
+import com.pizzora.contracts.SauceOptionDto
 import com.pizzora.contracts.SizeCode
+import com.pizzora.contracts.StandardToppingDto
 import com.pizzora.contracts.ToppingDto
 import com.pizzora.contracts.UpdateCrustRequest
 import com.pizzora.contracts.UpdateProductRequest
@@ -35,12 +41,16 @@ class CatalogService(
   private val dataSource: DataSource,
   private val cacheStore: EphemeralCacheStore,
   private val publicUrlResolver: (String) -> String?,
+  private val features: Phase8FeatureFlags = Phase8FeatureFlags(),
 ) {
   private val logger = LoggerFactory.getLogger(CatalogService::class.java)
   private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
   suspend fun getPublicMenu(): PublicMenuResponse {
-    val cached = runCatching { cacheStore.get(CatalogCacheKeys.PUBLIC_MENU) }
+    // Flags are process-wide, so the cached payload already reflects the active flag set and
+    // the stable key keeps existing cache invalidation (catalog:menu:v1) intact.
+    val cacheKey = CatalogCacheKeys.PUBLIC_MENU
+    val cached = runCatching { cacheStore.get(cacheKey) }
       .onFailure { logger.warn("Redis read failed for public menu; falling back to PostgreSQL", it) }
       .getOrNull()
     if (!cached.isNullOrBlank()) {
@@ -55,12 +65,17 @@ class CatalogService(
       val crusts = loadCrusts(conn, activeOnly = true)
       val toppings = loadToppings(conn, activeOnly = true)
       val settings = loadStoreSettings(conn)
+      val schema = Phase8Schema.detect(conn)
 
       PublicMenuResponse(
         categories = categories,
         products = products,
         crusts = crusts,
         toppings = toppings,
+        cheeses = loadGlobalCheeses(conn, schema),
+        sauces = loadGlobalSauces(conn, schema),
+        standardToppings = loadGlobalStandardToppings(conn, schema),
+        halfAndHalfConfigs = loadGlobalHalfAndHalfConfigs(conn, schema),
         gstBps = settings.first,
         storeName = settings.second,
         isAcceptingOrders = settings.third,
@@ -68,7 +83,7 @@ class CatalogService(
     }
 
     runCatching {
-      cacheStore.setEx(CatalogCacheKeys.PUBLIC_MENU, CatalogCacheKeys.TTL_SECONDS, json.encodeToString(menu))
+      cacheStore.setEx(cacheKey, CatalogCacheKeys.TTL_SECONDS, json.encodeToString(menu))
     }.onFailure {
       logger.warn("Redis write failed for public menu; continuing without cache", it)
     }
@@ -463,6 +478,7 @@ class CatalogService(
 
     val created = try {
       DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+        val schema = Phase8Schema.detect(conn)
         val id = UUID.randomUUID()
         val dto = conn.prepareStatement(
           """
@@ -477,6 +493,19 @@ class CatalogService(
           ps.setLong(4, request.extraPricePaise)
           ps.setBoolean(5, request.isActive)
           ps.executeQuery().use { rs -> rs.next(); rs.toToppingDto() }
+        }
+        // Preserve the pre-Phase-8 behavior that every topping is selectable on every product.
+        if (schema.hasProductToppings) {
+          conn.prepareStatement(
+            """
+            INSERT INTO product_toppings (product_id, topping_id, sort_order)
+            SELECT id, ?, 0 FROM products
+            ON CONFLICT (product_id, topping_id) DO NOTHING
+            """.trimIndent(),
+          ).use { ps ->
+            ps.setObject(1, id)
+            ps.executeUpdate()
+          }
         }
         AuditLogger.record(conn, auditContext, "TOPPING_CREATED", "topping", id.toString(), afterJson = json.encodeToString(dto))
         dto
@@ -655,13 +684,254 @@ class CatalogService(
       }
     }
 
+    val schema = Phase8Schema.detect(conn)
+    val cheesesByProduct = mutableMapOf<String, MutableList<CheeseOptionDto>>()
+    if (schema.hasCheeses && features.cheese) {
+      val where = if (activeOnly) "WHERE is_active = TRUE" else ""
+      conn.prepareStatement(
+        """
+        SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+        FROM cheeses
+        $where
+        ORDER BY sort_order ASC, name ASC
+        """.trimIndent(),
+      ).use { ps ->
+        ps.executeQuery().use { rs ->
+          while (rs.next()) {
+            val dto = CheeseOptionDto(
+              id = rs.getObject("id", UUID::class.java).toString(),
+              productId = rs.getObject("product_id", UUID::class.java).toString(),
+              name = rs.getString("name"),
+              extraPricePaise = rs.getLong("extra_price_paise"),
+              isActive = rs.getBoolean("is_active"),
+              sortOrder = rs.getInt("sort_order"),
+            )
+            cheesesByProduct.getOrPut(dto.productId) { mutableListOf() } += dto
+          }
+        }
+      }
+    }
+
+    val saucesByProduct = mutableMapOf<String, MutableList<SauceOptionDto>>()
+    if (schema.hasSauces && features.sauce) {
+      val where = if (activeOnly) "WHERE is_active = TRUE" else ""
+      conn.prepareStatement(
+        """
+        SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+        FROM sauces
+        $where
+        ORDER BY sort_order ASC, name ASC
+        """.trimIndent(),
+      ).use { ps ->
+        ps.executeQuery().use { rs ->
+          while (rs.next()) {
+            val dto = SauceOptionDto(
+              id = rs.getObject("id", UUID::class.java).toString(),
+              productId = rs.getObject("product_id", UUID::class.java).toString(),
+              name = rs.getString("name"),
+              extraPricePaise = rs.getLong("extra_price_paise"),
+              isActive = rs.getBoolean("is_active"),
+              sortOrder = rs.getInt("sort_order"),
+            )
+            saucesByProduct.getOrPut(dto.productId) { mutableListOf() } += dto
+          }
+        }
+      }
+    }
+
+    val standardToppingsByProduct = mutableMapOf<String, MutableList<StandardToppingDto>>()
+    if (schema.hasStandardToppings && features.standardToppings) {
+      val where = if (activeOnly) "WHERE is_active = TRUE" else ""
+      conn.prepareStatement(
+        """
+        SELECT id, product_id, name, is_veg, extra_price_paise, is_default, is_active, sort_order
+        FROM standard_toppings
+        $where
+        ORDER BY sort_order ASC, name ASC
+        """.trimIndent(),
+      ).use { ps ->
+        ps.executeQuery().use { rs ->
+          while (rs.next()) {
+            val dto = StandardToppingDto(
+              id = rs.getObject("id", UUID::class.java).toString(),
+              productId = rs.getObject("product_id", UUID::class.java).toString(),
+              name = rs.getString("name"),
+              isVeg = rs.getBoolean("is_veg"),
+              extraPricePaise = rs.getLong("extra_price_paise"),
+              isDefault = rs.getBoolean("is_default"),
+              isActive = rs.getBoolean("is_active"),
+              sortOrder = rs.getInt("sort_order"),
+            )
+            standardToppingsByProduct.getOrPut(dto.productId) { mutableListOf() } += dto
+          }
+        }
+      }
+    }
+
+    val halfAndHalfByProduct = mutableMapOf<String, MutableList<HalfAndHalfConfigDto>>()
+    if (schema.hasHalfAndHalfConfigs && features.halfAndHalf) {
+      val where = if (activeOnly) "WHERE is_active = TRUE" else ""
+      conn.prepareStatement(
+        """
+        SELECT id, product_id, name, left_topping_ids, right_topping_ids,
+               half_and_half_surcharge_paise, is_active, sort_order
+        FROM half_and_half_configs
+        $where
+        ORDER BY sort_order ASC, name ASC
+        """.trimIndent(),
+      ).use { ps ->
+        ps.executeQuery().use { rs ->
+          while (rs.next()) {
+            val dto = HalfAndHalfConfigDto(
+              id = rs.getObject("id", UUID::class.java).toString(),
+              productId = rs.getObject("product_id", UUID::class.java).toString(),
+              name = rs.getString("name"),
+              leftToppingIds = decodeIds(rs.getString("left_topping_ids")),
+              rightToppingIds = decodeIds(rs.getString("right_topping_ids")),
+              halfAndHalfSurchargePaise = rs.getLong("half_and_half_surcharge_paise"),
+              isActive = rs.getBoolean("is_active"),
+              sortOrder = rs.getInt("sort_order"),
+            )
+            halfAndHalfByProduct.getOrPut(dto.productId) { mutableListOf() } += dto
+          }
+        }
+      }
+    }
+
     return baseProducts.map { prod ->
       prod.copy(
         variants = variantsByProduct[prod.id].orEmpty(),
         images = imagesByProduct[prod.id].orEmpty(),
+        cheeses = cheesesByProduct[prod.id].orEmpty(),
+        sauces = saucesByProduct[prod.id].orEmpty(),
+        standardToppings = standardToppingsByProduct[prod.id].orEmpty(),
+        halfAndHalfConfigs = halfAndHalfByProduct[prod.id].orEmpty(),
       )
     }
   }
+
+  private fun loadGlobalCheeses(conn: Connection, schema: Phase8Schema.Availability): List<CheeseOptionDto> {
+    if (!schema.hasCheeses || !features.cheese) return emptyList()
+    return conn.prepareStatement(
+      """
+      SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+      FROM cheeses
+      WHERE is_active = TRUE
+      ORDER BY sort_order ASC, name ASC
+      """.trimIndent(),
+    ).use { ps ->
+      ps.executeQuery().use { rs ->
+        val out = mutableListOf<CheeseOptionDto>()
+        while (rs.next()) {
+          out += CheeseOptionDto(
+            id = rs.getObject("id", UUID::class.java).toString(),
+            productId = rs.getObject("product_id", UUID::class.java).toString(),
+            name = rs.getString("name"),
+            extraPricePaise = rs.getLong("extra_price_paise"),
+            isActive = rs.getBoolean("is_active"),
+            sortOrder = rs.getInt("sort_order"),
+          )
+        }
+        out.toList()
+      }
+    }
+  }
+
+  private fun loadGlobalSauces(conn: Connection, schema: Phase8Schema.Availability): List<SauceOptionDto> {
+    if (!schema.hasSauces || !features.sauce) return emptyList()
+    return conn.prepareStatement(
+      """
+      SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+      FROM sauces
+      WHERE is_active = TRUE
+      ORDER BY sort_order ASC, name ASC
+      """.trimIndent(),
+    ).use { ps ->
+      ps.executeQuery().use { rs ->
+        val out = mutableListOf<SauceOptionDto>()
+        while (rs.next()) {
+          out += SauceOptionDto(
+            id = rs.getObject("id", UUID::class.java).toString(),
+            productId = rs.getObject("product_id", UUID::class.java).toString(),
+            name = rs.getString("name"),
+            extraPricePaise = rs.getLong("extra_price_paise"),
+            isActive = rs.getBoolean("is_active"),
+            sortOrder = rs.getInt("sort_order"),
+          )
+        }
+        out.toList()
+      }
+    }
+  }
+
+  private fun loadGlobalStandardToppings(
+    conn: Connection,
+    schema: Phase8Schema.Availability,
+  ): List<StandardToppingDto> {
+    if (!schema.hasStandardToppings || !features.standardToppings) return emptyList()
+    return conn.prepareStatement(
+      """
+      SELECT id, product_id, name, is_veg, extra_price_paise, is_default, is_active, sort_order
+      FROM standard_toppings
+      WHERE is_active = TRUE
+      ORDER BY sort_order ASC, name ASC
+      """.trimIndent(),
+    ).use { ps ->
+      ps.executeQuery().use { rs ->
+        val out = mutableListOf<StandardToppingDto>()
+        while (rs.next()) {
+          out += StandardToppingDto(
+            id = rs.getObject("id", UUID::class.java).toString(),
+            productId = rs.getObject("product_id", UUID::class.java).toString(),
+            name = rs.getString("name"),
+            isVeg = rs.getBoolean("is_veg"),
+            extraPricePaise = rs.getLong("extra_price_paise"),
+            isDefault = rs.getBoolean("is_default"),
+            isActive = rs.getBoolean("is_active"),
+            sortOrder = rs.getInt("sort_order"),
+          )
+        }
+        out.toList()
+      }
+    }
+  }
+
+  private fun loadGlobalHalfAndHalfConfigs(
+    conn: Connection,
+    schema: Phase8Schema.Availability,
+  ): List<HalfAndHalfConfigDto> {
+    if (!schema.hasHalfAndHalfConfigs || !features.halfAndHalf) return emptyList()
+    return conn.prepareStatement(
+      """
+      SELECT id, product_id, name, left_topping_ids, right_topping_ids,
+             half_and_half_surcharge_paise, is_active, sort_order
+      FROM half_and_half_configs
+      WHERE is_active = TRUE
+      ORDER BY sort_order ASC, name ASC
+      """.trimIndent(),
+    ).use { ps ->
+      ps.executeQuery().use { rs ->
+        val out = mutableListOf<HalfAndHalfConfigDto>()
+        while (rs.next()) {
+          out += HalfAndHalfConfigDto(
+            id = rs.getObject("id", UUID::class.java).toString(),
+            productId = rs.getObject("product_id", UUID::class.java).toString(),
+            name = rs.getString("name"),
+            leftToppingIds = decodeIds(rs.getString("left_topping_ids")),
+            rightToppingIds = decodeIds(rs.getString("right_topping_ids")),
+            halfAndHalfSurchargePaise = rs.getLong("half_and_half_surcharge_paise"),
+            isActive = rs.getBoolean("is_active"),
+            sortOrder = rs.getInt("sort_order"),
+          )
+        }
+        out.toList()
+      }
+    }
+  }
+
+  private fun decodeIds(raw: String?): List<String> =
+    if (raw.isNullOrBlank()) emptyList()
+    else runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
 
   private fun loadCrusts(conn: Connection, activeOnly: Boolean): List<CrustOptionDto> {
     val where = if (activeOnly) "WHERE is_active = TRUE" else ""

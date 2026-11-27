@@ -183,6 +183,10 @@ class Phase8SerializationTest {
     val decoded = json.decodeFromString<PublicMenuResponse>(encoded)
     assertEquals(1, decoded.products.size)
     assertEquals(1, decoded.products[0].cheeses.size)
+    assertTrue(encoded.contains("\"cheeses\":"))
+    assertTrue(encoded.contains("\"sauces\":"))
+    assertTrue(encoded.contains("\"standard_toppings\":"))
+    assertTrue(encoded.contains("\"half_and_half_configs\":"))
   }
 
   @Test

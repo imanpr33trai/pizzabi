@@ -2,6 +2,7 @@ package com.pizzora.backend.orders
 
 import com.pizzora.backend.audit.AuditContext
 import com.pizzora.backend.audit.AuditLogger
+import com.pizzora.backend.core.config.Phase8FeatureFlags
 import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.error.ConflictException
 import com.pizzora.backend.core.error.ForbiddenException
@@ -9,6 +10,9 @@ import com.pizzora.backend.core.error.NotFoundException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.coupons.CouponService
 import com.pizzora.backend.inventory.InventoryService
+import com.pizzora.backend.modifiers.ModifierCatalog
+import com.pizzora.backend.modifiers.Phase8ModifierPricing
+import com.pizzora.backend.modifiers.Phase8Schema
 import com.pizzora.contracts.DeliveryAddressSnapshotDto
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.OrderDetailDto
@@ -23,6 +27,10 @@ import com.pizzora.contracts.PaymentAttemptSummaryDto
 import com.pizzora.contracts.PaymentMethod
 import com.pizzora.contracts.PaymentStatus
 import com.pizzora.contracts.PaymentSummaryDto
+import com.pizzora.contracts.ReorderItemDto
+import com.pizzora.contracts.ReorderResponseDto
+import com.pizzora.contracts.ReorderUnavailableDto
+import com.pizzora.contracts.ReorderUnavailableReason
 import com.pizzora.contracts.ScheduleType
 import com.pizzora.contracts.UserRole
 import java.sql.Connection
@@ -39,6 +47,7 @@ class OrderService(
   private val dataSource: DataSource,
   private val inventoryService: InventoryService,
   private val couponService: CouponService,
+  private val features: Phase8FeatureFlags = Phase8FeatureFlags(),
 ) {
   private val logger = LoggerFactory.getLogger(OrderService::class.java)
   private val json = Json {
@@ -67,8 +76,9 @@ class OrderService(
         ps.executeQuery().use { rs ->
           val list = mutableListOf<OrderSummaryDto>()
           while (rs.next()) {
+            val orderId = rs.getObject("id", UUID::class.java)
             list += OrderSummaryDto(
-              id = rs.getObject("id", UUID::class.java).toString(),
+              id = orderId.toString(),
               orderNumber = rs.getString("order_number"),
               fulfillmentType = FulfillmentType.valueOf(rs.getString("fulfillment_type")),
               scheduleType = ScheduleType.valueOf(rs.getString("schedule_type")),
@@ -81,6 +91,7 @@ class OrderService(
               isPriority = rs.getBoolean("is_priority"),
               createdAt = rs.getObject("created_at", OffsetDateTime::class.java).toInstant().toString(),
               expiresAt = rs.getObject("expires_at", OffsetDateTime::class.java)?.toInstant()?.toString(),
+              itemPreviewSummary = buildItemPreviewSummary(conn, orderId),
             )
           }
           list
@@ -620,35 +631,29 @@ class OrderService(
       }
     } ?: return null
 
-    val items = conn.prepareStatement(
-      """
-      SELECT id, product_id, product_name_snapshot, variant_size_snapshot, crust_name_snapshot,
-             toppings_snapshot::text AS toppings_json, unit_price_paise, quantity, line_total_paise
-      FROM order_items
-      WHERE order_id = ?
-      ORDER BY id ASC
-      """.trimIndent(),
-    ).use { ps ->
-      ps.setObject(1, orderId)
-      ps.executeQuery().use { rs ->
-        val list = mutableListOf<OrderItemDto>()
-        while (rs.next()) {
-          val toppingsJson = rs.getString("toppings_json") ?: "[]"
-          val toppingsList = runCatching { json.decodeFromString<List<String>>(toppingsJson) }.getOrDefault(emptyList())
-          list += OrderItemDto(
-            id = rs.getObject("id", UUID::class.java).toString(),
-            productId = rs.getObject("product_id", UUID::class.java).toString(),
-            productName = rs.getString("product_name_snapshot"),
-            variantSize = rs.getString("variant_size_snapshot"),
-            crustName = rs.getString("crust_name_snapshot"),
-            toppings = toppingsList,
-            unitPricePaise = rs.getLong("unit_price_paise"),
-            quantity = rs.getInt("quantity"),
-            lineTotalPaise = rs.getLong("line_total_paise"),
-          )
-        }
-        list
-      }
+    val items = loadOrderItemRows(conn, orderId).map { row ->
+      OrderItemDto(
+        id = row.id.toString(),
+        productId = row.productId.toString(),
+        productName = row.productName,
+        variantSize = row.variantSize,
+        crustName = row.crustName,
+        toppings = row.toppingNames,
+        unitPricePaise = row.unitPricePaise,
+        quantity = row.quantity,
+        lineTotalPaise = row.lineTotalPaise,
+        variantId = row.variantId?.toString(),
+        crustId = row.crustId?.toString(),
+        cheeseId = row.cheeseId?.toString(),
+        sauceId = row.sauceId?.toString(),
+        toppingIds = row.toppingIds.map(UUID::toString),
+        standardToppingIds = row.standardToppingIds.map(UUID::toString),
+        standardToppingRemovedIds = row.standardToppingRemovedIds.map(UUID::toString),
+        halfAndHalfConfigId = row.halfAndHalfConfigId?.toString(),
+        halfAndHalfLeftToppingIds = row.halfAndHalfLeftToppingIds.map(UUID::toString),
+        halfAndHalfRightToppingIds = row.halfAndHalfRightToppingIds.map(UUID::toString),
+        modifiersSnapshot = row.modifiersSnapshot,
+      )
     }
 
     val history = conn.prepareStatement(
@@ -736,6 +741,387 @@ class OrderService(
     )
   }
 
+  private fun loadOrderItemRows(conn: Connection, orderId: UUID): List<OrderItemRow> {
+    val schema = Phase8Schema.detect(conn)
+    val modifierColumns = if (schema.hasOrderModifierColumns) {
+      """
+      , variant_id, crust_id, cheese_id, sauce_id,
+        topping_ids::text AS topping_ids_json,
+        standard_topping_ids::text AS standard_topping_ids_json,
+        standard_topping_removed_ids::text AS standard_removed_ids_json,
+        half_and_half_config_id,
+        half_and_half_left_topping_ids::text AS half_left_ids_json,
+        half_and_half_right_topping_ids::text AS half_right_ids_json,
+        modifiers_snapshot::text AS modifiers_snapshot_json
+      """.trimIndent()
+    } else {
+      ""
+    }
+    return conn.prepareStatement(
+      """
+      SELECT id, product_id, product_name_snapshot, variant_size_snapshot, crust_name_snapshot,
+             toppings_snapshot::text AS toppings_json, unit_price_paise, quantity, line_total_paise$modifierColumns
+      FROM order_items
+      WHERE order_id = ?
+      ORDER BY id ASC
+      """.trimIndent(),
+    ).use { ps ->
+      ps.setObject(1, orderId)
+      ps.executeQuery().use { rs ->
+        val rows = mutableListOf<OrderItemRow>()
+        while (rs.next()) {
+          rows += OrderItemRow(
+            id = rs.getObject("id", UUID::class.java),
+            productId = rs.getObject("product_id", UUID::class.java),
+            productName = rs.getString("product_name_snapshot"),
+            variantSize = rs.getString("variant_size_snapshot"),
+            crustName = rs.getString("crust_name_snapshot"),
+            toppingNames = decodeStringList(rs.getString("toppings_json")),
+            unitPricePaise = rs.getLong("unit_price_paise"),
+            quantity = rs.getInt("quantity"),
+            lineTotalPaise = rs.getLong("line_total_paise"),
+            variantId = if (schema.hasOrderModifierColumns) rs.getObject("variant_id", UUID::class.java) else null,
+            crustId = if (schema.hasOrderModifierColumns) rs.getObject("crust_id", UUID::class.java) else null,
+            cheeseId = if (schema.hasOrderModifierColumns) rs.getObject("cheese_id", UUID::class.java) else null,
+            sauceId = if (schema.hasOrderModifierColumns) rs.getObject("sauce_id", UUID::class.java) else null,
+            toppingIds = if (schema.hasOrderModifierColumns) Phase8ModifierPricing.parseIds(rs.getString("topping_ids_json")) else emptyList(),
+            standardToppingIds = if (schema.hasOrderModifierColumns) {
+              Phase8ModifierPricing.parseIds(rs.getString("standard_topping_ids_json"))
+            } else {
+              emptyList()
+            },
+            standardToppingRemovedIds = if (schema.hasOrderModifierColumns) {
+              Phase8ModifierPricing.parseIds(rs.getString("standard_removed_ids_json"))
+            } else {
+              emptyList()
+            },
+            halfAndHalfConfigId = if (schema.hasOrderModifierColumns) {
+              rs.getObject("half_and_half_config_id", UUID::class.java)
+            } else {
+              null
+            },
+            halfAndHalfLeftToppingIds = if (schema.hasOrderModifierColumns) {
+              Phase8ModifierPricing.parseIds(rs.getString("half_left_ids_json"))
+            } else {
+              emptyList()
+            },
+            halfAndHalfRightToppingIds = if (schema.hasOrderModifierColumns) {
+              Phase8ModifierPricing.parseIds(rs.getString("half_right_ids_json"))
+            } else {
+              emptyList()
+            },
+            modifiersSnapshot = if (schema.hasOrderModifierColumns) {
+              decodeStringMap(rs.getString("modifiers_snapshot_json"))
+            } else {
+              emptyMap()
+            },
+          )
+        }
+        rows
+      }
+    }
+  }
+
+  private fun decodeStringList(raw: String?): List<String> =
+    if (raw.isNullOrBlank()) emptyList()
+    else runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+
+  private fun decodeStringMap(raw: String?): Map<String, String> =
+    if (raw.isNullOrBlank()) emptyMap()
+    else runCatching { json.decodeFromString<Map<String, String>>(raw) }.getOrDefault(emptyMap())
+
+  private fun buildItemPreviewSummary(conn: Connection, orderId: UUID): String {
+    val rows = loadOrderItemRows(conn, orderId)
+    if (rows.isEmpty()) return ""
+    val parts = rows.take(2).map { row ->
+      val modifiers = listOfNotNull(
+        row.modifiersSnapshot["cheese_name"]?.takeIf { it.isNotBlank() },
+        row.modifiersSnapshot["sauce_name"]?.takeIf { it.isNotBlank() },
+      )
+      (listOf("${row.productName} (${row.variantSize})") + modifiers + row.toppingNames.take(2))
+        .joinToString(", ")
+    }
+    val extra = if (rows.size > 2) " +${rows.size - 2} more" else ""
+    return parts.joinToString("; ") + extra
+  }
+
+  suspend fun reorderOrder(
+    orderId: UUID,
+    actorUserId: UUID,
+    actorRole: UserRole,
+  ): ReorderResponseDto {
+    if (!features.reorder) {
+      throw ValidationException("FEATURE_DISABLED", "The reorder feature is disabled.")
+    }
+    return DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
+      val ownerId = conn.prepareStatement("SELECT customer_id FROM orders WHERE id = ?").use { ps ->
+        ps.setObject(1, orderId)
+        ps.executeQuery().use { rs -> if (rs.next()) rs.getObject("customer_id", UUID::class.java) else null }
+      } ?: throw NotFoundException("ORDER_NOT_FOUND", "Order $orderId was not found.")
+      if (actorRole == UserRole.CUSTOMER && ownerId != actorUserId) {
+        logger.warn("Blocked cross-user reorder IDOR actorUserId={} orderId={} ownerCustomerId={}", actorUserId, orderId, ownerId)
+        throw ForbiddenException("FORBIDDEN", "You do not have access to this order.")
+      }
+
+      val schema = Phase8Schema.detect(conn)
+      val catalog = ModifierCatalog.load(conn, schema, features)
+      val productActive = loadReorderProducts(conn)
+      val variants = loadReorderVariants(conn)
+      val crusts = loadReorderCrusts(conn)
+      val toppingByName = catalog.toppings.values.associate { it.name.lowercase() to it.id }
+
+      val items = mutableListOf<ReorderItemDto>()
+      val unavailable = mutableListOf<ReorderUnavailableDto>()
+      val warnings = mutableListOf<String>()
+
+      for (row in loadOrderItemRows(conn, orderId)) {
+        val issues = mutableListOf<String>()
+        val productId = row.productId
+        if (productActive[productId] != true) {
+          issues += "Product is unavailable"
+          unavailable += reorderUnavailable(
+            row, "PRODUCT", productId.toString(), row.productName,
+            ReorderUnavailableReason.PRODUCT_UNAVAILABLE,
+          )
+        }
+
+        val variant = row.variantId?.let { variants.byId[it] }
+        val resolvedVariantId = when {
+          variant != null && variant.active && variant.productId == productId -> variant.id
+          else -> variants.byProductAndSize[productId to row.variantSize]
+            ?.takeIf { variants.byId[it]?.active == true }
+        }
+        if (resolvedVariantId == null) {
+          issues += "Size ${row.variantSize} is unavailable"
+          unavailable += reorderUnavailable(
+            row, "VARIANT", row.variantSize, row.variantSize,
+            ReorderUnavailableReason.VARIANT_UNAVAILABLE,
+          )
+        }
+
+        val crust = row.crustId?.let { crusts.byId[it] }
+        val resolvedCrustId = when {
+          crust != null && crust.active -> crust.id
+          else -> crusts.byName[row.crustName.lowercase()]?.takeIf { crusts.byId[it]?.active == true }
+        }
+        if (resolvedCrustId == null) {
+          issues += "Crust ${row.crustName} is unavailable"
+          unavailable += reorderUnavailable(
+            row, "CRUST", row.crustName, row.crustName,
+            ReorderUnavailableReason.CRUST_UNAVAILABLE,
+          )
+        }
+
+        val allowedToppings = catalog.allowedToppings(productId)
+        val toppingCandidates: List<Pair<String, String?>> = if (row.toppingIds.isNotEmpty()) {
+          row.toppingIds.map { id -> id.toString() to catalog.toppings[id]?.name }
+        } else {
+          row.toppingNames.map { name -> name to name }
+        }
+        val resolvedToppingIds = mutableSetOf<UUID>()
+        toppingCandidates.forEachIndexed { index, (candidateId, candidateName) ->
+          val direct = runCatching { UUID.fromString(candidateId) }.getOrNull()
+          val directRow = direct?.let { catalog.toppings[it] }
+          val resolved: UUID? = when {
+            directRow != null && directRow.isActive && (allowedToppings == null || direct in allowedToppings) -> direct
+            else -> {
+              val fallbackName = directRow?.name ?: candidateName ?: row.toppingNames.getOrNull(index)
+              fallbackName?.let { name ->
+                toppingByName[name.lowercase()]?.takeIf { id ->
+                  catalog.toppings[id]?.isActive == true && (allowedToppings == null || id in allowedToppings)
+                }
+              }
+            }
+          }
+          if (resolved != null) {
+            resolvedToppingIds += resolved
+          } else {
+            val name = candidateName ?: row.toppingNames.getOrNull(index) ?: candidateId
+            issues += "Topping $name is unavailable"
+            unavailable += reorderUnavailable(
+              row, "TOPPING", name, name, ReorderUnavailableReason.TOPPING_UNAVAILABLE,
+            )
+          }
+        }
+
+        val productModifiers = catalog.products[productId]
+        val resolvedCheeseId = row.cheeseId?.let { id ->
+          val cheese = productModifiers?.cheeses?.get(id)
+          if (cheese != null && cheese.isActive) id else {
+            issues += "Cheese ${cheese?.name ?: id} is unavailable"
+            unavailable += reorderUnavailable(
+              row, "CHEESE", id.toString(), cheese?.name ?: "Cheese",
+              ReorderUnavailableReason.CHEESE_UNAVAILABLE,
+            )
+            null
+          }
+        }
+        val resolvedSauceId = row.sauceId?.let { id ->
+          val sauce = productModifiers?.sauces?.get(id)
+          if (sauce != null && sauce.isActive) id else {
+            issues += "Sauce ${sauce?.name ?: id} is unavailable"
+            unavailable += reorderUnavailable(
+              row, "SAUCE", id.toString(), sauce?.name ?: "Sauce",
+              ReorderUnavailableReason.SAUCE_UNAVAILABLE,
+            )
+            null
+          }
+        }
+        val resolvedStandardIds = row.standardToppingIds.mapNotNull { id ->
+          val standard = productModifiers?.standardToppings?.get(id)
+          if (standard != null && standard.isActive) id else {
+            issues += "Standard topping ${standard?.name ?: id} is unavailable"
+            unavailable += reorderUnavailable(
+              row, "STANDARD_TOPPING", id.toString(), standard?.name ?: "Standard topping",
+              ReorderUnavailableReason.STANDARD_TOPPING_UNAVAILABLE,
+            )
+            null
+          }
+        }
+        val resolvedRemovedStandardIds = row.standardToppingRemovedIds.filter { id ->
+          productModifiers?.standardToppings?.get(id)?.isActive == true
+        }
+        val resolvedHalfConfigId = row.halfAndHalfConfigId?.let { id ->
+          val config = productModifiers?.halfAndHalfConfigs?.get(id)
+          if (config != null && config.isActive) id else {
+            issues += "Half-and-half ${config?.name ?: id} is unavailable"
+            unavailable += reorderUnavailable(
+              row, "HALF_AND_HALF", id.toString(), config?.name ?: "Half & Half",
+              ReorderUnavailableReason.HALF_AND_HALF_CONFIG_UNAVAILABLE,
+            )
+            null
+          }
+        }
+        val resolveHalfSide = { ids: List<UUID> ->
+          ids.mapNotNull { id ->
+            val topping = catalog.toppings[id]
+            if (topping != null && topping.isActive && (allowedToppings == null || id in allowedToppings)) {
+              id
+            } else {
+              issues += "Topping ${topping?.name ?: id} is unavailable"
+              unavailable += reorderUnavailable(
+                row, "TOPPING", id.toString(), topping?.name ?: "Topping",
+                ReorderUnavailableReason.TOPPING_UNAVAILABLE,
+              )
+              null
+            }
+          }
+        }
+        val resolvedHalfLeft = resolveHalfSide(row.halfAndHalfLeftToppingIds)
+        val resolvedHalfRight = resolveHalfSide(row.halfAndHalfRightToppingIds)
+
+        val historical = row.variantId == null && row.crustId == null
+        if (historical && (
+          row.modifiersSnapshot["cheese_name"].orNotBlank() ||
+            row.modifiersSnapshot["sauce_name"].orNotBlank() ||
+            row.modifiersSnapshot["standard_topping_names"].orNotBlank() ||
+            row.modifiersSnapshot["half_and_half_name"].orNotBlank()
+          )
+        ) {
+          warnings += "Historical order: cheese/sauce/standard toppings/half-and-half could not be reconstructed for ${row.productName}."
+        }
+
+        items += ReorderItemDto(
+          orderItemId = row.id.toString(),
+          productId = productId.toString(),
+          productName = row.productName,
+          variantId = resolvedVariantId?.toString(),
+          crustId = resolvedCrustId?.toString(),
+          cheeseId = resolvedCheeseId?.toString(),
+          sauceId = resolvedSauceId?.toString(),
+          toppingIds = resolvedToppingIds.sortedBy(UUID::toString).map(UUID::toString),
+          standardToppingIds = resolvedStandardIds.map(UUID::toString),
+          standardToppingRemovedIds = resolvedRemovedStandardIds.map(UUID::toString),
+          halfAndHalfConfigId = resolvedHalfConfigId?.toString(),
+          halfAndHalfLeftToppingIds = resolvedHalfLeft.map(UUID::toString),
+          halfAndHalfRightToppingIds = resolvedHalfRight.map(UUID::toString),
+          quantity = row.quantity,
+          isAvailable = issues.isEmpty(),
+          issues = issues.toList(),
+        )
+      }
+
+      ReorderResponseDto(
+        orderId = orderId.toString(),
+        canReorder = items.isNotEmpty() && items.all { it.isAvailable } && unavailable.isEmpty(),
+        items = items,
+        unavailable = unavailable,
+        warnings = warnings,
+      )
+    }
+  }
+
+  private fun reorderUnavailable(
+    row: OrderItemRow,
+    modifierType: String,
+    modifierId: String,
+    modifierName: String,
+    reason: ReorderUnavailableReason,
+  ) = ReorderUnavailableDto(
+    orderItemId = row.id.toString(),
+    productName = row.productName,
+    modifierType = modifierType,
+    modifierId = modifierId,
+    modifierName = modifierName,
+    reason = reason,
+  )
+
+  private fun String?.orNotBlank(): Boolean = !isNullOrBlank()
+
+  private fun loadReorderProducts(conn: Connection): Map<UUID, Boolean> =
+    conn.prepareStatement(
+      """
+      SELECT p.id, (p.is_active AND c.is_active) AS effective_active
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+      """.trimIndent(),
+    ).use { ps ->
+      ps.executeQuery().use { rs ->
+        val map = mutableMapOf<UUID, Boolean>()
+        while (rs.next()) map[rs.getObject("id", UUID::class.java)] = rs.getBoolean("effective_active")
+        map
+      }
+    }
+
+  private fun loadReorderVariants(conn: Connection): ReorderVariantIndex {
+    val byId = mutableMapOf<UUID, ReorderVariant>()
+    val byProductAndSize = mutableMapOf<Pair<UUID, String>, UUID>()
+    conn.prepareStatement("SELECT id, product_id, size_code, is_active FROM product_variants").use { ps ->
+      ps.executeQuery().use { rs ->
+        while (rs.next()) {
+          val variant = ReorderVariant(
+            id = rs.getObject("id", UUID::class.java),
+            productId = rs.getObject("product_id", UUID::class.java),
+            sizeCode = rs.getString("size_code"),
+            active = rs.getBoolean("is_active"),
+          )
+          byId[variant.id] = variant
+          byProductAndSize[variant.productId to variant.sizeCode] = variant.id
+        }
+      }
+    }
+    return ReorderVariantIndex(byId, byProductAndSize)
+  }
+
+  private fun loadReorderCrusts(conn: Connection): ReorderCrustIndex {
+    val byId = mutableMapOf<UUID, ReorderCrust>()
+    val byName = mutableMapOf<String, UUID>()
+    conn.prepareStatement("SELECT id, name, is_active FROM crust_options").use { ps ->
+      ps.executeQuery().use { rs ->
+        while (rs.next()) {
+          val crust = ReorderCrust(
+            id = rs.getObject("id", UUID::class.java),
+            name = rs.getString("name"),
+            active = rs.getBoolean("is_active"),
+          )
+          byId[crust.id] = crust
+          byName[crust.name.lowercase()] = crust.id
+        }
+      }
+    }
+    return ReorderCrustIndex(byId, byName)
+  }
+
   private fun loadLatestAttempt(conn: Connection, paymentId: UUID): PaymentAttemptSummaryDto? =
     conn.prepareStatement(
       """
@@ -809,5 +1195,51 @@ class OrderService(
     val completedAt: String?,
     val expiresAt: String?,
     val createdAt: String,
+  )
+
+  private data class OrderItemRow(
+    val id: UUID,
+    val productId: UUID,
+    val productName: String,
+    val variantSize: String,
+    val crustName: String,
+    val toppingNames: List<String>,
+    val unitPricePaise: Long,
+    val quantity: Int,
+    val lineTotalPaise: Long,
+    val variantId: UUID? = null,
+    val crustId: UUID? = null,
+    val cheeseId: UUID? = null,
+    val sauceId: UUID? = null,
+    val toppingIds: List<UUID> = emptyList(),
+    val standardToppingIds: List<UUID> = emptyList(),
+    val standardToppingRemovedIds: List<UUID> = emptyList(),
+    val halfAndHalfConfigId: UUID? = null,
+    val halfAndHalfLeftToppingIds: List<UUID> = emptyList(),
+    val halfAndHalfRightToppingIds: List<UUID> = emptyList(),
+    val modifiersSnapshot: Map<String, String> = emptyMap(),
+  )
+
+  private data class ReorderVariant(
+    val id: UUID,
+    val productId: UUID,
+    val sizeCode: String,
+    val active: Boolean,
+  )
+
+  private data class ReorderVariantIndex(
+    val byId: Map<UUID, ReorderVariant>,
+    val byProductAndSize: Map<Pair<UUID, String>, UUID>,
+  )
+
+  private data class ReorderCrust(
+    val id: UUID,
+    val name: String,
+    val active: Boolean,
+  )
+
+  private data class ReorderCrustIndex(
+    val byId: Map<UUID, ReorderCrust>,
+    val byName: Map<String, UUID>,
   )
 }

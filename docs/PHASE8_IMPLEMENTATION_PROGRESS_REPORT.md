@@ -90,10 +90,10 @@ repository; Kotlin changes must follow existing style and be reviewed in the sta
 | W2 Rust pricing + 33 vectors | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de343b2a7ffez42D4TrxHUvV6d`) | Initial audit REJECTED (3 MAJOR); all fixed; independent big-pickle re-audit PASS. 21 core tests PASS; 33/33 vectors match contract |
 | W3 DTO/API + reorder endpoint | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de3265e86ffe22X5qe8D2MaULu`, `opencode/big-pickle`) | Committed at `a332540`; API build + 7 tests PASS, shared contracts 40 tests PASS; coordinator follow-ups fixed UUID binding and checkout modifier persistence |
 | W4 UniFFI | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de31be575ffeJFJhKdoHPdiJ1I`, `opencode/big-pickle`) | Initial audit REJECTED; all findings repaired; independent re-audit PASS. 11 tests, all-features build, rustfmt, direct Kotlin bindgen evidence PASS |
-| W5 Kotlin backend five-service audit | **IN PROGRESS (final contract gaps)** | `general` subagent (`ses_de321c174ffemMqJrNxjY5Tmsg`, `opencode/big-pickle`) | Five services + reorder route + 82 backend tests PASS; coordinator added global menu arrays and explicit modifier breakdown to shared/Rust DTOs; backend follow-up populating them is running |
+| W5 Kotlin backend five-service audit | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de321c174ffemMqJrNxjY5Tmsg`, `opencode/big-pickle`) | Five services + reorder route + global menu arrays + explicit modifier breakdown; 84 backend tests + 40 shared-contract tests PASS; await scoped commit |
 | W6 Android builder | **IN PROGRESS** | `general` subagent (`ses_de31f0427ffeWCvzsyjxOW0YjM`, `opencode/big-pickle`) | DTO/FFI shapes frozen; builder modifier UI + Robolectric tests |
-| W7 Android orders/reorder | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de31edc10ffea4fG4y0LE3xTLU`, `opencode/big-pickle`) | Preview, extended modifier rendering, reconciliation dialog, confirmed cart population; 7 new + 20 order tests PASS; await scoped commit |
-| W8 Regression/QA | IN PROGRESS | `test-engineer` (`ses_de30bc263ffei7DIuSl5ErNyZY`, `opencode/big-pickle`) + `android-qa` | DB evidence + emulator readiness captured; live reorder API suite 4/4 PASS; full Rust/Kotlin/Android regression pending |
+| W7 Android orders/reorder | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de31edc10ffea4fG4y0LE3xTLU`, `opencode/big-pickle`) | Committed at `946d900`; preview, extended modifier rendering, reconciliation dialog, confirmed cart population; 7 new + 20 order tests PASS |
+| W8 Regression/QA | IN PROGRESS | `test-engineer` (`ses_de30bc263ffei7DIuSl5ErNyZY`, `opencode/big-pickle`) + `android-qa` | DB evidence + emulator readiness captured; live reorder API suite 4/4 PASS; full Rust workspace unit suite PASS; full live PostgreSQL suite PASS; Kotlin/Android regression pending |
 | W9 Independent review | NOT STARTED | `p8-reviewer` | After W8 |
 
 ---
@@ -114,6 +114,8 @@ repository; Kotlin changes must follow existing style and be reviewed in the sta
 | 2026-11-27 | Coordinator fix: reorder binds stored IDs as UUIDs; checkout persists all Phase 8 modifier IDs and snapshots | `rust/crates/pizzora-db/src/orders.rs`, `rust/crates/pizzora-api/src/services/checkout.rs`; rustfmt + API build + 7 tests PASS |
 | 2026-11-27 | Coordinator fix: live reorder 200/403/404/unavailable/historical suite 4/4 PASS; reorder wire shape aligned to §6.3 camelCase | `rust/crates/pizzora-api/tests/pg18_phase8_reorder.rs`, `qa-artifacts/phase8/api-contracts/w3_reorder_integration.log`, `w3_contract_casing.log` |
 | 2026-11-27 | Coordinator closed §6.1/§6.2 gaps: global modifier arrays on `PublicMenuResponse` and explicit modifier breakdown on `PriceBreakdownDto`; Rust API side verified | shared contract DTOs, `rust/crates/pizzora-api/src/services/{catalog,pricing}.rs`; API 7 tests + rustfmt PASS |
+| 2026-11-27 | Full Rust workspace regression PASS after adding the six Phase 8 optional fields to two legacy HTTP/WS test fixtures | `qa-artifacts/phase8/regression/w8_rust_workspace_tests.log` — `cargo fmt --all -- --check` + `cargo test --workspace` exit 0 |
+| 2026-11-27 | Full ignored live PostgreSQL 18 suite PASS with single-threaded execution | `qa-artifacts/phase8/regression/w8_live_postgres_tests.log` — `cargo test --workspace -- --ignored --nocapture --test-threads=1` exit 0 |
 
 ---
 
@@ -133,6 +135,9 @@ repository; Kotlin changes must follow existing style and be reviewed in the sta
 | Shared contract tests | `./gradlew -I /tmp/opencode/pizzora-gradle-init.gradle --dependency-verification=off :shared:contracts:test --no-daemon` | PASS — 40 passed |
 | UniFFI tests | `cargo test -p pizzora-uniffi` | PASS — 11 passed |
 | UniFFI all-features build | `cargo build -p pizzora-uniffi --all-features` | PASS |
+| Full Rust workspace | `cargo fmt --all -- --check && cargo test --workspace` | PASS — exit 0; `qa-artifacts/phase8/regression/w8_rust_workspace_tests.log` |
+| Full live PostgreSQL suite | `DATABASE_URL=... TEST_POSTGRES_URL=... cargo test --workspace -- --ignored --test-threads=1` | PASS — exit 0; `qa-artifacts/phase8/regression/w8_live_postgres_tests.log` |
+| Kotlin backend + shared contracts | `./gradlew -I /tmp/opencode/pizzora-gradle-init.gradle --dependency-verification=off -PbackendOnly=true :shared:contracts:test :backend:test --no-daemon --rerun-tasks` | PASS — 84 backend + 40 shared-contract tests, 0 failures/errors; `qa-artifacts/phase8/backend/w5_kotlin_backend.log` |
 
 ---
 
@@ -160,6 +165,7 @@ implementations and W8/W9 evidence are still in progress.
 | C — API/DTO/reorder | `a332540` | `origin/ui-ux-changes` | VERIFIED — fmt, API 7 tests, shared contracts 40 tests PASS |
 | D — UniFFI | `c9f10ab` | `origin/ui-ux-changes` | VERIFIED — independent re-audit PASS; 11 tests, bindgen, rustfmt |
 | E — Reorder hardening/wire shape | `ea9bfd1` | `origin/ui-ux-changes` | VERIFIED — rustfmt, API 7 tests, shared contracts 40 tests, live reorder 4/4 PASS |
+| F — Android orders/reorder | `946d900` | `origin/ui-ux-changes` | VERIFIED — 7 new + 20 total order tests PASS |
 
 ---
 
@@ -179,7 +185,8 @@ All 11 criteria from the reviewed addendum remain open until their evidence is r
 | Golden parity reports | `qa-artifacts/phase8/parity/` | CREATED — W2 PASS (21 tests, 33/33 vectors) |
 | API/contract evidence | `qa-artifacts/phase8/api-contracts/` | CREATED — W3 PASS (API 7 tests, contracts 40 tests) |
 | UniFFI evidence | `qa-artifacts/phase8/uniffi/` | CREATED — W4 re-audit PASS (11 tests, direct bindgen, rustfmt) |
-| Kotlin backend evidence | `qa-artifacts/phase8/backend/` | PENDING (W5) |
+| Kotlin backend evidence | `qa-artifacts/phase8/backend/` | CREATED — W5 PASS (84 backend + 40 shared-contract tests) |
+| Rust regression evidence | `qa-artifacts/phase8/regression/` | CREATED — full workspace + live PostgreSQL PASS |
 | Unit test XML | `qa-artifacts/phase8/unit-test-xml/` | PENDING |
 | Visual QA | `qa-artifacts/phase8/visual/` | READY — API 36 `emulator-5554` booted; order tests captured; final screens deferred until W6 |
 | Android orders evidence | `qa-artifacts/phase8/visual/orders/` | CREATED — W7 7 new + 20 order tests PASS |

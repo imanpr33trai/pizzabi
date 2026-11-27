@@ -1,7 +1,13 @@
 package com.pizzora.backend.cart
 
+import com.pizzora.backend.core.config.Phase8FeatureFlags
 import com.pizzora.backend.core.db.DatabaseFactory
+import com.pizzora.backend.core.error.UnprocessableEntityException
 import com.pizzora.backend.core.error.ValidationException
+import com.pizzora.backend.modifiers.ModifierCatalog
+import com.pizzora.backend.modifiers.ModifierSelection
+import com.pizzora.backend.modifiers.Phase8ModifierPricing
+import com.pizzora.backend.modifiers.Phase8Schema
 import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CartItemViewDto
 import com.pizzora.contracts.CartResponseDto
@@ -15,11 +21,14 @@ import java.sql.Connection
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
+import kotlinx.serialization.json.Json
 
 class CartService(
   private val dataSource: DataSource,
   private val publicUrlResolver: (String) -> String?,
+  private val features: Phase8FeatureFlags = Phase8FeatureFlags(),
 ) {
+  private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
   suspend fun getCart(userId: UUID): CartResponseDto =
     DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
       val cartHeader = loadCartHeader(conn, userId)
@@ -42,9 +51,12 @@ class CartService(
 
   suspend fun replaceCart(userId: UUID, request: ReplaceCartRequest): CartResponseDto {
     val parsedInputs = validateAndParseInputs(request.items)
+    parsedInputs.forEach { Phase8ModifierPricing.rejectDisabledWrites(it.modifiers, features) }
 
     return DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
       val cartId = ensureCartRow(conn, userId)
+      val schema = Phase8Schema.detect(conn)
+      val catalog = ModifierCatalog.load(conn, schema, features)
 
       // Clear previous items (cart_item_toppings cascades cleanly via ON DELETE CASCADE)
       conn.prepareStatement("DELETE FROM cart_items WHERE cart_id = ?").use { ps ->
@@ -76,12 +88,26 @@ class CartService(
             throw ValidationException("INVALID_TOPPING_ID", "Topping $tid does not exist.")
           }
         }
+        validateModifierRefs(item, schema, catalog)
 
         val serverItemId = UUID.randomUUID()
+        val modifierColumns = if (schema.hasCartModifierColumns) {
+          """
+          , cheese_id, sauce_id, standard_topping_ids, half_and_half_config_id,
+            half_and_half_left_topping_ids, half_and_half_right_topping_ids
+          """.trimIndent()
+        } else {
+          ""
+        }
+        val modifierValues = if (schema.hasCartModifierColumns) {
+          ", ?, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb"
+        } else {
+          ""
+        }
         conn.prepareStatement(
           """
-          INSERT INTO cart_items (id, cart_id, product_id, variant_id, crust_id, quantity)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO cart_items (id, cart_id, product_id, variant_id, crust_id, quantity$modifierColumns)
+          VALUES (?, ?, ?, ?, ?, ?$modifierValues)
           """.trimIndent(),
         ).use { ps ->
           ps.setObject(1, serverItemId)
@@ -90,6 +116,15 @@ class CartService(
           ps.setObject(4, item.variantId)
           ps.setObject(5, item.crustId)
           ps.setInt(6, item.quantity)
+          if (schema.hasCartModifierColumns) {
+            val mods = item.modifiers
+            setNullableUuid(ps, 7, mods.cheeseId)
+            setNullableUuid(ps, 8, mods.sauceId)
+            ps.setString(9, Phase8ModifierPricing.encodeIds(mods.standardToppingIds))
+            setNullableUuid(ps, 10, mods.halfAndHalfConfigId)
+            ps.setString(11, Phase8ModifierPricing.encodeIds(mods.halfAndHalfLeftToppingIds))
+            ps.setString(12, Phase8ModifierPricing.encodeIds(mods.halfAndHalfRightToppingIds))
+          }
           ps.executeUpdate()
         }
 
@@ -126,6 +161,7 @@ class CartService(
 
   suspend fun validateCart(request: ValidateCartRequest): CartResponseDto {
     val parsedInputs = validateAndParseInputs(request.items)
+    parsedInputs.forEach { Phase8ModifierPricing.rejectDisabledWrites(it.modifiers, features) }
 
     return DatabaseFactory.withJdbcTransaction(dataSource) { conn ->
       val evaluated = evaluateCartItems(conn, parsedInputs, publicUrlResolver)
@@ -160,6 +196,18 @@ class CartService(
         crustId = crustUuid,
         toppingIds = toppingUuids,
         quantity = raw.quantity,
+        modifiers = ModifierSelection(
+          cheeseId = raw.cheeseId?.takeIf { it.isNotBlank() }?.let { parseUuid(it, "cheese_id") },
+          sauceId = raw.sauceId?.takeIf { it.isNotBlank() }?.let { parseUuid(it, "sauce_id") },
+          standardToppingIds = raw.standardToppingIds.map { parseUuid(it, "standard_topping_id") }
+            .distinct().sortedBy { it.toString() },
+          halfAndHalfConfigId = raw.halfAndHalfConfigId?.takeIf { it.isNotBlank() }
+            ?.let { parseUuid(it, "half_and_half_config_id") },
+          halfAndHalfLeftToppingIds = raw.halfAndHalfLeftToppingIds.map { parseUuid(it, "half_and_half_left_topping_id") }
+            .distinct().sortedBy { it.toString() },
+          halfAndHalfRightToppingIds = raw.halfAndHalfRightToppingIds.map { parseUuid(it, "half_and_half_right_topping_id") }
+            .distinct().sortedBy { it.toString() },
+        ),
       )
     }
   }
@@ -167,7 +215,7 @@ class CartService(
   private fun mergeDuplicateConfigurations(inputs: List<PersistedCartInput>): List<PersistedCartInput> {
     val grouped = linkedMapOf<ConfigKey, PersistedCartInput>()
     for (item in inputs) {
-      val key = ConfigKey(item.productId, item.variantId, item.crustId, item.toppingIds)
+      val key = ConfigKey(item.productId, item.variantId, item.crustId, item.toppingIds, item.modifiers)
       val existing = grouped[key]
       grouped[key] = if (existing == null) {
         item
@@ -211,9 +259,18 @@ class CartService(
   }
 
   private fun loadPersistedCartItems(conn: Connection, cartId: UUID): List<PersistedCartInput> {
+    val schema = Phase8Schema.detect(conn)
+    val modifierColumns = if (schema.hasCartModifierColumns) {
+      """
+      , cheese_id, sauce_id, standard_topping_ids, half_and_half_config_id,
+        half_and_half_left_topping_ids, half_and_half_right_topping_ids
+      """.trimIndent()
+    } else {
+      ""
+    }
     val baseRows = conn.prepareStatement(
       """
-      SELECT id, product_id, variant_id, crust_id, quantity
+      SELECT id, product_id, variant_id, crust_id, quantity$modifierColumns
       FROM cart_items
       WHERE cart_id = ?
       ORDER BY created_at ASC, id ASC
@@ -230,6 +287,22 @@ class CartService(
             crustId = rs.getObject("crust_id", UUID::class.java),
             toppingIds = emptyList(),
             quantity = rs.getInt("quantity"),
+            modifiers = if (schema.hasCartModifierColumns) {
+              ModifierSelection(
+                cheeseId = rs.getObject("cheese_id", UUID::class.java),
+                sauceId = rs.getObject("sauce_id", UUID::class.java),
+                standardToppingIds = Phase8ModifierPricing.parseIds(rs.getString("standard_topping_ids")),
+                halfAndHalfConfigId = rs.getObject("half_and_half_config_id", UUID::class.java),
+                halfAndHalfLeftToppingIds = Phase8ModifierPricing.parseIds(
+                  rs.getString("half_and_half_left_topping_ids"),
+                ),
+                halfAndHalfRightToppingIds = Phase8ModifierPricing.parseIds(
+                  rs.getString("half_and_half_right_topping_ids"),
+                ),
+              )
+            } else {
+              ModifierSelection()
+            },
           )
         }
         out
@@ -282,6 +355,98 @@ class CartService(
       ps.executeQuery().use { rs -> while (rs.next()) toppings += rs.getObject("id", UUID::class.java) }
     }
     return RefLookup(products, variants, crusts, toppings)
+  }
+
+  private fun validateModifierRefs(
+    item: PersistedCartInput,
+    schema: Phase8Schema.Availability,
+    catalog: ModifierCatalog,
+  ) {
+    val mods = item.modifiers
+    val productModifiers = catalog.products[item.productId]
+    if (mods.cheeseId != null) {
+      if (!schema.hasCheeses || !features.cheese) {
+        throw ValidationException("CHEESE_UNAVAILABLE", "Cheese modifiers are not available.")
+      }
+      val row = productModifiers?.cheeses?.get(mods.cheeseId)
+        ?: throw ValidationException("CHEESE_NOT_IN_PRODUCT", "Cheese ${mods.cheeseId} does not belong to product ${item.productId}.")
+      if (!row.isActive) {
+        throw ValidationException("CHEESE_UNAVAILABLE", "Cheese ${row.name} is not active.")
+      }
+    }
+    if (mods.sauceId != null) {
+      if (!schema.hasSauces || !features.sauce) {
+        throw ValidationException("SAUCE_UNAVAILABLE", "Sauce modifiers are not available.")
+      }
+      val row = productModifiers?.sauces?.get(mods.sauceId)
+        ?: throw ValidationException("SAUCE_NOT_IN_PRODUCT", "Sauce ${mods.sauceId} does not belong to product ${item.productId}.")
+      if (!row.isActive) {
+        throw ValidationException("SAUCE_UNAVAILABLE", "Sauce ${row.name} is not active.")
+      }
+    }
+    mods.standardToppingIds.forEach { id ->
+      if (!schema.hasStandardToppings || !features.standardToppings) {
+        throw ValidationException("STANDARD_TOPPING_UNAVAILABLE", "Standard topping modifiers are not available.")
+      }
+      val row = productModifiers?.standardToppings?.get(id)
+        ?: throw ValidationException(
+          "STANDARD_TOPPING_NOT_IN_PRODUCT",
+          "Standard topping $id does not belong to product ${item.productId}.",
+        )
+      if (!row.isActive) {
+        throw ValidationException("STANDARD_TOPPING_UNAVAILABLE", "Standard topping ${row.name} is not active.")
+      }
+    }
+    if (mods.halfAndHalfConfigId != null || mods.halfAndHalfLeftToppingIds.isNotEmpty() ||
+      mods.halfAndHalfRightToppingIds.isNotEmpty()
+    ) {
+      if (!schema.hasHalfAndHalfConfigs || !features.halfAndHalf) {
+        throw ValidationException("HALF_AND_HALF_UNAVAILABLE", "Half-and-half modifiers are not available.")
+      }
+      val configId = mods.halfAndHalfConfigId
+        ?: throw ValidationException("HALF_AND_HALF_UNAVAILABLE", "half_and_half_config_id is required for half-and-half.")
+      val config = productModifiers?.halfAndHalfConfigs?.get(configId)
+        ?: throw ValidationException(
+          "HALF_AND_HALF_CONFIG_NOT_IN_PRODUCT",
+          "Half-and-half config $configId does not belong to product ${item.productId}.",
+        )
+      if (!config.isActive) {
+        throw ValidationException("HALF_AND_HALF_UNAVAILABLE", "Half-and-half config ${config.name} is not active.")
+      }
+    }
+    val halfToppings = mods.halfAndHalfLeftToppingIds + mods.halfAndHalfRightToppingIds
+    if (halfToppings.isNotEmpty()) {
+      if (mods.halfAndHalfLeftToppingIds.size > Phase8ModifierPricing.MAX_TOPPINGS_PER_HALF ||
+        mods.halfAndHalfRightToppingIds.size > Phase8ModifierPricing.MAX_TOPPINGS_PER_HALF
+      ) {
+        throw ValidationException(
+          "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
+          "Each half can contain at most ${Phase8ModifierPricing.MAX_TOPPINGS_PER_HALF} toppings.",
+        )
+      }
+      if (mods.halfAndHalfLeftToppingIds.toSet().intersect(mods.halfAndHalfRightToppingIds.toSet()).isNotEmpty()) {
+        throw ValidationException(
+          "HALF_AND_HALF_LEFT_RIGHT_OVERLAP",
+          "A topping cannot appear on both halves.",
+        )
+      }
+      if (halfToppings.distinct().size > Phase8ModifierPricing.MAX_DISTINCT_HALF_TOPPINGS) {
+        throw ValidationException(
+          "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
+          "Half-and-half can contain at most ${Phase8ModifierPricing.MAX_DISTINCT_HALF_TOPPINGS} distinct toppings.",
+        )
+      }
+      val allowed = catalog.allowedToppings(item.productId)
+      halfToppings.forEach { id ->
+        if (catalog.toppings[id] == null || (allowed != null && id !in allowed)) {
+          throw ValidationException("TOPPING_UNAVAILABLE", "Topping $id is not available on product ${item.productId}.")
+        }
+      }
+    }
+  }
+
+  private fun setNullableUuid(ps: java.sql.PreparedStatement, index: Int, value: UUID?) {
+    if (value == null) ps.setNull(index, java.sql.Types.OTHER) else ps.setObject(index, value)
   }
 
   private fun evaluateCartItems(
@@ -378,6 +543,9 @@ class CartService(
       }
     }
 
+    val schema = Phase8Schema.detect(conn)
+    val catalog = ModifierCatalog.load(conn, schema, features)
+
     return inputs.map { input ->
       val issues = mutableListOf<CartValidationIssueDto>()
       val prod = productsMap[input.productId]
@@ -426,11 +594,29 @@ class CartService(
         )
       }
 
+      val modifiers = Phase8ModifierPricing.evaluate(
+        productId = input.productId,
+        selection = input.modifiers,
+        extraToppingIds = input.toppingIds,
+        catalog = catalog,
+      )
+      issues += modifiers.issues
+
       val basePrice = variant?.pricePaise ?: 0L
       val crustPrice = crust?.extraPricePaise ?: 0L
-      val toppingsPrice = toppingViews.sumOf { it.extraPricePaise }
-      val unitPrice = basePrice + crustPrice + toppingsPrice
-      val lineTotal = unitPrice * input.quantity
+      val unitPrice = modifiers.unitPricePaise(
+        variantPricePaise = basePrice,
+        crustExtraPaise = crustPrice,
+        extraToppingIds = input.toppingIds,
+        catalog = catalog,
+      )
+      val lineTotal = runCatching { Math.multiplyExact(unitPrice, input.quantity) }
+        .getOrElse {
+          throw UnprocessableEntityException(
+            "ARITHMETIC_OVERFLOW",
+            "Line total overflowed the supported paise range.",
+          )
+        }
 
       CartItemViewDto(
         id = input.itemId,
@@ -450,6 +636,10 @@ class CartService(
         lineTotalPaise = lineTotal,
         isAvailable = issues.isEmpty(),
         issues = issues,
+        cheese = modifiers.cheeseView,
+        sauce = modifiers.sauceView,
+        standardToppings = modifiers.standardToppingViews,
+        halfAndHalf = modifiers.halfAndHalfView,
       )
     }
   }
@@ -483,6 +673,7 @@ class CartService(
     val crustId: UUID,
     val toppingIds: List<UUID>,
     val quantity: Int,
+    val modifiers: ModifierSelection = ModifierSelection(),
   )
 
   private data class ConfigKey(
@@ -490,6 +681,7 @@ class CartService(
     val variantId: UUID,
     val crustId: UUID,
     val toppingIds: List<UUID>,
+    val modifiers: ModifierSelection,
   )
 
   private data class RefLookup(

@@ -279,6 +279,14 @@ pub struct PublicMenuResponse {
     pub products: Vec<ProductDto>,
     pub crusts: Vec<CrustOptionDto>,
     pub toppings: Vec<ToppingDto>,
+    #[serde(default)]
+    pub cheeses: Vec<CheeseOptionDto>,
+    #[serde(default)]
+    pub sauces: Vec<SauceOptionDto>,
+    #[serde(default)]
+    pub standard_toppings: Vec<StandardToppingDto>,
+    #[serde(default)]
+    pub half_and_half_configs: Vec<HalfAndHalfConfigDto>,
     pub gst_bps: i32,
     pub store_name: String,
     pub is_accepting_orders: bool,
@@ -497,6 +505,16 @@ pub struct PriceBreakdownDto {
     pub cgst_paise: i64,
     pub sgst_paise: i64,
     pub total_paise: i64,
+    #[serde(default)]
+    pub cheese_extra_paise: i64,
+    #[serde(default)]
+    pub sauce_extra_paise: i64,
+    #[serde(default)]
+    pub standard_toppings_extra_paise: i64,
+    #[serde(default)]
+    pub half_and_half_surcharge_paise: i64,
+    #[serde(default)]
+    pub modifier_extra_paise: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -42,6 +42,12 @@ fun Route.ordersRoutes(
           val orderId = parseUuid(call.parameters["id"], "order_id")
           call.respond(HttpStatusCode.OK, orderService.getOrderDetail(orderId, principal.userId, principal.role))
         }
+
+        post("/{id}/reorder") {
+          val principal = call.principal<PizzoraPrincipal>() ?: throw UnauthorizedException()
+          val orderId = parseUuid(call.parameters["id"], "order_id")
+          call.respond(HttpStatusCode.OK, orderService.reorderOrder(orderId, principal.userId, principal.role))
+        }
       }
 
       requirePermission("orders:cancel_own", authorizationService) {

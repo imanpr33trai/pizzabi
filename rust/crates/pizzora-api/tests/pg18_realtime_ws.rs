@@ -277,6 +277,12 @@ async fn pg18_events_replay_and_ws_resume_with_room_isolation() {
         topping_ids: vec![seeded.topping.id.clone()],
         quantity: 1,
         client_unit_price_paise: None,
+        cheese_id: None,
+        sauce_id: None,
+        standard_topping_ids: Vec::new(),
+        half_and_half_config_id: None,
+        half_and_half_left_topping_ids: Vec::new(),
+        half_and_half_right_topping_ids: Vec::new(),
     };
 
     // COD checkout -> ORDER_PLACED outbox event

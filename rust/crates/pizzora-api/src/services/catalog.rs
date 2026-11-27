@@ -112,6 +112,8 @@ impl CatalogService {
         let products = self.load_products(true).await?;
         let crusts = self.load_crusts(true).await?;
         let toppings = self.load_toppings(true).await?;
+        let (cheeses, sauces, standard_toppings, half_and_half_configs) =
+            self.load_all_modifiers().await?;
         let (store_name, is_accepting_orders, gst_bps) = self.load_store_summary().await?;
 
         let response = PublicMenuResponse {
@@ -119,6 +121,10 @@ impl CatalogService {
             products,
             crusts,
             toppings,
+            cheeses,
+            sauces,
+            standard_toppings,
+            half_and_half_configs,
             gst_bps,
             store_name,
             is_accepting_orders,
@@ -134,6 +140,93 @@ impl CatalogService {
 
     pub async fn list_all_products(&self) -> Result<Vec<ProductDto>, ApiError> {
         self.load_products(false).await
+    }
+
+    async fn load_all_modifiers(
+        &self,
+    ) -> Result<
+        (
+            Vec<CheeseOptionDto>,
+            Vec<SauceOptionDto>,
+            Vec<StandardToppingDto>,
+            Vec<HalfAndHalfConfigDto>,
+        ),
+        ApiError,
+    > {
+        let cheeses = if self.features.cheese {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                FROM cheeses
+                WHERE is_active = TRUE
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await?
+            .iter()
+            .map(row_to_cheese)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
+
+        let sauces = if self.features.sauce {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                FROM sauces
+                WHERE is_active = TRUE
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await?
+            .iter()
+            .map(row_to_sauce)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
+
+        let standard_toppings = if self.features.standard_toppings {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, is_veg, extra_price_paise, is_default, is_active, sort_order
+                FROM standard_toppings
+                WHERE is_active = TRUE
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await?
+            .iter()
+            .map(row_to_standard_topping)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
+
+        let half_and_half_configs = if self.features.half_and_half {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, left_topping_ids, right_topping_ids,
+                       half_and_half_surcharge_paise, is_active, sort_order
+                FROM half_and_half_configs
+                WHERE is_active = TRUE
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await?
+            .iter()
+            .map(row_to_half_and_half_config)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
+
+        Ok((cheeses, sauces, standard_toppings, half_and_half_configs))
     }
 
     pub async fn create_product(

@@ -1,12 +1,17 @@
 package com.pizzora.backend.pricing
 
 import com.pizzora.backend.cart.CartService
+import com.pizzora.backend.core.config.Phase8FeatureFlags
 import com.pizzora.backend.core.db.DatabaseFactory
 import com.pizzora.backend.core.error.ForbiddenException
 import com.pizzora.backend.core.error.NotFoundException
 import com.pizzora.backend.core.error.UnprocessableEntityException
 import com.pizzora.backend.core.error.ValidationException
 import com.pizzora.backend.coupons.CouponService
+import com.pizzora.backend.modifiers.ModifierCatalog
+import com.pizzora.backend.modifiers.ModifierSelection
+import com.pizzora.backend.modifiers.Phase8ModifierPricing
+import com.pizzora.backend.modifiers.Phase8Schema
 import com.pizzora.contracts.AppliedCouponSummaryDto
 import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.CartItemViewDto
@@ -29,6 +34,7 @@ class PricingService(
   private val dataSource: DataSource,
   private val couponService: CouponService,
   private val publicUrlResolver: (String) -> String?,
+  private val features: Phase8FeatureFlags = Phase8FeatureFlags(),
 ) {
   suspend fun quotePrice(
     userId: UUID,
@@ -58,8 +64,21 @@ class PricingService(
         crustId = parseUuid(raw.crustId, "crust_id"),
         toppingIds = raw.toppingIds.map { parseUuid(it, "topping_id") }.distinct().sortedBy { it.toString() },
         quantity = raw.quantity,
+        modifiers = ModifierSelection(
+          cheeseId = raw.cheeseId?.takeIf { it.isNotBlank() }?.let { parseUuid(it, "cheese_id") },
+          sauceId = raw.sauceId?.takeIf { it.isNotBlank() }?.let { parseUuid(it, "sauce_id") },
+          standardToppingIds = raw.standardToppingIds.map { parseUuid(it, "standard_topping_id") }
+            .distinct().sortedBy { it.toString() },
+          halfAndHalfConfigId = raw.halfAndHalfConfigId?.takeIf { it.isNotBlank() }
+            ?.let { parseUuid(it, "half_and_half_config_id") },
+          halfAndHalfLeftToppingIds = raw.halfAndHalfLeftToppingIds.map { parseUuid(it, "half_and_half_left_topping_id") }
+            .distinct().sortedBy { it.toString() },
+          halfAndHalfRightToppingIds = raw.halfAndHalfRightToppingIds.map { parseUuid(it, "half_and_half_right_topping_id") }
+            .distinct().sortedBy { it.toString() },
+        ),
       )
     }
+    parsedItems.forEach { Phase8ModifierPricing.rejectDisabledWrites(it.modifiers, features) }
 
     val addressUuid = request.addressId?.takeIf { it.isNotBlank() }?.let { parseUuid(it, "address_id") }
 
@@ -115,11 +134,20 @@ class PricingService(
         ?.takeIf { it.isNotBlank() }
         ?.let { code -> couponService.validateCouponForQuote(conn, code, userId, rawSubtotal) }
 
+      val modifierBreakdown = calculateModifierBreakdown(evaluated)
+      // PricingEngine owns the tax/discount totals; the explicit modifier fields are derived
+      // from the resolved per-item views so Kotlin matches the Rust quote response.
       val breakdown = PricingEngine.calculateQuote(
         lines = pricedLines,
         gstBps = settings.gstBps,
         deliveryFeePaise = deliveryFeePaise,
         coupon = validatedCoupon?.spec,
+      ).copy(
+        cheeseExtraPaise = modifierBreakdown.cheeseExtraPaise,
+        sauceExtraPaise = modifierBreakdown.sauceExtraPaise,
+        standardToppingsExtraPaise = modifierBreakdown.standardToppingsExtraPaise,
+        halfAndHalfSurchargePaise = modifierBreakdown.halfAndHalfSurchargePaise,
+        modifierExtraPaise = modifierBreakdown.modifierExtraPaise,
       )
 
       val appliedCoupon = validatedCoupon?.let {
@@ -143,6 +171,48 @@ class PricingService(
       )
     }
   }
+
+  private fun calculateModifierBreakdown(items: List<EvaluatedQuoteItem>): ModifierBreakdown {
+    var cheese = 0L
+    var sauce = 0L
+    var standards = 0L
+    var halfAndHalf = 0L
+
+    items.forEach { item ->
+      val quantity = item.view.quantity
+      cheese = checkedAdd(cheese, checkedMultiply(item.view.cheese?.extraPricePaise ?: 0L, quantity))
+      sauce = checkedAdd(sauce, checkedMultiply(item.view.sauce?.extraPricePaise ?: 0L, quantity))
+
+      // Only selected, non-default standard toppings contribute to the price; catalog views
+      // include every option on the product, so the selection set from evaluation disambiguates.
+      val itemStandards = item.view.standardToppings
+        .filter { view ->
+          val id = runCatching { UUID.fromString(view.standardToppingId) }.getOrNull()
+          !view.isRemoved && !view.isDefault && id in item.selectedStandardToppingIds
+        }
+        .fold(0L) { acc, view -> checkedAdd(acc, view.extraPricePaise) }
+      standards = checkedAdd(standards, checkedMultiply(itemStandards, quantity))
+
+      halfAndHalf = checkedAdd(
+        halfAndHalf,
+        checkedMultiply(item.view.halfAndHalf?.halfAndHalfSurchargePaise ?: 0L, quantity),
+      )
+    }
+
+    val total = checkedAdd(checkedAdd(checkedAdd(cheese, sauce), standards), halfAndHalf)
+    return ModifierBreakdown(cheese, sauce, standards, halfAndHalf, total)
+  }
+
+  private fun checkedMultiply(value: Long, quantity: Int): Long =
+    runCatching { Math.multiplyExact(value, quantity.toLong()) }.getOrElse { throw modifierOverflow() }
+
+  private fun checkedAdd(left: Long, right: Long): Long =
+    runCatching { Math.addExact(left, right) }.getOrElse { throw modifierOverflow() }
+
+  private fun modifierOverflow(): ValidationException = ValidationException(
+    "ARITHMETIC_OVERFLOW",
+    "Extended modifier total exceeds the supported range.",
+  )
 
   private fun loadSettings(conn: Connection): StoreSettings =
     conn.prepareStatement(
@@ -294,6 +364,9 @@ class PricingService(
       }
     }
 
+    val schema = Phase8Schema.detect(conn)
+    val modifierCatalog = ModifierCatalog.load(conn, schema, features)
+
     return inputs.map { input ->
       val issues = mutableListOf<CartValidationIssueDto>()
       val prod = productsMap[input.productId]
@@ -342,13 +415,26 @@ class PricingService(
         )
       }
 
+      val modifiers = Phase8ModifierPricing.evaluate(
+        productId = input.productId,
+        selection = input.modifiers,
+        extraToppingIds = input.toppingIds,
+        catalog = modifierCatalog,
+      )
+      issues += modifiers.issues
+
       val basePrice = variant?.pricePaise ?: 0L
       val crustPrice = crust?.extraPricePaise ?: 0L
-      val toppingsPrice = toppingViews.fold(0L) { acc, t -> Math.addExact(acc, t.extraPricePaise) }
-      val unitPrice = Math.addExact(Math.addExact(basePrice, crustPrice), toppingsPrice)
+      val unitPrice = modifiers.unitPricePaise(
+        variantPricePaise = basePrice,
+        crustExtraPaise = crustPrice,
+        extraToppingIds = input.toppingIds,
+        catalog = modifierCatalog,
+      )
       val lineTotal = PricingEngine.calculateLineTotalPaise(unitPrice, input.quantity)
 
       EvaluatedQuoteItem(
+        selectedStandardToppingIds = modifiers.selectedStandardToppingIds,
         view = CartItemViewDto(
           id = input.itemId,
           productId = input.productId.toString(),
@@ -367,6 +453,10 @@ class PricingService(
           lineTotalPaise = lineTotal,
           isAvailable = issues.isEmpty(),
           issues = issues,
+          cheese = modifiers.cheeseView,
+          sauce = modifiers.sauceView,
+          standardToppings = modifiers.standardToppingViews,
+          halfAndHalf = modifiers.halfAndHalfView,
         ),
         lineInput = PricedLineInput(
           unitPricePaise = unitPrice,
@@ -388,11 +478,21 @@ class PricingService(
     val crustId: UUID,
     val toppingIds: List<UUID>,
     val quantity: Int,
+    val modifiers: ModifierSelection = ModifierSelection(),
   )
 
   private data class EvaluatedQuoteItem(
     val view: CartItemViewDto,
     val lineInput: PricedLineInput,
+    val selectedStandardToppingIds: Set<UUID>,
+  )
+
+  private data class ModifierBreakdown(
+    val cheeseExtraPaise: Long,
+    val sauceExtraPaise: Long,
+    val standardToppingsExtraPaise: Long,
+    val halfAndHalfSurchargePaise: Long,
+    val modifierExtraPaise: Long,
   )
 
   private data class StoreSettings(val gstBps: Int, val isAcceptingOrders: Boolean)

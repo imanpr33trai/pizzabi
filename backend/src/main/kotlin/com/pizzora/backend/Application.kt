@@ -362,6 +362,7 @@ fun Application.pizzoraModule(
         dataSource = dataSource,
         cacheStore = effectiveCacheStore,
         publicUrlResolver = storageClient::resolvePublicUrlOrNull,
+        features = config.phase8Features,
       )
       val productImagesService = ProductImagesService(
         dataSource = dataSource,
@@ -371,6 +372,7 @@ fun Application.pizzoraModule(
       val cartService = CartService(
         dataSource = dataSource,
         publicUrlResolver = storageClient::resolvePublicUrlOrNull,
+        features = config.phase8Features,
       )
       val couponService = CouponService(
         dataSource = dataSource,
@@ -379,6 +381,7 @@ fun Application.pizzoraModule(
         dataSource = dataSource,
         couponService = couponService,
         publicUrlResolver = storageClient::resolvePublicUrlOrNull,
+        features = config.phase8Features,
       )
       val inventoryService = InventoryService(
         dataSource = dataSource,
@@ -390,6 +393,7 @@ fun Application.pizzoraModule(
         dataSource = dataSource,
         inventoryService = inventoryService,
         couponService = couponService,
+        features = config.phase8Features,
       )
       val kitchenService = KitchenService(
         dataSource = dataSource,
@@ -401,6 +405,7 @@ fun Application.pizzoraModule(
         inventoryService = inventoryService,
         recipeService = recipeService,
         orderService = orderService,
+        features = config.phase8Features,
       )
       val effectiveRazorpayGateway = razorpayGateway ?: createDefaultRazorpayGateway(config)
       val paymentService = PaymentService(

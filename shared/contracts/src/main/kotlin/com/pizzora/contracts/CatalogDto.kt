@@ -223,6 +223,11 @@ data class PublicMenuResponse(
   val products: List<ProductDto>,
   val crusts: List<CrustOptionDto>,
   val toppings: List<ToppingDto>,
+  // Phase 8: global modifier arrays (optional/defaulted for old clients).
+  val cheeses: List<CheeseOptionDto> = emptyList(),
+  val sauces: List<SauceOptionDto> = emptyList(),
+  @SerialName("standard_toppings") val standardToppings: List<StandardToppingDto> = emptyList(),
+  @SerialName("half_and_half_configs") val halfAndHalfConfigs: List<HalfAndHalfConfigDto> = emptyList(),
   @SerialName("gst_bps") val gstBps: Int,
   @SerialName("store_name") val storeName: String,
   @SerialName("is_accepting_orders") val isAcceptingOrders: Boolean,

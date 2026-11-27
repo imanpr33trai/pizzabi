@@ -603,7 +603,12 @@
                 "tax_paise": 0,
                 "cgst_paise": 0,
                 "sgst_paise": 0,
-                "total_paise": 4000
+                "total_paise": 4000,
+                "cheese_extra_paise": 0,
+                "sauce_extra_paise": 0,
+                "standard_toppings_extra_paise": 0,
+                "half_and_half_surcharge_paise": 0,
+                "modifier_extra_paise": 0
             }
         },
         {
@@ -639,7 +644,12 @@
                 "tax_paise": 1800,
                 "cgst_paise": 900,
                 "sgst_paise": 900,
-                "total_paise": 50800
+                "total_paise": 50800,
+                "cheese_extra_paise": 0,
+                "sauce_extra_paise": 0,
+                "standard_toppings_extra_paise": 0,
+                "half_and_half_surcharge_paise": 0,
+                "modifier_extra_paise": 0
             }
         },
         {
@@ -675,7 +685,12 @@
                 "tax_paise": 14,
                 "cgst_paise": 7,
                 "sgst_paise": 7,
-                "total_paise": 2666
+                "total_paise": 2666,
+                "cheese_extra_paise": 0,
+                "sauce_extra_paise": 0,
+                "standard_toppings_extra_paise": 0,
+                "half_and_half_surcharge_paise": 0,
+                "modifier_extra_paise": 0
             }
         },
         {
@@ -700,7 +715,12 @@
                 "tax_paise": 995,
                 "cgst_paise": 497,
                 "sgst_paise": 498,
-                "total_paise": 20895
+                "total_paise": 20895,
+                "cheese_extra_paise": 0,
+                "sauce_extra_paise": 0,
+                "standard_toppings_extra_paise": 0,
+                "half_and_half_surcharge_paise": 0,
+                "modifier_extra_paise": 0
             }
         },
         {
@@ -731,7 +751,12 @@
                 "tax_paise": 788940000,
                 "cgst_paise": 394470000,
                 "sgst_paise": 394470000,
-                "total_paise": 5171945000
+                "total_paise": 5171945000,
+                "cheese_extra_paise": 0,
+                "sauce_extra_paise": 0,
+                "standard_toppings_extra_paise": 0,
+                "half_and_half_surcharge_paise": 0,
+                "modifier_extra_paise": 0
             }
         },
         {
@@ -762,7 +787,12 @@
                 "tax_paise": 0,
                 "cgst_paise": 0,
                 "sgst_paise": 0,
-                "total_paise": 83730
+                "total_paise": 83730,
+                "cheese_extra_paise": 0,
+                "sauce_extra_paise": 0,
+                "standard_toppings_extra_paise": 0,
+                "half_and_half_surcharge_paise": 0,
+                "modifier_extra_paise": 0
             }
         },
         {
@@ -793,7 +823,12 @@
                 "tax_paise": 0,
                 "cgst_paise": 0,
                 "sgst_paise": 0,
-                "total_paise": 43410
+                "total_paise": 43410,
+                "cheese_extra_paise": 0,
+                "sauce_extra_paise": 0,
+                "standard_toppings_extra_paise": 0,
+                "half_and_half_surcharge_paise": 0,
+                "modifier_extra_paise": 0
             }
         }
     ],
