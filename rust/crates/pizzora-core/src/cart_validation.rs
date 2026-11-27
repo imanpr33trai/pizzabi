@@ -368,12 +368,14 @@ impl CartValidation {
 
             let mut half_and_half_left_topping_ids = Vec::new();
             for tid_raw in &raw.half_and_half_left_topping_ids {
-                half_and_half_left_topping_ids.push(parse_uuid(tid_raw, "half_and_half_left_topping_id")?);
+                half_and_half_left_topping_ids
+                    .push(parse_uuid(tid_raw, "half_and_half_left_topping_id")?);
             }
 
             let mut half_and_half_right_topping_ids = Vec::new();
             for tid_raw in &raw.half_and_half_right_topping_ids {
-                half_and_half_right_topping_ids.push(parse_uuid(tid_raw, "half_and_half_right_topping_id")?);
+                half_and_half_right_topping_ids
+                    .push(parse_uuid(tid_raw, "half_and_half_right_topping_id")?);
             }
 
             let item_id = raw
@@ -480,13 +482,19 @@ impl CartValidation {
                 if cheese.is_none() || cheese.is_some_and(|c| c.product_id != item.product_id) {
                     return Err(DomainError::Validation {
                         code: "CHEESE_NOT_IN_PRODUCT",
-                        message: format!("Cheese {cheese_id} does not belong to product {}.", item.product_id),
+                        message: format!(
+                            "Cheese {cheese_id} does not belong to product {}.",
+                            item.product_id
+                        ),
                     });
                 }
                 if cheese.is_some_and(|c| !c.is_active) {
                     return Err(DomainError::CheeseUnavailable {
                         code: "CHEESE_UNAVAILABLE",
-                        message: format!("Cheese {} is currently unavailable.", cheese.unwrap().name),
+                        message: format!(
+                            "Cheese {} is currently unavailable.",
+                            cheese.unwrap().name
+                        ),
                     });
                 }
             }
@@ -497,7 +505,10 @@ impl CartValidation {
                 if sauce.is_none() || sauce.is_some_and(|s| s.product_id != item.product_id) {
                     return Err(DomainError::Validation {
                         code: "SAUCE_NOT_IN_PRODUCT",
-                        message: format!("Sauce {sauce_id} does not belong to product {}.", item.product_id),
+                        message: format!(
+                            "Sauce {sauce_id} does not belong to product {}.",
+                            item.product_id
+                        ),
                     });
                 }
                 if sauce.is_some_and(|s| !s.is_active) {
@@ -511,16 +522,24 @@ impl CartValidation {
             // Standard topping validation
             for std_id in &item.standard_topping_ids {
                 let std_topping = lookup.standard_toppings.get(std_id);
-                if std_topping.is_none() || std_topping.is_some_and(|s| s.product_id != item.product_id) {
+                if std_topping.is_none()
+                    || std_topping.is_some_and(|s| s.product_id != item.product_id)
+                {
                     return Err(DomainError::Validation {
                         code: "STANDARD_TOPPING_NOT_IN_PRODUCT",
-                        message: format!("Standard topping {std_id} does not belong to product {}.", item.product_id),
+                        message: format!(
+                            "Standard topping {std_id} does not belong to product {}.",
+                            item.product_id
+                        ),
                     });
                 }
                 if std_topping.is_some_and(|s| !s.is_active) {
                     return Err(DomainError::StandardToppingUnavailable {
                         code: "STANDARD_TOPPING_UNAVAILABLE",
-                        message: format!("Standard topping {} is currently unavailable.", std_topping.unwrap().name),
+                        message: format!(
+                            "Standard topping {} is currently unavailable.",
+                            std_topping.unwrap().name
+                        ),
                     });
                 }
             }
@@ -528,16 +547,24 @@ impl CartValidation {
             // Half-and-half config validation
             if let Some(hah_config_id) = item.half_and_half_config_id {
                 let hah_config = lookup.half_and_half_configs.get(&hah_config_id);
-                if hah_config.is_none() || hah_config.is_some_and(|c| c.product_id != item.product_id) {
+                if hah_config.is_none()
+                    || hah_config.is_some_and(|c| c.product_id != item.product_id)
+                {
                     return Err(DomainError::Validation {
                         code: "HALF_AND_HALF_CONFIG_NOT_IN_PRODUCT",
-                        message: format!("Half-and-half config {hah_config_id} does not belong to product {}.", item.product_id),
+                        message: format!(
+                            "Half-and-half config {hah_config_id} does not belong to product {}.",
+                            item.product_id
+                        ),
                     });
                 }
                 if hah_config.is_some_and(|c| !c.is_active) {
                     return Err(DomainError::HalfAndHalfUnavailable {
                         code: "HALF_AND_HALF_UNAVAILABLE",
-                        message: format!("Half-and-half config {} is currently unavailable.", hah_config.unwrap().name),
+                        message: format!(
+                            "Half-and-half config {} is currently unavailable.",
+                            hah_config.unwrap().name
+                        ),
                     });
                 }
             }
@@ -552,7 +579,10 @@ impl CartValidation {
                 if !available_topping_ids.contains(tid) {
                     return Err(DomainError::Validation {
                         code: "STANDARD_TOPPING_NOT_IN_PRODUCT",
-                        message: format!("Half-and-half left topping {tid} is not available for product {}.", item.product_id),
+                        message: format!(
+                            "Half-and-half left topping {tid} is not available for product {}.",
+                            item.product_id
+                        ),
                     });
                 }
             }
@@ -560,7 +590,10 @@ impl CartValidation {
                 if !available_topping_ids.contains(tid) {
                     return Err(DomainError::Validation {
                         code: "STANDARD_TOPPING_NOT_IN_PRODUCT",
-                        message: format!("Half-and-half right topping {tid} is not available for product {}.", item.product_id),
+                        message: format!(
+                            "Half-and-half right topping {tid} is not available for product {}.",
+                            item.product_id
+                        ),
                     });
                 }
             }
@@ -580,7 +613,8 @@ impl CartValidation {
                         ),
                     });
                 }
-                if item.half_and_half_right_topping_ids.len() > MAX_HALF_AND_HALF_TOPPINGS_PER_HALF {
+                if item.half_and_half_right_topping_ids.len() > MAX_HALF_AND_HALF_TOPPINGS_PER_HALF
+                {
                     return Err(DomainError::HalfAndHalfToppingLimitExceeded {
                         code: "HALF_AND_HALF_TOPPING_LIMIT_EXCEEDED",
                         message: format!(
@@ -591,7 +625,8 @@ impl CartValidation {
                 }
 
                 // Check distinct total
-                let mut distinct: std::collections::HashSet<&Uuid> = std::collections::HashSet::new();
+                let mut distinct: std::collections::HashSet<&Uuid> =
+                    std::collections::HashSet::new();
                 distinct.extend(&item.half_and_half_left_topping_ids);
                 distinct.extend(&item.half_and_half_right_topping_ids);
                 if distinct.len() > MAX_HALF_AND_HALF_DISTINCT_TOPPINGS {
@@ -605,12 +640,15 @@ impl CartValidation {
                 }
 
                 // Check left/right overlap
-                let left_set: std::collections::HashSet<_> = item.half_and_half_left_topping_ids.iter().collect();
-                let right_set: std::collections::HashSet<_> = item.half_and_half_right_topping_ids.iter().collect();
+                let left_set: std::collections::HashSet<_> =
+                    item.half_and_half_left_topping_ids.iter().collect();
+                let right_set: std::collections::HashSet<_> =
+                    item.half_and_half_right_topping_ids.iter().collect();
                 if !left_set.is_disjoint(&right_set) {
                     return Err(DomainError::HalfAndHalfLeftRightOverlap {
                         code: "HALF_AND_HALF_LEFT_RIGHT_OVERLAP",
-                        message: "Half-and-half left and right sides cannot share toppings.".to_owned(),
+                        message: "Half-and-half left and right sides cannot share toppings."
+                            .to_owned(),
                     });
                 }
             }
@@ -709,7 +747,8 @@ impl CartValidation {
                 cheese_extra_paise = extra;
                 cheese_view = Some(EvaluatedCheeseView {
                     cheese_id: cheese_id.to_string(),
-                    name: cheese.map_or_else(|| "Unavailable Cheese".to_owned(), |c| c.name.clone()),
+                    name: cheese
+                        .map_or_else(|| "Unavailable Cheese".to_owned(), |c| c.name.clone()),
                     extra_price_paise: extra,
                     is_available: available,
                 });
@@ -740,12 +779,14 @@ impl CartValidation {
 
             // Standard toppings
             let mut standard_topping_views = Vec::with_capacity(input.standard_topping_ids.len());
-            let mut standard_toppings_selections: Vec<crate::pricing::StandardToppingSelection> = Vec::with_capacity(input.standard_topping_ids.len());
+            let mut standard_toppings_selections: Vec<crate::pricing::StandardToppingSelection> =
+                Vec::with_capacity(input.standard_topping_ids.len());
             for std_id in &input.standard_topping_ids {
                 let std_topping = lookup.standard_toppings.get(std_id);
                 let available = std_topping.is_some_and(|s| s.is_active);
                 if !available {
-                    let s_name = std_topping.map_or("Selected standard topping", |s| s.name.as_str());
+                    let s_name =
+                        std_topping.map_or("Selected standard topping", |s| s.name.as_str());
                     issues.push(CartValidationIssue {
                         code: CartValidationIssueCode::StandardToppingUnavailable,
                         message: format!("{s_name} is currently unavailable."),
@@ -756,7 +797,10 @@ impl CartValidation {
                 let is_removed = false; // In cart input, removed defaults are not sent; they're just absent
                 standard_topping_views.push(EvaluatedStandardToppingView {
                     standard_topping_id: std_id.to_string(),
-                    name: std_topping.map_or_else(|| "Unavailable Standard Topping".to_owned(), |s| s.name.clone()),
+                    name: std_topping.map_or_else(
+                        || "Unavailable Standard Topping".to_owned(),
+                        |s| s.name.clone(),
+                    ),
                     is_veg: std_topping.is_none_or(|s| s.is_veg),
                     extra_price_paise: extra,
                     is_default,
@@ -817,8 +861,12 @@ impl CartValidation {
                 for extra in &right_extras {
                     right_sum = right_sum.saturating_add(*extra);
                 }
-                let left_half_base = base_price.saturating_add(crust_extra).saturating_add(left_sum);
-                let right_half_base = base_price.saturating_add(crust_extra).saturating_add(right_sum);
+                let left_half_base = base_price
+                    .saturating_add(crust_extra)
+                    .saturating_add(left_sum);
+                let right_half_base = base_price
+                    .saturating_add(crust_extra)
+                    .saturating_add(right_sum);
                 let average = i128::from(left_half_base)
                     .checked_add(i128::from(right_half_base))
                     .and_then(|v| v.checked_add(1))
@@ -828,9 +876,20 @@ impl CartValidation {
 
                 half_and_half_view = Some(EvaluatedHalfAndHalfView {
                     config_id: hah_config_id.to_string(),
-                    config_name: hah_config.map_or_else(|| "Unavailable Half-and-Half".to_owned(), |c| c.name.clone()),
-                    left_topping_ids: input.half_and_half_left_topping_ids.iter().map(|u| u.to_string()).collect(),
-                    right_topping_ids: input.half_and_half_right_topping_ids.iter().map(|u| u.to_string()).collect(),
+                    config_name: hah_config.map_or_else(
+                        || "Unavailable Half-and-Half".to_owned(),
+                        |c| c.name.clone(),
+                    ),
+                    left_topping_ids: input
+                        .half_and_half_left_topping_ids
+                        .iter()
+                        .map(|u| u.to_string())
+                        .collect(),
+                    right_topping_ids: input
+                        .half_and_half_right_topping_ids
+                        .iter()
+                        .map(|u| u.to_string())
+                        .collect(),
                     surcharge_paise: surcharge,
                     left_half_base_paise: left_half_base,
                     right_half_base_paise: right_half_base,
@@ -840,7 +899,10 @@ impl CartValidation {
             }
 
             // Calculate standard toppings extra
-            let standard_toppings_extra_paise = PricingEngine::calculate_standard_toppings_extra_paise(&standard_toppings_selections)?;
+            let standard_toppings_extra_paise =
+                PricingEngine::calculate_standard_toppings_extra_paise(
+                    &standard_toppings_selections,
+                )?;
 
             // Calculate unit price using new pricing engine
             let base_price = variant.map_or(0, |v| v.price_paise);

@@ -11,7 +11,8 @@ use crate::dto::{
 use crate::error::ApiError;
 use crate::extractors::parse_uuid_param;
 use crate::services::cart::{
-    evaluated_summary_to_item_dtos, load_catalog_ref_lookup, to_core_cart_inputs,
+    ensure_half_and_half_config_matches, ensure_modifier_features_enabled, evaluate_cart_for_api,
+    evaluated_summary_to_item_dtos, load_extended_catalog_ref_lookup, to_core_cart_inputs,
 };
 use crate::storage::ObjectStorageClient;
 
@@ -31,14 +32,18 @@ impl PricingService {
         user_id: Uuid,
         request: &PricingQuoteRequest,
     ) -> Result<PricingQuoteResponse, ApiError> {
+        ensure_modifier_features_enabled(&request.items)?;
         let core_inputs = to_core_cart_inputs(&request.items);
         let parsed = CartValidation::validate_and_parse_inputs(&core_inputs)?;
         let merged = CartValidation::merge_duplicate_configurations(parsed);
 
         let mut conn = self.pool.acquire().await?;
-        let lookup = load_catalog_ref_lookup(&mut conn, &*self.storage).await?;
+        let lookup = load_extended_catalog_ref_lookup(&mut conn, &*self.storage).await?;
         CartValidation::ensure_catalog_fk_references(&merged, &lookup)?;
-        let evaluated = CartValidation::evaluate_cart(&merged, &lookup)?;
+        ensure_half_and_half_config_matches(&merged, &lookup)?;
+
+        // Evaluate through the shared pizzora-core engine (linear + half-and-half pricing).
+        let evaluated = evaluate_cart_for_api(&merged, &lookup)?;
         if !evaluated.all_available {
             return Err(ApiError::unprocessable(
                 "CART_ITEM_UNAVAILABLE",
@@ -146,6 +151,7 @@ impl PricingService {
             None => None,
         };
 
+        // Unit prices already include Phase 8 modifiers via `CartValidation::evaluate_cart`.
         let priced_lines: Vec<PricedLineInput> = evaluated
             .items
             .iter()
@@ -164,7 +170,7 @@ impl PricingService {
         )?;
 
         Ok(PricingQuoteResponse {
-            items: evaluated_summary_to_item_dtos(&evaluated),
+            items: evaluated_summary_to_item_dtos(&evaluated, &lookup),
             fulfillment_type: request.fulfillment_type,
             breakdown: PriceBreakdownDto {
                 subtotal_paise: breakdown.subtotal_paise,

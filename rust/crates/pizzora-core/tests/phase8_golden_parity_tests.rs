@@ -100,7 +100,8 @@ fn load_vectors() -> Vec<GoldenVector> {
         .join("golden-vectors")
         .join("pizzora_phase8_modifier_vectors.json");
     let content = fs::read_to_string(&path).expect("Failed to read golden vectors file");
-    let file: GoldenVectorFile = serde_json::from_str(&content).expect("Failed to parse golden vectors JSON");
+    let file: GoldenVectorFile =
+        serde_json::from_str(&content).expect("Failed to parse golden vectors JSON");
     file.vectors
 }
 
@@ -154,8 +155,9 @@ fn test_unit_pricing_vector(vector: &GoldenVector) {
         inputs.sauce_extra_paise.unwrap_or(0),
         // We need to calculate standard toppings extra first
         {
-            let std_extra = PricingEngine::calculate_standard_toppings_extra_paise(&standard_toppings)
-                .expect("calculate_standard_toppings_extra_paise failed");
+            let std_extra =
+                PricingEngine::calculate_standard_toppings_extra_paise(&standard_toppings)
+                    .expect("calculate_standard_toppings_extra_paise failed");
             std_extra
         },
         inputs.extra_topping_extras.as_deref().unwrap_or(&[]),
@@ -169,7 +171,8 @@ fn test_unit_pricing_vector(vector: &GoldenVector) {
         if unit_price_result.is_err() {
             let err = unit_price_result.unwrap_err();
             assert!(
-                format!("{err}").contains("arithmetic overflow") || format!("{err}").contains("ArithmeticOverflow"),
+                format!("{err}").contains("arithmetic overflow")
+                    || format!("{err}").contains("ArithmeticOverflow"),
                 "Vector {}: expected ArithmeticOverflow error, got: {}",
                 vector.id,
                 err
@@ -187,7 +190,8 @@ fn test_unit_pricing_vector(vector: &GoldenVector) {
         );
         let err = line_total_result.unwrap_err();
         assert!(
-            format!("{err}").contains("arithmetic overflow") || format!("{err}").contains("ArithmeticOverflow"),
+            format!("{err}").contains("arithmetic overflow")
+                || format!("{err}").contains("ArithmeticOverflow"),
             "Vector {}: expected ArithmeticOverflow error, got: {}",
             vector.id,
             err
@@ -195,23 +199,28 @@ fn test_unit_pricing_vector(vector: &GoldenVector) {
         return;
     }
 
-    let unit_price = unit_price_result.expect(&format!("Vector {}: calculate_unit_price_paise failed", vector.id));
+    let unit_price = unit_price_result.expect(&format!(
+        "Vector {}: calculate_unit_price_paise failed",
+        vector.id
+    ));
 
     assert_eq!(
         unit_price,
-        vector.expected_unit_price_paise.expect("expected_unit_price_paise missing"),
+        vector
+            .expected_unit_price_paise
+            .expect("expected_unit_price_paise missing"),
         "Vector {}: unit price mismatch",
         vector.id
     );
 
     // Also test line total if quantity > 1 or expected_line_total_paise is provided
     if quantity != 1 || vector.expected_line_total_paise.is_some() {
-        let line_total = PricingEngine::calculate_line_total_paise(unit_price, quantity)
-            .expect(&format!("Vector {}: calculate_line_total_paise failed", vector.id));
+        let line_total = PricingEngine::calculate_line_total_paise(unit_price, quantity).expect(
+            &format!("Vector {}: calculate_line_total_paise failed", vector.id),
+        );
         if let Some(expected_line_total) = vector.expected_line_total_paise {
             assert_eq!(
-                line_total,
-                expected_line_total,
+                line_total, expected_line_total,
                 "Vector {}: line total mismatch",
                 vector.id
             );
@@ -223,7 +232,9 @@ fn test_quote_vector(vector: &GoldenVector) {
     let inputs = &vector.inputs;
     let lines = inputs.lines.as_ref().expect("Q vectors must have lines");
     let gst_bps = inputs.gst_bps.expect("Q vectors must have gst_bps");
-    let delivery_fee_paise = inputs.delivery_fee_paise.expect("Q vectors must have delivery_fee_paise");
+    let delivery_fee_paise = inputs
+        .delivery_fee_paise
+        .expect("Q vectors must have delivery_fee_paise");
 
     let priced_lines: Vec<PricedLineInput> = lines
         .iter()
@@ -251,71 +262,116 @@ fn test_quote_vector(vector: &GoldenVector) {
         gst_bps,
         delivery_fee_paise,
         coupon_spec.as_ref(),
-    ).expect(&format!("Vector {}: calculate_quote failed", vector.id));
+    )
+    .expect(&format!("Vector {}: calculate_quote failed", vector.id));
 
-    let expected = vector.expected_quote.as_ref().expect("Q vectors must have expected_quote");
+    let expected = vector
+        .expected_quote
+        .as_ref()
+        .expect("Q vectors must have expected_quote");
 
-    assert_eq!(breakdown.subtotal_paise, expected.subtotal_paise, "Vector {}: subtotal mismatch", vector.id);
-    assert_eq!(breakdown.taxable_subtotal_paise, expected.taxable_subtotal_paise, "Vector {}: taxable_subtotal mismatch", vector.id);
-    assert_eq!(breakdown.discount_paise, expected.discount_paise, "Vector {}: discount mismatch", vector.id);
-    assert_eq!(breakdown.taxable_amount_paise, expected.taxable_amount_paise, "Vector {}: taxable_amount mismatch", vector.id);
-    assert_eq!(breakdown.delivery_fee_paise, expected.delivery_fee_paise, "Vector {}: delivery_fee mismatch", vector.id);
-    assert_eq!(breakdown.gst_bps, expected.gst_bps, "Vector {}: gst_bps mismatch", vector.id);
-    assert_eq!(breakdown.tax_paise, expected.tax_paise, "Vector {}: tax mismatch", vector.id);
-    assert_eq!(breakdown.cgst_paise, expected.cgst_paise, "Vector {}: cgst mismatch", vector.id);
-    assert_eq!(breakdown.sgst_paise, expected.sgst_paise, "Vector {}: sgst mismatch", vector.id);
-    assert_eq!(breakdown.total_paise, expected.total_paise, "Vector {}: total mismatch", vector.id);
+    assert_eq!(
+        breakdown.subtotal_paise, expected.subtotal_paise,
+        "Vector {}: subtotal mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.taxable_subtotal_paise, expected.taxable_subtotal_paise,
+        "Vector {}: taxable_subtotal mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.discount_paise, expected.discount_paise,
+        "Vector {}: discount mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.taxable_amount_paise, expected.taxable_amount_paise,
+        "Vector {}: taxable_amount mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.delivery_fee_paise, expected.delivery_fee_paise,
+        "Vector {}: delivery_fee mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.gst_bps, expected.gst_bps,
+        "Vector {}: gst_bps mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.tax_paise, expected.tax_paise,
+        "Vector {}: tax mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.cgst_paise, expected.cgst_paise,
+        "Vector {}: cgst mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.sgst_paise, expected.sgst_paise,
+        "Vector {}: sgst mismatch",
+        vector.id
+    );
+    assert_eq!(
+        breakdown.total_paise, expected.total_paise,
+        "Vector {}: total mismatch",
+        vector.id
+    );
 }
 
 #[test]
 fn calculate_standard_toppings_extra_paise_zero_credit_default_removal() {
     // Test that removed default toppings contribute 0 (zero credit)
-    let selections = vec![
-        StandardToppingSelection {
-            id: uuid::Uuid::nil(),
-            extra_price_paise: 1000,
-            is_default: true,
-            is_removed: true,
-        },
-    ];
+    let selections = vec![StandardToppingSelection {
+        id: uuid::Uuid::nil(),
+        extra_price_paise: 1000,
+        is_default: true,
+        is_removed: true,
+    }];
     let extra = PricingEngine::calculate_standard_toppings_extra_paise(&selections).unwrap();
-    assert_eq!(extra, 0, "Removed default topping should contribute 0 (zero credit)");
+    assert_eq!(
+        extra, 0,
+        "Removed default topping should contribute 0 (zero credit)"
+    );
 
     // Test that kept default toppings contribute 0
-    let selections = vec![
-        StandardToppingSelection {
-            id: uuid::Uuid::nil(),
-            extra_price_paise: 1000,
-            is_default: true,
-            is_removed: false,
-        },
-    ];
+    let selections = vec![StandardToppingSelection {
+        id: uuid::Uuid::nil(),
+        extra_price_paise: 1000,
+        is_default: true,
+        is_removed: false,
+    }];
     let extra = PricingEngine::calculate_standard_toppings_extra_paise(&selections).unwrap();
     assert_eq!(extra, 0, "Kept default topping should contribute 0");
 
     // Test that non-default selected toppings add their extra
-    let selections = vec![
-        StandardToppingSelection {
-            id: uuid::Uuid::nil(),
-            extra_price_paise: 1000,
-            is_default: false,
-            is_removed: false,
-        },
-    ];
+    let selections = vec![StandardToppingSelection {
+        id: uuid::Uuid::nil(),
+        extra_price_paise: 1000,
+        is_default: false,
+        is_removed: false,
+    }];
     let extra = PricingEngine::calculate_standard_toppings_extra_paise(&selections).unwrap();
-    assert_eq!(extra, 1000, "Non-default selected topping should add its extra");
+    assert_eq!(
+        extra, 1000,
+        "Non-default selected topping should add its extra"
+    );
 
     // Test that non-default removed toppings contribute 0 (zero credit)
-    let selections = vec![
-        StandardToppingSelection {
-            id: uuid::Uuid::nil(),
-            extra_price_paise: 1000,
-            is_default: false,
-            is_removed: true,
-        },
-    ];
+    let selections = vec![StandardToppingSelection {
+        id: uuid::Uuid::nil(),
+        extra_price_paise: 1000,
+        is_default: false,
+        is_removed: true,
+    }];
     let extra = PricingEngine::calculate_standard_toppings_extra_paise(&selections).unwrap();
-    assert_eq!(extra, 0, "Removed non-default topping should contribute 0 (zero credit)");
+    assert_eq!(
+        extra, 0,
+        "Removed non-default topping should contribute 0 (zero credit)"
+    );
 }
 
 #[test]
@@ -327,9 +383,8 @@ fn half_and_half_half_up_odd_paise() {
         right_topping_extras: vec![2],
         surcharge_paise: 0,
     };
-    let price = PricingEngine::calculate_unit_price_paise(
-        10000, 0, 0, 0, 0, &[], Some(&hah),
-    ).unwrap();
+    let price =
+        PricingEngine::calculate_unit_price_paise(10000, 0, 0, 0, 0, &[], Some(&hah)).unwrap();
     assert_eq!(price, 10002, "HALF_UP: (10001+10002)/2 = 10001.5 -> 10002");
 
     // Test even sum
@@ -339,9 +394,8 @@ fn half_and_half_half_up_odd_paise() {
         right_topping_extras: vec![2],
         surcharge_paise: 0,
     };
-    let price = PricingEngine::calculate_unit_price_paise(
-        10000, 0, 0, 0, 0, &[], Some(&hah),
-    ).unwrap();
+    let price =
+        PricingEngine::calculate_unit_price_paise(10000, 0, 0, 0, 0, &[], Some(&hah)).unwrap();
     assert_eq!(price, 10001, "HALF_UP: (10000+10002)/2 = 10001");
 
     // Test 3 paise difference: (10000 + 10003 + 1) / 2 = 20004 / 2 = 10002
@@ -350,23 +404,21 @@ fn half_and_half_half_up_odd_paise() {
         right_topping_extras: vec![3],
         surcharge_paise: 0,
     };
-    let price = PricingEngine::calculate_unit_price_paise(
-        10000, 0, 0, 0, 0, &[], Some(&hah),
-    ).unwrap();
+    let price =
+        PricingEngine::calculate_unit_price_paise(10000, 0, 0, 0, 0, &[], Some(&hah)).unwrap();
     assert_eq!(price, 10002, "HALF_UP: (10000+10003)/2 = 10001.5 -> 10002");
 }
 
 #[test]
 fn arithmetic_overflow_detection() {
     // Test unit price overflow - adding non-zero to i64::MAX will overflow
-    let result = PricingEngine::calculate_unit_price_paise(
-        i64::MAX, 1, 0, 0, 0, &[], None,
-    );
+    let result = PricingEngine::calculate_unit_price_paise(i64::MAX, 1, 0, 0, 0, &[], None);
     eprintln!("Result: {:?}", result);
     assert!(result.is_err(), "Expected error but got Ok({:?})", result);
     let err = result.unwrap_err();
     assert!(
-        format!("{err}").contains("arithmetic overflow") || format!("{err}").contains("ArithmeticOverflow"),
+        format!("{err}").contains("arithmetic overflow")
+            || format!("{err}").contains("ArithmeticOverflow"),
         "Expected ArithmeticOverflow error for unit price, got: {}",
         err
     );
@@ -377,7 +429,8 @@ fn arithmetic_overflow_detection() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(
-        format!("{err}").contains("arithmetic overflow") || format!("{err}").contains("ArithmeticOverflow"),
+        format!("{err}").contains("arithmetic overflow")
+            || format!("{err}").contains("ArithmeticOverflow"),
         "Expected ArithmeticOverflow error for line total, got: {}",
         err
     );
@@ -394,7 +447,10 @@ fn arithmetic_overflow_detection() {
         is_active: true,
     };
     let result = PricingEngine::calculate_discount_paise(i64::MAX, Some(&spec));
-    assert!(result.is_ok(), "Discount calculation should handle large values");
+    assert!(
+        result.is_ok(),
+        "Discount calculation should handle large values"
+    );
     let discount = result.unwrap();
     // 50% of i64::MAX with HALF_UP: (MAX * 5000 + 5000) / 10000
     let expected = (i128::from(i64::MAX) * 5000 + 5000) / 10000;
@@ -471,14 +527,15 @@ fn validation_error_codes_phase8() {
 fn linear_pricing_breakdown() {
     // Test linear pricing with all modifiers
     let price = PricingEngine::calculate_unit_price_paise(
-        10000,  // variant
-        1000,   // crust
-        2000,   // cheese
-        1500,   // sauce
-        1000,   // standard_toppings_extra
+        10000,       // variant
+        1000,        // crust
+        2000,        // cheese
+        1500,        // sauce
+        1000,        // standard_toppings_extra
         &[500, 300], // extra topping extras
-        None,   // no half-and-half
-    ).unwrap();
+        None,        // no half-and-half
+    )
+    .unwrap();
 
     // 10000 + 1000 + 2000 + 1500 + 1000 + 500 + 300 = 16300
     assert_eq!(price, 16300);
@@ -494,14 +551,15 @@ fn half_and_half_breakdown_calculation() {
     };
 
     let (price, breakdown) = PricingEngine::calculate_unit_price_with_breakdown(
-        10000,  // variant
-        0,      // crust
-        0,      // cheese
-        0,      // sauce
-        0,      // standard_toppings_extra
-        &[],    // extra topping extras
+        10000, // variant
+        0,     // crust
+        0,     // cheese
+        0,     // sauce
+        0,     // standard_toppings_extra
+        &[],   // extra topping extras
         Some(&hah),
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(price, 15500); // (14000 + 15000 + 1) / 2 + 1000 = 14500 + 1000 = 15500
 
@@ -526,14 +584,15 @@ fn half_and_half_with_all_modifiers() {
     };
 
     let price = PricingEngine::calculate_unit_price_paise(
-        10000,  // variant
-        0,      // crust
-        2000,   // cheese
-        1500,   // sauce
-        700,    // standard_toppings_extra
-        &[],    // extra topping extras
+        10000, // variant
+        0,     // crust
+        2000,  // cheese
+        1500,  // sauce
+        700,   // standard_toppings_extra
+        &[],   // extra topping extras
         Some(&hah),
-    ).unwrap();
+    )
+    .unwrap();
 
     // average = (14000 + 15000 + 1) / 2 = 14500
     // unit = 14500 + 1000 (surcharge) + 2000 (cheese) + 1500 (sauce) + 700 (standard) = 19700

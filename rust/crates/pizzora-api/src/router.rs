@@ -127,6 +127,11 @@ pub fn build_router(state: AppState) -> Router {
             "/api/v1/orders/{id}/payments/fail",
             post(orders_payments::fail_order_payment),
         )
+        // Phase 8: Reorder endpoint
+        .route(
+            "/api/v1/orders/{id}/reorder",
+            post(orders_payments::reorder_order),
+        )
         .route(
             "/api/v1/payments/razorpay/verify",
             post(orders_payments::verify_razorpay_payment),

@@ -173,6 +173,56 @@ pub struct ProductImageDto {
     pub created_at: String,
 }
 
+// Phase 8: New modifier DTOs
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheeseOptionDto {
+    pub id: String,
+    pub product_id: String,
+    pub name: String,
+    pub extra_price_paise: i64,
+    pub is_active: bool,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SauceOptionDto {
+    pub id: String,
+    pub product_id: String,
+    pub name: String,
+    pub extra_price_paise: i64,
+    pub is_active: bool,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StandardToppingDto {
+    pub id: String,
+    pub product_id: String,
+    pub name: String,
+    pub is_veg: bool,
+    pub extra_price_paise: i64,
+    pub is_default: bool,
+    pub is_active: bool,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HalfAndHalfConfigDto {
+    pub id: String,
+    pub product_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub left_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub right_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_surcharge_paise: i64,
+    #[serde(default = "default_true")]
+    pub is_active: bool,
+    #[serde(default)]
+    pub sort_order: i32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProductDto {
     pub id: String,
@@ -187,6 +237,15 @@ pub struct ProductDto {
     pub variants: Vec<ProductVariantDto>,
     #[serde(default)]
     pub images: Vec<ProductImageDto>,
+    // Phase 8: New modifier arrays (all optional/defaulted for backward compatibility)
+    #[serde(default)]
+    pub cheeses: Vec<CheeseOptionDto>,
+    #[serde(default)]
+    pub sauces: Vec<SauceOptionDto>,
+    #[serde(default)]
+    pub standard_toppings: Vec<StandardToppingDto>,
+    #[serde(default)]
+    pub half_and_half_configs: Vec<HalfAndHalfConfigDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -271,6 +330,19 @@ pub struct CartItemInputDto {
     pub quantity: i32,
     #[serde(default)]
     pub client_unit_price_paise: Option<i64>,
+    // Phase 8: New modifier fields (all optional/defaulted for backward compatibility)
+    #[serde(default)]
+    pub cheese_id: Option<String>,
+    #[serde(default)]
+    pub sauce_id: Option<String>,
+    #[serde(default)]
+    pub standard_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_config_id: Option<String>,
+    #[serde(default)]
+    pub half_and_half_left_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_right_topping_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -291,6 +363,48 @@ pub struct CartToppingViewDto {
     pub name: String,
     pub is_veg: bool,
     pub extra_price_paise: i64,
+    pub is_available: bool,
+}
+
+// Phase 8: New view DTOs for resolved modifiers
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CartCheeseViewDto {
+    pub cheese_id: String,
+    pub name: String,
+    pub extra_price_paise: i64,
+    pub is_available: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CartSauceViewDto {
+    pub sauce_id: String,
+    pub name: String,
+    pub extra_price_paise: i64,
+    pub is_available: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CartStandardToppingViewDto {
+    pub standard_topping_id: String,
+    pub name: String,
+    pub is_veg: bool,
+    pub extra_price_paise: i64,
+    pub is_default: bool,
+    pub is_removed: bool,
+    pub is_available: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CartHalfAndHalfViewDto {
+    pub half_and_half_config_id: String,
+    pub name: String,
+    pub left_topping_ids: Vec<String>,
+    pub right_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub left_toppings: Vec<CartToppingViewDto>,
+    #[serde(default)]
+    pub right_toppings: Vec<CartToppingViewDto>,
+    pub half_and_half_surcharge_paise: i64,
     pub is_available: bool,
 }
 
@@ -317,6 +431,15 @@ pub struct CartItemViewDto {
     pub is_available: bool,
     #[serde(default)]
     pub issues: Vec<CartValidationIssueDto>,
+    // Phase 8: New resolved modifier views
+    #[serde(default)]
+    pub cheese: Option<CartCheeseViewDto>,
+    #[serde(default)]
+    pub sauce: Option<CartSauceViewDto>,
+    #[serde(default)]
+    pub standard_toppings: Vec<CartStandardToppingViewDto>,
+    #[serde(default)]
+    pub half_and_half: Option<CartHalfAndHalfViewDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -429,6 +552,75 @@ pub struct TransitionOrderStatusRequest {
     pub to_status: OrderStatus,
     #[serde(default)]
     pub reason: Option<String>,
+}
+
+// ---------- Orders (Phase 8 extended) ----------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ReorderUnavailableReason {
+    ProductUnavailable,
+    VariantUnavailable,
+    CrustUnavailable,
+    ToppingUnavailable,
+    CheeseUnavailable,
+    SauceUnavailable,
+    StandardToppingUnavailable,
+    HalfAndHalfUnavailable,
+    HalfAndHalfConfigUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReorderItemDto {
+    pub order_item_id: String,
+    pub product_id: String,
+    pub product_name: String,
+    #[serde(default)]
+    pub variant_id: Option<String>,
+    #[serde(default)]
+    pub crust_id: Option<String>,
+    #[serde(default)]
+    pub cheese_id: Option<String>,
+    #[serde(default)]
+    pub sauce_id: Option<String>,
+    #[serde(default)]
+    pub topping_ids: Vec<String>,
+    #[serde(default)]
+    pub standard_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub standard_topping_removed_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_config_id: Option<String>,
+    #[serde(default)]
+    pub half_and_half_left_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_right_topping_ids: Vec<String>,
+    pub quantity: i32,
+    pub is_available: bool,
+    #[serde(default)]
+    pub issues: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReorderUnavailableDto {
+    pub order_item_id: String,
+    pub product_name: String,
+    pub modifier_type: String,
+    pub modifier_id: String,
+    pub modifier_name: String,
+    pub reason: ReorderUnavailableReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReorderResponseDto {
+    pub order_id: String,
+    pub can_reorder: bool,
+    #[serde(default)]
+    pub items: Vec<ReorderItemDto>,
+    #[serde(default)]
+    pub unavailable: Vec<ReorderUnavailableDto>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 // ---------- Recipes ----------
@@ -717,6 +909,9 @@ pub struct TopSellingProductDto {
 pub struct CouponRoiDto {
     pub coupon_id: String,
     pub code: String,
+    pub discount_type: pizzora_core::DiscountType,
+    pub discount_value: i64,
+    pub max_discount_paise: Option<i64>,
     pub redemption_count: i32,
     pub total_discount_paise: i64,
     pub gross_order_revenue_paise: i64,

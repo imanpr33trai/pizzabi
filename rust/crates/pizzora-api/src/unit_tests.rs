@@ -253,6 +253,9 @@ fn dto_round_trips_and_wire_field_names_match_ktor_and_android_contracts() {
         coupon_performance: vec![CouponRoiDto {
             coupon_id: "cpn_1".to_owned(),
             code: "PIZZA10".to_owned(),
+            discount_type: pizzora_core::DiscountType::PercentBps,
+            discount_value: 1000,
+            max_discount_paise: None,
             redemption_count: 2,
             total_discount_paise: 10_000,
             gross_order_revenue_paise: 60_000,

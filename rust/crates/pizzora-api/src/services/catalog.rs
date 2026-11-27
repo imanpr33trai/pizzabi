@@ -8,10 +8,11 @@ use sqlx::{PgPool, Row as _};
 use uuid::Uuid;
 
 use crate::dto::{
-    CategoryDto, CreateCrustRequest, CreateProductRequest, CreateToppingRequest,
-    CreateVariantRequest, CrustOptionDto, ProductDto, ProductImageDto, ProductImageStatus,
-    ProductVariantDto, PublicMenuResponse, ToppingDto, UpdateCrustRequest, UpdateProductRequest,
-    UpdateToppingRequest, UpdateVariantRequest,
+    CategoryDto, CheeseOptionDto, CreateCrustRequest, CreateProductRequest, CreateToppingRequest,
+    CreateVariantRequest, CrustOptionDto, HalfAndHalfConfigDto, ProductDto, ProductImageDto,
+    ProductImageStatus, ProductVariantDto, PublicMenuResponse, SauceOptionDto, StandardToppingDto,
+    ToppingDto, UpdateCrustRequest, UpdateProductRequest, UpdateToppingRequest,
+    UpdateVariantRequest,
 };
 use crate::error::{format_iso8601, ApiError};
 use crate::extractors::parse_uuid_param;
@@ -46,11 +47,44 @@ pub fn parse_image_status(raw: &str) -> ProductImageStatus {
     }
 }
 
+/// Phase 8 feature flags (default enabled for local/dev; set to `false` to disable via env)
+#[derive(Clone, Debug)]
+pub struct Phase8FeatureFlags {
+    pub cheese: bool,
+    pub sauce: bool,
+    pub standard_toppings: bool,
+    pub half_and_half: bool,
+    pub reorder: bool,
+}
+
+impl Phase8FeatureFlags {
+    pub fn from_env() -> Self {
+        Self {
+            cheese: std::env::var("PIZZORA_FEATURE_CHEESE")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            sauce: std::env::var("PIZZORA_FEATURE_SAUCE")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            standard_toppings: std::env::var("PIZZORA_FEATURE_STANDARD_TOPPINGS")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            half_and_half: std::env::var("PIZZORA_FEATURE_HALF_AND_HALF")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            reorder: std::env::var("PIZZORA_FEATURE_REORDER")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CatalogService {
     pool: PgPool,
     cache: Arc<dyn EphemeralCacheStore>,
     storage: Arc<dyn ObjectStorageClient>,
+    features: Phase8FeatureFlags,
 }
 
 impl CatalogService {
@@ -63,6 +97,7 @@ impl CatalogService {
             pool,
             cache,
             storage,
+            features: Phase8FeatureFlags::from_env(),
         }
     }
 
@@ -904,6 +939,152 @@ impl CatalogService {
             variants_by_prod.entry(pid).or_default().push(dto);
         }
 
+        // Phase 8: Load cheeses per product
+        let mut cheeses_by_prod: HashMap<Uuid, Vec<CheeseOptionDto>> = if self.features.cheese {
+            let rows = if active_only {
+                sqlx::query(
+                    r#"
+                    SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                    FROM cheeses
+                    WHERE is_active = TRUE
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            } else {
+                sqlx::query(
+                    r#"
+                    SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                    FROM cheeses
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            };
+            let mut map: HashMap<Uuid, Vec<CheeseOptionDto>> = HashMap::new();
+            for r in rows {
+                let pid: Uuid = r.try_get("product_id")?;
+                map.entry(pid).or_default().push(row_to_cheese(&r)?);
+            }
+            map
+        } else {
+            HashMap::new()
+        };
+
+        // Phase 8: Load sauces per product
+        let mut sauces_by_prod: HashMap<Uuid, Vec<SauceOptionDto>> = if self.features.sauce {
+            let rows = if active_only {
+                sqlx::query(
+                    r#"
+                    SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                    FROM sauces
+                    WHERE is_active = TRUE
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            } else {
+                sqlx::query(
+                    r#"
+                    SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                    FROM sauces
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            };
+            let mut map: HashMap<Uuid, Vec<SauceOptionDto>> = HashMap::new();
+            for r in rows {
+                let pid: Uuid = r.try_get("product_id")?;
+                map.entry(pid).or_default().push(row_to_sauce(&r)?);
+            }
+            map
+        } else {
+            HashMap::new()
+        };
+
+        // Phase 8: Load standard toppings per product
+        let mut std_toppings_by_prod: HashMap<Uuid, Vec<StandardToppingDto>> = if self
+            .features
+            .standard_toppings
+        {
+            let rows = if active_only {
+                sqlx::query(
+                    r#"
+                    SELECT id, product_id, name, is_veg, extra_price_paise, is_default, is_active, sort_order
+                    FROM standard_toppings
+                    WHERE is_active = TRUE
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            } else {
+                sqlx::query(
+                    r#"
+                    SELECT id, product_id, name, is_veg, extra_price_paise, is_default, is_active, sort_order
+                    FROM standard_toppings
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            };
+            let mut map: HashMap<Uuid, Vec<StandardToppingDto>> = HashMap::new();
+            for r in rows {
+                let pid: Uuid = r.try_get("product_id")?;
+                map.entry(pid)
+                    .or_default()
+                    .push(row_to_standard_topping(&r)?);
+            }
+            map
+        } else {
+            HashMap::new()
+        };
+
+        // Phase 8: Load half-and-half configs per product
+        let mut hah_configs_by_prod: HashMap<Uuid, Vec<HalfAndHalfConfigDto>> =
+            if self.features.half_and_half {
+                let rows = if active_only {
+                    sqlx::query(
+                        r#"
+                    SELECT id, product_id, name, left_topping_ids, right_topping_ids,
+                           half_and_half_surcharge_paise, is_active, sort_order
+                    FROM half_and_half_configs
+                    WHERE is_active = TRUE
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                    )
+                    .fetch_all(&self.pool)
+                    .await?
+                } else {
+                    sqlx::query(
+                        r#"
+                    SELECT id, product_id, name, left_topping_ids, right_topping_ids,
+                           half_and_half_surcharge_paise, is_active, sort_order
+                    FROM half_and_half_configs
+                    ORDER BY sort_order ASC, name ASC
+                    "#,
+                    )
+                    .fetch_all(&self.pool)
+                    .await?
+                };
+                let mut map: HashMap<Uuid, Vec<HalfAndHalfConfigDto>> = HashMap::new();
+                for r in rows {
+                    let pid: Uuid = r.try_get("product_id")?;
+                    map.entry(pid)
+                        .or_default()
+                        .push(row_to_half_and_half_config(&r)?);
+                }
+                map
+            } else {
+                HashMap::new()
+            };
+
         let img_rows = if active_only {
             sqlx::query(
                 r#"
@@ -972,6 +1153,11 @@ impl CatalogService {
                 is_taxable: pr.try_get("is_taxable")?,
                 variants: variants_by_prod.remove(&pid).unwrap_or_default(),
                 images: images_by_prod.remove(&pid).unwrap_or_default(),
+                // Phase 8: Attach modifier arrays (empty if feature disabled)
+                cheeses: cheeses_by_prod.remove(&pid).unwrap_or_default(),
+                sauces: sauces_by_prod.remove(&pid).unwrap_or_default(),
+                standard_toppings: std_toppings_by_prod.remove(&pid).unwrap_or_default(),
+                half_and_half_configs: hah_configs_by_prod.remove(&pid).unwrap_or_default(),
             });
         }
 
@@ -1014,6 +1200,84 @@ impl CatalogService {
             .iter()
             .map(row_to_variant)
             .collect::<Result<Vec<_>, _>>()?;
+
+        // Phase 8: Load modifiers for single product
+        let cheeses = if self.features.cheese {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                FROM cheeses
+                WHERE product_id = $1
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .bind(product_id)
+            .fetch_all(&mut **tx)
+            .await?
+            .iter()
+            .map(row_to_cheese)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
+
+        let sauces = if self.features.sauce {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, extra_price_paise, is_active, sort_order
+                FROM sauces
+                WHERE product_id = $1
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .bind(product_id)
+            .fetch_all(&mut **tx)
+            .await?
+            .iter()
+            .map(row_to_sauce)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
+
+        let standard_toppings = if self.features.standard_toppings {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, is_veg, extra_price_paise, is_default, is_active, sort_order
+                FROM standard_toppings
+                WHERE product_id = $1
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .bind(product_id)
+            .fetch_all(&mut **tx)
+            .await?
+            .iter()
+            .map(row_to_standard_topping)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
+
+        let half_and_half_configs = if self.features.half_and_half {
+            sqlx::query(
+                r#"
+                SELECT id, product_id, name, left_topping_ids, right_topping_ids,
+                       half_and_half_surcharge_paise, is_active, sort_order
+                FROM half_and_half_configs
+                WHERE product_id = $1
+                ORDER BY sort_order ASC, name ASC
+                "#,
+            )
+            .bind(product_id)
+            .fetch_all(&mut **tx)
+            .await?
+            .iter()
+            .map(row_to_half_and_half_config)
+            .collect::<Result<Vec<_>, _>>()?
+        } else {
+            Vec::new()
+        };
 
         let img_rows = sqlx::query(
             r#"
@@ -1063,6 +1327,10 @@ impl CatalogService {
             is_taxable: pr.try_get("is_taxable")?,
             variants,
             images,
+            cheeses,
+            sauces,
+            standard_toppings,
+            half_and_half_configs,
         }))
     }
 
@@ -1140,5 +1408,68 @@ fn row_to_topping(row: &sqlx::postgres::PgRow) -> Result<ToppingDto, ApiError> {
         is_veg: row.try_get("is_veg")?,
         extra_price_paise: row.try_get("extra_price_paise")?,
         is_active: row.try_get("is_active")?,
+    })
+}
+
+// Phase 8: New row mappers for modifier tables
+fn row_to_cheese(row: &sqlx::postgres::PgRow) -> Result<CheeseOptionDto, ApiError> {
+    let id: Uuid = row.try_get("id")?;
+    let product_id: Uuid = row.try_get("product_id")?;
+    Ok(CheeseOptionDto {
+        id: id.to_string(),
+        product_id: product_id.to_string(),
+        name: row.try_get("name")?,
+        extra_price_paise: row.try_get("extra_price_paise")?,
+        is_active: row.try_get("is_active")?,
+        sort_order: row.try_get("sort_order")?,
+    })
+}
+
+fn row_to_sauce(row: &sqlx::postgres::PgRow) -> Result<SauceOptionDto, ApiError> {
+    let id: Uuid = row.try_get("id")?;
+    let product_id: Uuid = row.try_get("product_id")?;
+    Ok(SauceOptionDto {
+        id: id.to_string(),
+        product_id: product_id.to_string(),
+        name: row.try_get("name")?,
+        extra_price_paise: row.try_get("extra_price_paise")?,
+        is_active: row.try_get("is_active")?,
+        sort_order: row.try_get("sort_order")?,
+    })
+}
+
+fn row_to_standard_topping(row: &sqlx::postgres::PgRow) -> Result<StandardToppingDto, ApiError> {
+    let id: Uuid = row.try_get("id")?;
+    let product_id: Uuid = row.try_get("product_id")?;
+    Ok(StandardToppingDto {
+        id: id.to_string(),
+        product_id: product_id.to_string(),
+        name: row.try_get("name")?,
+        is_veg: row.try_get("is_veg")?,
+        extra_price_paise: row.try_get("extra_price_paise")?,
+        is_default: row.try_get("is_default")?,
+        is_active: row.try_get("is_active")?,
+        sort_order: row.try_get("sort_order")?,
+    })
+}
+
+fn row_to_half_and_half_config(
+    row: &sqlx::postgres::PgRow,
+) -> Result<HalfAndHalfConfigDto, ApiError> {
+    let id: Uuid = row.try_get("id")?;
+    let product_id: Uuid = row.try_get("product_id")?;
+    let left_ids: serde_json::Value = row.try_get("left_topping_ids")?;
+    let right_ids: serde_json::Value = row.try_get("right_topping_ids")?;
+    let left_topping_ids = serde_json::from_value(left_ids).unwrap_or_default();
+    let right_topping_ids = serde_json::from_value(right_ids).unwrap_or_default();
+    Ok(HalfAndHalfConfigDto {
+        id: id.to_string(),
+        product_id: product_id.to_string(),
+        name: row.try_get("name")?,
+        left_topping_ids,
+        right_topping_ids,
+        half_and_half_surcharge_paise: row.try_get("half_and_half_surcharge_paise")?,
+        is_active: row.try_get("is_active")?,
+        sort_order: row.try_get("sort_order")?,
     })
 }

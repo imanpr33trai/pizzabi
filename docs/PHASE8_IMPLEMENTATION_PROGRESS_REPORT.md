@@ -72,6 +72,10 @@ commands are used for build/test execution and evidence capture.
 Subagent model policy (user instruction, 2026-11-27): all **new** subagents and all **failed-agent
 retries** use `opencode/big-pickle`. Already-running healthy agents are left undisturbed.
 
+Formatter policy (user instruction, 2026-11-27): run `cargo fmt --all` (and `cargo fmt --all -- --check`
+before staging) before every further commit/push. Kotlin has no configured formatter plugin in this
+repository; Kotlin changes must follow existing style and be reviewed in the staged diff.
+
 ---
 
 ## 4. Workstream status
@@ -80,11 +84,11 @@ retries** use `opencode/big-pickle`. Already-running healthy agents are left und
 |------------|-------|-------|-------|
 | W1 SQLx V4+ schema + invariants | **IMPLEMENTED / VERIFIED** | Coordinator / `p8-backend` | 8 migrations (0004–0011), 51 tables, two profiles, rollback/reapply — Checkpoint A PASS |
 | W2 Rust pricing + 33 vectors | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de343b2a7ffez42D4TrxHUvV6d`) | Initial audit REJECTED (3 MAJOR); all fixed; independent big-pickle re-audit PASS. 21 core tests PASS; 33/33 vectors match contract |
-| W3 DTO/API + reorder endpoint | **IN PROGRESS (resumed)** | `general` subagent (`ses_de3265e86ffe22X5qe8D2MaULu`, `opencode/big-pickle`) | Initial agent hit HTTP 429; partial work preserved; 18 compile errors being fixed |
-| W4 UniFFI | **IN PROGRESS** | `general` subagent (`ses_de3338c34ffeK2iXRknZkhoPi8`) | 11 records + 6 exports, FFI/core parity; W2 dependency satisfied |
+| W3 DTO/API + reorder endpoint | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de3265e86ffe22X5qe8D2MaULu`, `opencode/big-pickle`) | Initial HTTP 429 retry preserved partial work; API build + 7 tests PASS; shared contracts 40 tests PASS; reorder route registered; await scoped commit |
+| W4 UniFFI | **IMPLEMENTED / RE-AUDIT OPEN** | `general` subagent (`ses_de31be575ffeJFJhKdoHPdiJ1I`, `opencode/big-pickle`) | Initial audit REJECTED; all findings repaired; 11 tests PASS; all-features build PASS; rustfmt PASS; direct bindgen evidence captured; re-audit running |
 | W5 Kotlin backend five-service audit | **IN PROGRESS** | `general` subagent (`ses_de321c174ffemMqJrNxjY5Tmsg`, `opencode/big-pickle`) | Audit complete; implementing five services + reorder route + new tests |
-| W6 Android builder | NOT STARTED | `p8-builder-ui` | Blocked by W3/W4; mapping received |
-| W7 Android orders/reorder | NOT STARTED | `p8-orders-ui` | Blocked by W3/W4; mapping received |
+| W6 Android builder | **IN PROGRESS** | `general` subagent (`ses_de31f0427ffeWCvzsyjxOW0YjM`, `opencode/big-pickle`) | DTO/FFI shapes frozen; builder modifier UI + Robolectric tests |
+| W7 Android orders/reorder | **IN PROGRESS** | `general` subagent (`ses_de31edc10ffea4fG4y0LE3xTLU`, `opencode/big-pickle`) | Preview, extended modifier rendering, reconciliation dialog; API client method added by coordinator |
 | W8 Regression/QA | IN PROGRESS (DB evidence) | `p8-test-engineer`, `android-qa` | Checkpoint A logs captured |
 | W9 Independent review | NOT STARTED | `p8-reviewer` | After W8 |
 
@@ -100,6 +104,8 @@ retries** use `opencode/big-pickle`. Already-running healthy agents are left und
 | 2026-11-27 | SQLx V4–V11 migrations created (5 tables, modifier columns, 12 indexes) | `rust/crates/pizzora-db/migrations/0004_*.sql`–`0011_*.sql` |
 | 2026-11-27 | `migrator.rs` updated: 51 tables, baseline/full invariant profiles, Phase 8 indexes/constraints, preflight profile detection | `rust/crates/pizzora-db/src/migrator.rs` |
 | 2026-11-27 | Checkpoint A tests: 7 unit + 3 live PostgreSQL 18 integration tests, `cargo build --workspace`, fresh schema = 51 tables | `qa-artifacts/phase8/migrations/` |
+| 2026-11-27 | Checkpoint B Rust pricing + 33 vectors committed and pushed | `2d4a682`, `qa-artifacts/phase8/parity/` |
+| 2026-11-27 | Android API 36 emulator booted for deferred runtime QA | `qa-artifacts/phase8/visual/ANDROID_QA_READINESS.md` |
 
 ---
 
@@ -113,6 +119,11 @@ retries** use `opencode/big-pickle`. Already-running healthy agents are left und
 | DB live integration | `TEST_POSTGRES_URL=... cargo test -p pizzora-db --lib -- --ignored --test-threads=1` | PASS — 3 passed |
 | Workspace build | `cargo build --workspace` | PASS |
 | Fresh schema table count | `SELECT COUNT(*) FROM information_schema.tables ...` | PASS — 51 tables |
+| Rust formatter | `cargo fmt --all && cargo fmt --all -- --check` | PASS |
+| API unit tests | `cargo test -p pizzora-api --lib` | PASS — 7 passed |
+| Shared contract tests | `./gradlew -I /tmp/opencode/pizzora-gradle-init.gradle --dependency-verification=off :shared:contracts:test --no-daemon` | PASS — 40 passed |
+| UniFFI tests | `cargo test -p pizzora-uniffi` | PASS — 11 passed |
+| UniFFI all-features build | `cargo build -p pizzora-uniffi --all-features` | PASS |
 
 ---
 
@@ -121,7 +132,9 @@ retries** use `opencode/big-pickle`. Already-running healthy agents are left und
 | ID | Blocker | Impact | Mitigation |
 |----|---------|--------|------------|
 | B8-01 | Reviewed contract not present as a standalone file | Agents could implement against stale draft | Binding addendum created; all agents must read it |
-| B8-02 | Phase 8 work after Checkpoint A not yet committed | Intermediate work exists only in the working tree | Stage scoped files after each workstream verifies; do not stage `.opencode/opencode.jsonc` |
+| B8-02 | Intermediate Phase 8 work not all committed | W3/W4/W5/W6/W7 still in progress | Stage scoped files after each workstream verifies; do not stage `.opencode/opencode.jsonc` |
+| B8-03 | Runtime backend API not listening | Android runtime QA cannot exercise server-backed flows | Emulator is READY; start the local API against `pizzora-pg18` during W8, no production deployment |
+| B8-04 | Gradle foojay plugin resolution / Maven Central HTTP 429 | Gradle tasks can fail before compilation in this environment | Environment-only init script `/tmp/opencode/pizzora-gradle-init.gradle` + `--dependency-verification=off`; no repository build files changed |
 
 No open BLOCKER or MAJOR design findings remain after the addendum. W2 completion is pending
 scoped commit; W3/W4/W5 are still in progress.
@@ -134,7 +147,8 @@ scoped commit; W3/W4/W5 are still in progress.
 |------------|--------|------|--------|
 | Baseline | `db41169` | `origin/ui-ux-changes` | VERIFIED |
 | A — Schema | `897b8f9` | `origin/ui-ux-changes` | VERIFIED — 51 tables, 2 profiles + rollback, 10 tests PASS |
-| B — Rust core pricing | pending | pending | VERIFIED locally; commit in progress |
+| B — Rust core pricing | `2d4a682` | `origin/ui-ux-changes` | VERIFIED — independent re-audit PASS; 21 tests + 33 vectors |
+| C — API/DTO/reorder | pending | pending | VERIFIED locally; commit in progress |
 
 ---
 
@@ -152,11 +166,11 @@ All 11 criteria from the reviewed addendum remain open until their evidence is r
 | Reviewed resolutions | `docs/PHASE8_REVIEWED_CONTRACT_RESOLUTIONS.md` | CREATED |
 | Migration reports | `qa-artifacts/phase8/migrations/` | CREATED — Checkpoint A PASS |
 | Golden parity reports | `qa-artifacts/phase8/parity/` | CREATED — W2 PASS (21 tests, 33/33 vectors) |
-| API/contract evidence | `qa-artifacts/phase8/api-contracts/` | PENDING (W3) |
-| UniFFI evidence | `qa-artifacts/phase8/uniffi/` | PENDING (W4) |
+| API/contract evidence | `qa-artifacts/phase8/api-contracts/` | CREATED — W3 PASS (API 7 tests, contracts 40 tests) |
+| UniFFI evidence | `qa-artifacts/phase8/uniffi/` | CREATED — W4 repair PASS pending re-audit (11 tests, direct bindgen) |
 | Kotlin backend evidence | `qa-artifacts/phase8/backend/` | PENDING (W5) |
 | Unit test XML | `qa-artifacts/phase8/unit-test-xml/` | PENDING |
-| Visual QA | `qa-artifacts/phase8/visual/` | PENDING |
+| Visual QA | `qa-artifacts/phase8/visual/` | READY — API 36 `emulator-5554` booted; final screens deferred until W6/W7 |
 | Independent review | `qa-artifacts/phase8/review/` | PENDING |
 
 ### 10.1 Acceptance-criteria command map

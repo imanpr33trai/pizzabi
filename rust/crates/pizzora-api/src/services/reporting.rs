@@ -164,6 +164,9 @@ impl ReportingService {
             SELECT
               c.id AS coupon_id,
               c.code,
+              c.discount_type,
+              c.discount_value,
+              c.max_discount_paise,
               COUNT(*)::int AS redemption_count,
               COALESCE(SUM(cr.discount_paise), 0)::bigint AS total_discount_paise,
               COALESCE(SUM(o.total_paise), 0)::bigint AS gross_order_revenue_paise,
@@ -175,7 +178,7 @@ impl ReportingService {
             WHERE o.created_at >= $1 AND o.created_at < $2
               AND o.status NOT IN ('PENDING_PAYMENT', 'EXPIRED')
               AND (o.status <> 'CANCELLED' OR COALESCE(p.captured_paise, 0) > 0)
-            GROUP BY c.id, c.code
+            GROUP BY c.id, c.code, c.discount_type, c.discount_value, c.max_discount_paise
             ORDER BY redemption_count DESC, net_order_revenue_paise DESC
             "#,
         )
@@ -187,9 +190,18 @@ impl ReportingService {
         let mut coupon_performance = Vec::with_capacity(coupon_rows.len());
         for row in coupon_rows {
             let cid: Uuid = row.try_get("coupon_id")?;
+            let discount_type_raw: String = row.try_get("discount_type")?;
+            let discount_type = match discount_type_raw.as_str() {
+                "PERCENT_BPS" => pizzora_core::DiscountType::PercentBps,
+                "FLAT_PAISE" => pizzora_core::DiscountType::FlatPaise,
+                _ => return Err(ApiError::internal()),
+            };
             coupon_performance.push(CouponRoiDto {
                 coupon_id: cid.to_string(),
                 code: row.try_get("code")?,
+                discount_type,
+                discount_value: row.try_get("discount_value")?,
+                max_discount_paise: row.try_get("max_discount_paise")?,
                 redemption_count: row.try_get("redemption_count")?,
                 total_discount_paise: row.try_get("total_discount_paise")?,
                 gross_order_revenue_paise: row.try_get("gross_order_revenue_paise")?,

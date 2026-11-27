@@ -250,13 +250,13 @@ impl PricingEngine {
         for sel in selections {
             if !sel.is_default && !sel.is_removed {
                 if sel.extra_price_paise < 0 {
-                    return Err(DomainError::NegativeAmount("standard_topping_extra_price_paise"));
+                    return Err(DomainError::NegativeAmount(
+                        "standard_topping_extra_price_paise",
+                    ));
                 }
-                total = total
-                    .checked_add(sel.extra_price_paise)
-                    .ok_or(DomainError::ArithmeticOverflow(
-                        "calculate_standard_toppings_extra_paise",
-                    ))?;
+                total = total.checked_add(sel.extra_price_paise).ok_or(
+                    DomainError::ArithmeticOverflow("calculate_standard_toppings_extra_paise"),
+                )?;
             }
             // is_default == true (kept or removed) -> contributes 0
             // is_removed == true for non-default -> contributes 0 (zero credit)
@@ -295,7 +295,9 @@ impl PricingEngine {
         }
         for extra in extra_topping_extras {
             if *extra < 0 {
-                return Err(DomainError::NegativeAmount("extra_topping_extra_price_paise"));
+                return Err(DomainError::NegativeAmount(
+                    "extra_topping_extra_price_paise",
+                ));
             }
         }
 
@@ -319,7 +321,9 @@ impl PricingEngine {
                 for extra in extra_topping_extras {
                     price = price
                         .checked_add(*extra)
-                        .ok_or(DomainError::ArithmeticOverflow("unit_price_add_extra_topping"))?;
+                        .ok_or(DomainError::ArithmeticOverflow(
+                            "unit_price_add_extra_topping",
+                        ))?;
                 }
                 Ok(price)
             }

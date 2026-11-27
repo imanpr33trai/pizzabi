@@ -191,6 +191,7 @@ async fn query_orders(
             is_priority: row.try_get("is_priority")?,
             created_at: format_iso8601(created_at),
             expires_at: expires_at.map(format_iso8601),
+            item_preview_summary: None,
         });
     }
 

@@ -44,6 +44,9 @@ pub struct OrderSummaryDto {
     pub created_at: String,
     #[serde(default)]
     pub expires_at: Option<String>,
+    // Phase 8: Item preview summary for list view
+    #[serde(default)]
+    pub item_preview_summary: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +54,7 @@ pub struct OrderListResponse {
     pub orders: Vec<OrderSummaryDto>,
 }
 
+// Phase 8: Extended OrderItemDto with all modifier IDs, snapshots, and preview data
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderItemDto {
     pub id: String,
@@ -62,6 +66,29 @@ pub struct OrderItemDto {
     pub unit_price_paise: i64,
     pub quantity: i32,
     pub line_total_paise: i64,
+    // Phase 8: New modifier ID fields (nullable for historical orders)
+    #[serde(default)]
+    pub variant_id: Option<String>,
+    #[serde(default)]
+    pub crust_id: Option<String>,
+    #[serde(default)]
+    pub cheese_id: Option<String>,
+    #[serde(default)]
+    pub sauce_id: Option<String>,
+    #[serde(default)]
+    pub topping_ids: Vec<String>,
+    #[serde(default)]
+    pub standard_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub standard_topping_removed_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_config_id: Option<String>,
+    #[serde(default)]
+    pub half_and_half_left_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_right_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub modifiers_snapshot: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,6 +227,9 @@ impl OrderService {
             let created_at: DateTime<Utc> = row.try_get("created_at")?;
             let expires_at: Option<DateTime<Utc>> = row.try_get("expires_at")?;
 
+            // Phase 8: Build item preview summary from order_items
+            let preview = build_item_preview_summary(&self.pool, id).await?;
+
             orders.push(OrderSummaryDto {
                 id: id.to_string(),
                 order_number: row.try_get("order_number")?,
@@ -214,6 +244,7 @@ impl OrderService {
                 is_priority: row.try_get("is_priority")?,
                 created_at: created_at.to_rfc3339(),
                 expires_at: expires_at.map(|dt| dt.to_rfc3339()),
+                item_preview_summary: preview,
             });
         }
 
@@ -248,6 +279,296 @@ impl OrderService {
 
         tx.commit().await?;
         Ok(detail)
+    }
+
+    /// Phase 8: Reorder endpoint - reconstruct order items for reordering
+    /// Returns ReorderResponseDto with available items and unavailable items with reasons.
+    pub async fn reorder(
+        &self,
+        order_id: Uuid,
+        actor_user_id: Uuid,
+        actor_role: UserRole,
+    ) -> Result<ReorderResponseDto, DbError> {
+        let mut tx = self.pool.begin().await?;
+        let detail = Self::load_order_detail_in_tx(&mut tx, order_id)
+            .await?
+            .ok_or_else(|| DbError::NotFound {
+                code: "ORDER_NOT_FOUND",
+                message: format!("Order {order_id} was not found."),
+            })?;
+
+        // Ownership check
+        if actor_role == UserRole::Customer && detail.customer_id != actor_user_id.to_string() {
+            warn!(
+                actor_user_id = %actor_user_id,
+                order_id = %order_id,
+                "Blocked cross-user reorder IDOR"
+            );
+            return Err(DbError::Forbidden {
+                code: "FORBIDDEN",
+                message: "You do not have access to this order.".to_owned(),
+            });
+        }
+
+        let mut reorder_items = Vec::new();
+        let mut unavailable = Vec::new();
+        let mut warnings = Vec::new();
+
+        // Check if historical order lacks new modifier data
+        let has_new_modifiers = detail.items.iter().any(|item| {
+            item.variant_id.is_some()
+                || item.crust_id.is_some()
+                || item.cheese_id.is_some()
+                || item.sauce_id.is_some()
+                || !item.standard_topping_ids.is_empty()
+                || !item.standard_topping_removed_ids.is_empty()
+                || item.half_and_half_config_id.is_some()
+                || !item.half_and_half_left_topping_ids.is_empty()
+                || !item.half_and_half_right_topping_ids.is_empty()
+        });
+        if !has_new_modifiers {
+            warnings.push("Historical order: cheese/sauce/standard toppings/half-and-half could not be reconstructed.".to_owned());
+        }
+
+        for item in &detail.items {
+            // Try to resolve current live prices and availability
+            let mut issues = Vec::new();
+
+            // Resolve variant by (productId, variantSize)
+            let variant_id = if let Some(vid) = &item.variant_id {
+                // Use stored variant_id if available
+                let exists: Option<i32> = sqlx::query_scalar(
+                    "SELECT 1 FROM product_variants WHERE id = $1 AND product_id = $2 AND is_active = TRUE",
+                )
+                .bind(vid)
+                .bind(&item.product_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+                if exists.is_some() {
+                    Some(vid.clone())
+                } else {
+                    issues.push("VARIANT_UNAVAILABLE".to_owned());
+                    // Fallback: find variant by size name
+                    let fallback: Option<Uuid> = sqlx::query_scalar(
+                        "SELECT id FROM product_variants WHERE product_id = $1 AND size_code = $2 AND is_active = TRUE",
+                    )
+                    .bind(&item.product_id)
+                    .bind(&item.variant_size)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+                    fallback.map(|u| u.to_string())
+                }
+            } else {
+                // Historical: find variant by size name
+                let fallback: Option<Uuid> = sqlx::query_scalar(
+                    "SELECT id FROM product_variants WHERE product_id = $1 AND size_code = $2 AND is_active = TRUE",
+                )
+                .bind(&item.product_id)
+                .bind(&item.variant_size)
+                .fetch_optional(&mut *tx)
+                .await?;
+                fallback.map(|u| u.to_string())
+            };
+
+            // Resolve crust by name
+            let crust_id = if let Some(cid) = &item.crust_id {
+                let exists: Option<i32> = sqlx::query_scalar(
+                    "SELECT 1 FROM crust_options WHERE id = $1 AND is_active = TRUE",
+                )
+                .bind(cid)
+                .fetch_optional(&mut *tx)
+                .await?;
+                if exists.is_some() {
+                    Some(cid.clone())
+                } else {
+                    issues.push("CRUST_UNAVAILABLE".to_owned());
+                    let fallback: Option<Uuid> = sqlx::query_scalar(
+                        "SELECT id FROM crust_options WHERE name = $1 AND is_active = TRUE",
+                    )
+                    .bind(&item.crust_name)
+                    .fetch_optional(&mut *tx)
+                    .await?;
+                    fallback.map(|u| u.to_string())
+                }
+            } else {
+                let fallback: Option<Uuid> = sqlx::query_scalar(
+                    "SELECT id FROM crust_options WHERE name = $1 AND is_active = TRUE",
+                )
+                .bind(&item.crust_name)
+                .fetch_optional(&mut *tx)
+                .await?;
+                fallback.map(|u| u.to_string())
+            };
+
+            // Resolve cheese (Phase 8 modifier - only if stored)
+            if let Some(cid) = &item.cheese_id {
+                let active: Option<bool> = sqlx::query_scalar(
+                    "SELECT is_active FROM cheeses WHERE id = $1 AND product_id = $2",
+                )
+                .bind(cid)
+                .bind(&item.product_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .flatten();
+                if active == Some(true) {
+                    // cheese_id = Some(cid.clone());
+                } else {
+                    unavailable.push(ReorderUnavailableDto {
+                        order_item_id: item.id.clone(),
+                        product_name: item.product_name.clone(),
+                        modifier_type: "CHEESE".to_owned(),
+                        modifier_id: cid.clone(),
+                        modifier_name: "Unknown".to_owned(), // Would need to fetch name
+                        reason: ReorderUnavailableReason::CheeseUnavailable,
+                    });
+                    issues.push("CHEESE_UNAVAILABLE".to_owned());
+                }
+            }
+
+            // Resolve sauce
+            if let Some(sid) = &item.sauce_id {
+                let active: Option<bool> = sqlx::query_scalar(
+                    "SELECT is_active FROM sauces WHERE id = $1 AND product_id = $2",
+                )
+                .bind(sid)
+                .bind(&item.product_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .flatten();
+                if active != Some(true) {
+                    unavailable.push(ReorderUnavailableDto {
+                        order_item_id: item.id.clone(),
+                        product_name: item.product_name.clone(),
+                        modifier_type: "SAUCE".to_owned(),
+                        modifier_id: sid.clone(),
+                        modifier_name: "Unknown".to_owned(),
+                        reason: ReorderUnavailableReason::SauceUnavailable,
+                    });
+                    issues.push("SAUCE_UNAVAILABLE".to_owned());
+                }
+            }
+
+            // Resolve extra toppings by name (historical fallback)
+            let mut resolved_topping_ids = Vec::new();
+            for topping_name in &item.toppings {
+                let tid: Option<Uuid> = sqlx::query_scalar(
+                    "SELECT id FROM toppings WHERE name = $1 AND is_active = TRUE",
+                )
+                .bind(topping_name)
+                .fetch_optional(&mut *tx)
+                .await?;
+                if let Some(tid) = tid {
+                    resolved_topping_ids.push(tid.to_string());
+                } else {
+                    unavailable.push(ReorderUnavailableDto {
+                        order_item_id: item.id.clone(),
+                        product_name: item.product_name.clone(),
+                        modifier_type: "TOPPING".to_owned(),
+                        modifier_id: "".to_owned(),
+                        modifier_name: topping_name.clone(),
+                        reason: ReorderUnavailableReason::ToppingUnavailable,
+                    });
+                    issues.push("TOPPING_UNAVAILABLE".to_owned());
+                }
+            }
+
+            // Standard toppings (Phase 8)
+            let mut resolved_std_topping_ids = Vec::new();
+            for std_id in &item.standard_topping_ids {
+                let active: Option<bool> = sqlx::query_scalar(
+                    "SELECT is_active FROM standard_toppings WHERE id = $1 AND product_id = $2",
+                )
+                .bind(std_id)
+                .bind(&item.product_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .flatten();
+                if active == Some(true) {
+                    resolved_std_topping_ids.push(std_id.clone());
+                } else {
+                    unavailable.push(ReorderUnavailableDto {
+                        order_item_id: item.id.clone(),
+                        product_name: item.product_name.clone(),
+                        modifier_type: "STANDARD_TOPPING".to_owned(),
+                        modifier_id: std_id.clone(),
+                        modifier_name: "Unknown".to_owned(),
+                        reason: ReorderUnavailableReason::StandardToppingUnavailable,
+                    });
+                    issues.push("STANDARD_TOPPING_UNAVAILABLE".to_owned());
+                }
+            }
+
+            // Standard topping removals (historical - just pass through)
+            let standard_topping_removed_ids = item.standard_topping_removed_ids.clone();
+
+            // Half-and-half config
+            let mut half_and_half_config_id = None;
+            if let Some(hah_id) = &item.half_and_half_config_id {
+                let active: Option<bool> = sqlx::query_scalar(
+                    "SELECT is_active FROM half_and_half_configs WHERE id = $1 AND product_id = $2",
+                )
+                .bind(hah_id)
+                .bind(&item.product_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .flatten();
+                if active == Some(true) {
+                    half_and_half_config_id = Some(hah_id.clone());
+                } else {
+                    unavailable.push(ReorderUnavailableDto {
+                        order_item_id: item.id.clone(),
+                        product_name: item.product_name.clone(),
+                        modifier_type: "HALF_AND_HALF_CONFIG".to_owned(),
+                        modifier_id: hah_id.clone(),
+                        modifier_name: "Unknown".to_owned(),
+                        reason: ReorderUnavailableReason::HalfAndHalfConfigUnavailable,
+                    });
+                    issues.push("HALF_AND_HALF_UNAVAILABLE".to_owned());
+                }
+            }
+
+            // Half-and-half left/right toppings (pass through from snapshot)
+            let half_and_half_left_topping_ids = item.half_and_half_left_topping_ids.clone();
+            let half_and_half_right_topping_ids = item.half_and_half_right_topping_ids.clone();
+
+            let reorder_item = ReorderItemDto {
+                order_item_id: item.id.clone(),
+                product_id: item.product_id.clone(),
+                product_name: item.product_name.clone(),
+                variant_id,
+                crust_id,
+                cheese_id: item.cheese_id.clone(), // Pass through stored ID
+                sauce_id: item.sauce_id.clone(),
+                topping_ids: resolved_topping_ids,
+                standard_topping_ids: resolved_std_topping_ids,
+                standard_topping_removed_ids,
+                half_and_half_config_id,
+                half_and_half_left_topping_ids,
+                half_and_half_right_topping_ids,
+                quantity: item.quantity,
+                is_available: issues.is_empty(),
+                issues,
+            };
+
+            if reorder_item.is_available {
+                reorder_items.push(reorder_item);
+            } else {
+                // Item has issues, still include in items but mark unavailable
+                reorder_items.push(reorder_item);
+            }
+        }
+
+        let can_reorder = !reorder_items.is_empty();
+
+        tx.commit().await?;
+
+        Ok(ReorderResponseDto {
+            order_id: order_id.to_string(),
+            can_reorder,
+            items: reorder_items,
+            unavailable,
+            warnings,
+        })
     }
 
     pub async fn cancel_order(
@@ -635,10 +956,15 @@ impl OrderService {
         let delivery_address =
             addr_json.and_then(|v| serde_json::from_value::<DeliveryAddressSnapshotDto>(v).ok());
 
+        // Phase 8: Read new order_items columns
         let item_rows = sqlx::query(
             r#"
             SELECT id, product_id, product_name_snapshot, variant_size_snapshot, crust_name_snapshot,
-                   toppings_snapshot, unit_price_paise, quantity, line_total_paise
+                   toppings_snapshot, unit_price_paise, quantity, line_total_paise,
+                   variant_id, crust_id, cheese_id, sauce_id,
+                   topping_ids, standard_topping_ids, standard_topping_removed_ids,
+                   half_and_half_config_id, half_and_half_left_topping_ids, half_and_half_right_topping_ids,
+                   modifiers_snapshot
             FROM order_items
             WHERE order_id = $1
             ORDER BY id ASC
@@ -652,6 +978,23 @@ impl OrderService {
         for r in item_rows {
             let toppings_json: serde_json::Value = r.try_get("toppings_snapshot")?;
             let toppings = serde_json::from_value::<Vec<String>>(toppings_json).unwrap_or_default();
+
+            // Phase 8: Read new columns (all nullable for historical rows)
+            let variant_id: Option<Uuid> = r.try_get("variant_id")?;
+            let crust_id: Option<Uuid> = r.try_get("crust_id")?;
+            let cheese_id: Option<Uuid> = r.try_get("cheese_id")?;
+            let sauce_id: Option<Uuid> = r.try_get("sauce_id")?;
+            let topping_ids: serde_json::Value = r.try_get("topping_ids")?;
+            let standard_topping_ids: serde_json::Value = r.try_get("standard_topping_ids")?;
+            let standard_topping_removed_ids: serde_json::Value =
+                r.try_get("standard_topping_removed_ids")?;
+            let half_and_half_config_id: Option<Uuid> = r.try_get("half_and_half_config_id")?;
+            let half_and_half_left_topping_ids: serde_json::Value =
+                r.try_get("half_and_half_left_topping_ids")?;
+            let half_and_half_right_topping_ids: serde_json::Value =
+                r.try_get("half_and_half_right_topping_ids")?;
+            let modifiers_snapshot: serde_json::Value = r.try_get("modifiers_snapshot")?;
+
             items.push(OrderItemDto {
                 id: r.try_get::<Uuid, _>("id")?.to_string(),
                 product_id: r.try_get::<Uuid, _>("product_id")?.to_string(),
@@ -662,6 +1005,25 @@ impl OrderService {
                 unit_price_paise: r.try_get("unit_price_paise")?,
                 quantity: r.try_get("quantity")?,
                 line_total_paise: r.try_get("line_total_paise")?,
+                variant_id: variant_id.map(|u| u.to_string()),
+                crust_id: crust_id.map(|u| u.to_string()),
+                cheese_id: cheese_id.map(|u| u.to_string()),
+                sauce_id: sauce_id.map(|u| u.to_string()),
+                topping_ids: serde_json::from_value(topping_ids).unwrap_or_default(),
+                standard_topping_ids: serde_json::from_value(standard_topping_ids)
+                    .unwrap_or_default(),
+                standard_topping_removed_ids: serde_json::from_value(standard_topping_removed_ids)
+                    .unwrap_or_default(),
+                half_and_half_config_id: half_and_half_config_id.map(|u| u.to_string()),
+                half_and_half_left_topping_ids: serde_json::from_value(
+                    half_and_half_left_topping_ids,
+                )
+                .unwrap_or_default(),
+                half_and_half_right_topping_ids: serde_json::from_value(
+                    half_and_half_right_topping_ids,
+                )
+                .unwrap_or_default(),
+                modifiers_snapshot: serde_json::from_value(modifiers_snapshot).unwrap_or_default(),
             });
         }
 
@@ -763,6 +1125,41 @@ impl OrderService {
             payment,
         }))
     }
+}
+
+/// Phase 8: Build item preview summary for order list
+async fn build_item_preview_summary(
+    pool: &PgPool,
+    order_id: Uuid,
+) -> Result<Option<String>, DbError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT product_name_snapshot, variant_size_snapshot, crust_name_snapshot, quantity
+        FROM order_items
+        WHERE order_id = $1
+        ORDER BY id ASC
+        "#,
+    )
+    .bind(order_id)
+    .fetch_all(pool)
+    .await?;
+
+    if rows.is_empty() {
+        return Ok(None);
+    }
+
+    let parts: Vec<String> = rows
+        .into_iter()
+        .map(|r| {
+            let name: String = r.try_get("product_name_snapshot").unwrap_or_default();
+            let size: String = r.try_get("variant_size_snapshot").unwrap_or_default();
+            let crust: String = r.try_get("crust_name_snapshot").unwrap_or_default();
+            let qty: i32 = r.try_get("quantity").unwrap_or(1);
+            format!("{name} ({size}, {crust}) x{qty}")
+        })
+        .collect();
+
+    Ok(Some(parts.join("; ")))
 }
 
 struct LockedOrderHeader {
@@ -985,6 +1382,74 @@ async fn load_latest_attempt(
             .map(|dt| dt.to_rfc3339()),
         created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
     }))
+}
+
+// Phase 8: Reorder DTOs
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ReorderUnavailableReason {
+    ProductUnavailable,
+    VariantUnavailable,
+    CrustUnavailable,
+    ToppingUnavailable,
+    CheeseUnavailable,
+    SauceUnavailable,
+    StandardToppingUnavailable,
+    HalfAndHalfUnavailable,
+    HalfAndHalfConfigUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReorderItemDto {
+    pub order_item_id: String,
+    pub product_id: String,
+    pub product_name: String,
+    #[serde(default)]
+    pub variant_id: Option<String>,
+    #[serde(default)]
+    pub crust_id: Option<String>,
+    #[serde(default)]
+    pub cheese_id: Option<String>,
+    #[serde(default)]
+    pub sauce_id: Option<String>,
+    #[serde(default)]
+    pub topping_ids: Vec<String>,
+    #[serde(default)]
+    pub standard_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub standard_topping_removed_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_config_id: Option<String>,
+    #[serde(default)]
+    pub half_and_half_left_topping_ids: Vec<String>,
+    #[serde(default)]
+    pub half_and_half_right_topping_ids: Vec<String>,
+    pub quantity: i32,
+    pub is_available: bool,
+    #[serde(default)]
+    pub issues: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReorderUnavailableDto {
+    pub order_item_id: String,
+    pub product_name: String,
+    pub modifier_type: String,
+    pub modifier_id: String,
+    pub modifier_name: String,
+    pub reason: ReorderUnavailableReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReorderResponseDto {
+    pub order_id: String,
+    pub can_reorder: bool,
+    #[serde(default)]
+    pub items: Vec<ReorderItemDto>,
+    #[serde(default)]
+    pub unavailable: Vec<ReorderUnavailableDto>,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 const fn order_status_as_str(s: OrderStatus) -> &'static str {

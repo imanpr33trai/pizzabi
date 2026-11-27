@@ -132,6 +132,51 @@ data class ProductImageDto(
   @SerialName("created_at") val createdAt: String,
 )
 
+// Phase 8: New modifier DTOs
+@Serializable
+data class CheeseOptionDto(
+  val id: String,
+  @SerialName("product_id") val productId: String,
+  val name: String,
+  @SerialName("extra_price_paise") val extraPricePaise: Long,
+  @SerialName("is_active") val isActive: Boolean,
+  @SerialName("sort_order") val sortOrder: Int,
+)
+
+@Serializable
+data class SauceOptionDto(
+  val id: String,
+  @SerialName("product_id") val productId: String,
+  val name: String,
+  @SerialName("extra_price_paise") val extraPricePaise: Long,
+  @SerialName("is_active") val isActive: Boolean,
+  @SerialName("sort_order") val sortOrder: Int,
+)
+
+@Serializable
+data class StandardToppingDto(
+  val id: String,
+  @SerialName("product_id") val productId: String,
+  val name: String,
+  @SerialName("is_veg") val isVeg: Boolean,
+  @SerialName("extra_price_paise") val extraPricePaise: Long,
+  @SerialName("is_default") val isDefault: Boolean,
+  @SerialName("is_active") val isActive: Boolean,
+  @SerialName("sort_order") val sortOrder: Int,
+)
+
+@Serializable
+data class HalfAndHalfConfigDto(
+  val id: String,
+  @SerialName("product_id") val productId: String,
+  val name: String,
+  @SerialName("left_topping_ids") val leftToppingIds: List<String> = emptyList(),
+  @SerialName("right_topping_ids") val rightToppingIds: List<String> = emptyList(),
+  @SerialName("half_and_half_surcharge_paise") val halfAndHalfSurchargePaise: Long = 0L,
+  @SerialName("is_active") val isActive: Boolean = true,
+  @SerialName("sort_order") val sortOrder: Int = 0,
+)
+
 @Serializable
 data class ProductDto(
   val id: String,
@@ -144,6 +189,11 @@ data class ProductDto(
   @SerialName("is_taxable") val isTaxable: Boolean,
   val variants: List<ProductVariantDto> = emptyList(),
   val images: List<ProductImageDto> = emptyList(),
+  // Phase 8: New modifier arrays (optional/defaulted for backward compatibility)
+  @SerialName("cheeses") val cheeses: List<CheeseOptionDto> = emptyList(),
+  @SerialName("sauces") val sauces: List<SauceOptionDto> = emptyList(),
+  @SerialName("standard_toppings") val standardToppings: List<StandardToppingDto> = emptyList(),
+  @SerialName("half_and_half_configs") val halfAndHalfConfigs: List<HalfAndHalfConfigDto> = emptyList(),
 )
 
 @Serializable

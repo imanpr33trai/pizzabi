@@ -1025,14 +1025,20 @@ mod tests {
             .await
             .expect("fresh bootstrap succeeds");
         assert_eq!(fresh_outcome.mode, HandoffMode::FreshBootstrap);
-        assert_eq!(fresh_outcome.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(
+            fresh_outcome.applied_or_verified_versions,
+            ALL_APPLIED_VERSIONS.to_vec()
+        );
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
 
         let resumed_outcome = run_locked_handoff(&fresh_pool)
             .await
             .expect("subsequent run resumes cleanly");
         assert_eq!(resumed_outcome.mode, HandoffMode::ResumedSqlx);
-        assert_eq!(resumed_outcome.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(
+            resumed_outcome.applied_or_verified_versions,
+            ALL_APPLIED_VERSIONS.to_vec()
+        );
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
         drop_isolated_test_db(&admin_pool, &fresh_db, fresh_pool).await;
 
@@ -1114,7 +1120,10 @@ mod tests {
             .await
             .expect("adopt Flyway V1..V3 without re-running DDL");
         assert_eq!(adopt_outcome.mode, HandoffMode::AdoptedExistingFlyway);
-        assert_eq!(adopt_outcome.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(
+            adopt_outcome.applied_or_verified_versions,
+            ALL_APPLIED_VERSIONS.to_vec()
+        );
         let preflight_after = verify_migration_readiness_readonly(&adopt_pool)
             .await
             .expect("read-only preflight succeeds after SQLx adoption");
@@ -1139,7 +1148,10 @@ mod tests {
             .await
             .expect("partial baseline recovers cleanly");
         assert_eq!(recovered.mode, HandoffMode::AdoptedExistingFlyway);
-        assert_eq!(recovered.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(
+            recovered.applied_or_verified_versions,
+            ALL_APPLIED_VERSIONS.to_vec()
+        );
 
         // Tampered Flyway checksum -> MigrationChecksumMismatch & lock released
         let original_v2_crc = canonical_v1_v3_specs().unwrap()[1].2;
@@ -1242,7 +1254,10 @@ mod tests {
         // Initial migration: all V1-V11 tables, columns, and indexes.
         let first = run_locked_handoff(&pool).await.expect("initial handoff");
         assert_eq!(first.mode, HandoffMode::FreshBootstrap);
-        assert_eq!(first.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(
+            first.applied_or_verified_versions,
+            ALL_APPLIED_VERSIONS.to_vec()
+        );
         verify_catalog_invariants(&mut pool.acquire().await.unwrap())
             .await
             .expect("51-table invariants after initial handoff");
@@ -1281,7 +1296,10 @@ mod tests {
         // Reapply under the same advisory lock and verify full invariants again.
         let reapplied = run_locked_handoff(&pool).await.expect("reapply handoff");
         assert_eq!(reapplied.mode, HandoffMode::ResumedSqlx);
-        assert_eq!(reapplied.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(
+            reapplied.applied_or_verified_versions,
+            ALL_APPLIED_VERSIONS.to_vec()
+        );
         verify_catalog_invariants(&mut pool.acquire().await.unwrap())
             .await
             .expect("51-table invariants after reapply");
@@ -1289,7 +1307,10 @@ mod tests {
         // Re-applying a second time must be idempotent.
         let again = run_locked_handoff(&pool).await.expect("idempotent reapply");
         assert_eq!(again.mode, HandoffMode::ResumedSqlx);
-        assert_eq!(again.applied_or_verified_versions, ALL_APPLIED_VERSIONS.to_vec());
+        assert_eq!(
+            again.applied_or_verified_versions,
+            ALL_APPLIED_VERSIONS.to_vec()
+        );
         assert_eq!(count_active_migration_advisory_locks(&admin_pool).await, 0);
         drop_isolated_test_db(&admin_pool, &db_name, pool).await;
     }

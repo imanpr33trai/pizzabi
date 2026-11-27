@@ -3,7 +3,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use pizzora_auth::MessageResponse;
-use pizzora_db::{OrderDetailDto, OrderListResponse};
+use pizzora_db::{OrderDetailDto, OrderListResponse, ReorderResponseDto};
 use pizzora_payments::{
     FailPaymentAttemptRequest, OrderPaymentStatusResponse, OwnerRefundRequest, RefundDto,
     RetryPaymentRequest, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
@@ -16,6 +16,7 @@ use crate::extractors::{
     build_audit_context, header_str, parse_uuid_param, require_permission, AuthPrincipal,
     OptionalJson, RequestMeta, ValidatedJson,
 };
+use crate::services::catalog::Phase8FeatureFlags;
 use crate::services::kitchen::parse_order_status;
 use crate::state::AppState;
 
@@ -242,4 +243,27 @@ pub async fn initiate_owner_refund(
         )
         .await?;
     Ok((StatusCode::ACCEPTED, Json(refund)))
+}
+
+/// Phase 8: Reorder endpoint - POST /v1/orders/{id}/reorder
+/// Returns ReorderResponseDto with available items and unavailable items with reasons.
+/// Does not mutate cart; client must handle reconciliation.
+pub async fn reorder_order(
+    State(state): State<AppState>,
+    AuthPrincipal(principal): AuthPrincipal,
+    Path(id): Path<String>,
+) -> Result<Json<ReorderResponseDto>, ApiError> {
+    require_permission(&state, &principal, "orders:read_own").await?;
+    if !Phase8FeatureFlags::from_env().reorder {
+        return Err(ApiError::not_found(
+            "FEATURE_DISABLED",
+            "Reorder is currently disabled.",
+        ));
+    }
+    let order_id = parse_uuid_param(&id, "order_id")?;
+    let resp = state
+        .order_service
+        .reorder(order_id, principal.user_id, principal.role)
+        .await?;
+    Ok(Json(resp))
 }

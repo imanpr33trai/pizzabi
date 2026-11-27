@@ -42,6 +42,7 @@ pub use notifications::{
 pub use orders::{
     DeliveryAddressSnapshotDto, OrderDetailDto, OrderItemDto, OrderListResponse, OrderService,
     OrderStatusHistoryDto, OrderSummaryDto, PaymentAttemptSummaryDto, PaymentSummaryDto,
+    ReorderItemDto, ReorderResponseDto, ReorderUnavailableDto, ReorderUnavailableReason,
 };
 pub use outbox::{
     ClaimedOutboxEvent, OutboxRepository, EVENT_EMAIL_DELIVERY_REQUESTED,
