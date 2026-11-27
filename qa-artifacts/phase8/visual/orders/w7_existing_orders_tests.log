@@ -1,0 +1,71 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :app:preBuild UP-TO-DATE
+> Task :shared:contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig FROM-CACHE
+> Task :app:generateDebugResources FROM-CACHE
+> Task :app:packageDebugResources FROM-CACHE
+> Task :shared:contracts:processResources NO-SOURCE
+> Task :app:processDebugNavigationResources FROM-CACHE
+> Task :app:parseDebugLocalResources FROM-CACHE
+> Task :app:generateDebugRFile FROM-CACHE
+
+> Task :app:buildHostRustLib
+    Finished `release` profile [optimized] target(s) in 0.23s
+
+> Task :app:generateUniFfiKotlinBindings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running `target/debug/uniffi-bindgen generate --library /workspace/pizzabi/rust/target/release/libpizzora_uniffi.so --language kotlin --out-dir /workspace/pizzabi/app/build/generated/uniffi/kotlin`
+Code generation complete, formatting with ktlint (use --no-format to disable)
+Warning: Unable to auto-format pizzora_uniffi.kt using ktlint: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+> Task :app:javaPreCompileDebug FROM-CACHE
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:compileDebugNavigationResources FROM-CACHE
+> Task :app:mergeDebugResources FROM-CACHE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug FROM-CACHE
+> Task :app:processDebugMainManifest FROM-CACHE
+> Task :app:processDebugManifest FROM-CACHE
+> Task :app:processDebugManifestForPackage FROM-CACHE
+> Task :app:processDebugResources FROM-CACHE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:packageDebugUnitTestForUnitTest
+
+> Task :app:processDebugUnitTestManifest
+/workspace/pizzabi/app/src/main/AndroidManifest.xml:42:13-45:39 Warning:
+	meta-data#androidx.work.WorkManagerInitializer was tagged at AndroidManifest.xml:42 to remove other declarations but no other declaration present
+
+> Task :app:generateDebugUnitTestConfig
+> Task :shared:contracts:compileKotlin
+> Task :shared:contracts:compileJava NO-SOURCE
+> Task :shared:contracts:classes UP-TO-DATE
+> Task :shared:contracts:jar
+> Task :app:kspDebugKotlin
+> Task :app:compileDebugKotlin
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:880:46 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:912:39 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:912:67 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:962:39 Condition is always 'true'.
+w: file:///workspace/pizzabi/app/src/main/java/com/example/navigation/PizzoraNavHost.kt:1004:34 Condition is always 'true'.
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:kspDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestKotlin
+w: file:///workspace/pizzabi/app/src/test/java/com/example/orders/Phase8ReorderCartPopulationRobolectricTest.kt:214:38 The corresponding parameter in the supertype 'TokenStorage' is named 'session'. This may cause problems when calling this function with named arguments.
+w: file:///workspace/pizzabi/app/src/test/java/com/example/orders/Phase8ReorderCartPopulationRobolectricTest.kt:221:43 The corresponding parameter in the supertype 'TokenStorage' is named 'muted'. This may cause problems when calling this function with named arguments.
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+> Task :app:testDebugUnitTest
+
+BUILD SUCCESSFUL in 4m 27s
+36 actionable tasks: 21 executed, 15 from cache

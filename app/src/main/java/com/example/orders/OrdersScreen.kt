@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -74,7 +75,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.PizzoraApplication
 import com.example.R
+import com.example.cart.Phase8ApiLocator
 import com.example.checkout.PriceBreakdownCard
 import com.example.ui.components.OrderDisplayFormatters
 import com.example.ui.theme.LocalPizzoraSemanticColors
@@ -84,12 +87,95 @@ import com.example.core.domain.RustDomainBridge
 import com.pizzora.contracts.FulfillmentType
 import com.pizzora.contracts.Money
 import com.pizzora.contracts.OrderDetailDto
+import com.pizzora.contracts.OrderItemDto
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderSummaryDto
 import com.pizzora.contracts.PaymentMethod
 import com.pizzora.contracts.PaymentStatus
 import com.pizzora.contracts.PriceBreakdownDto
 import com.pizzora.contracts.RealtimeConnectionState
+import com.pizzora.contracts.ReorderItemDto
+import com.pizzora.contracts.ReorderResponseDto
+import com.pizzora.contracts.ReorderUnavailableDto
+import kotlinx.serialization.json.Json
+
+private val modifierSnapshotJson = Json { ignoreUnknownKeys = true }
+
+/**
+ * Reads recorded modifier names from a historical order's snapshot. Values may be a single name,
+ * a comma-separated list, a JSON array of names, or a JSON object keyed by modifier ID. Nothing
+ * is looked up from the current catalog: historical orders are displayed exactly as recorded.
+ */
+private fun snapshotNames(snapshot: Map<String, String>, keys: List<String>): List<String> {
+  for (key in keys) {
+    val raw = snapshot[key]?.takeIf { it.isNotBlank() } ?: continue
+    val parsed = runCatching { modifierSnapshotJson.decodeFromString<List<String>>(raw) }.getOrNull()
+      ?: runCatching { modifierSnapshotJson.decodeFromString<Map<String, String>>(raw).values.toList() }.getOrNull()
+      ?: raw.trim().trim('[', ']').split(',').map { it.trim().trim('"') }
+    val names = parsed.filter { it.isNotBlank() }
+    if (names.isNotEmpty()) return names
+  }
+  return emptyList()
+}
+
+private fun snapshotLabel(snapshot: Map<String, String>, keys: List<String>): String? =
+  snapshotNames(snapshot, keys).firstOrNull()
+
+private fun displayName(name: String?): String =
+  if (name.isNullOrBlank()) "name not recorded" else name
+
+/** Historical IDs are shown verbatim but labelled so they are not mistaken for current names. */
+private fun displayHistoricalId(id: String): String = "name not recorded ($id)"
+
+/**
+ * Human-readable extended modifier line for an order item. Modern orders use recorded snapshot
+ * names; older orders fall back to the IDs that were persisted and finally to the legacy topping
+ * names. Missing data is labelled rather than substituted from today's menu.
+ */
+internal fun formatExtendedModifierSummary(item: OrderItemDto): String? {
+  val snapshot = item.modifiersSnapshot
+  val parts = buildList {
+    val cheese = snapshotLabel(snapshot, listOf("cheese", "cheese_name"))
+      ?: item.cheeseId?.let { displayName(null) + " ($it)" }
+    if (cheese != null) add("Cheese: $cheese")
+
+    val sauce = snapshotLabel(snapshot, listOf("sauce", "sauce_name"))
+      ?: item.sauceId?.let { displayName(null) + " ($it)" }
+    if (sauce != null) add("Sauce: $sauce")
+
+    val standard = snapshotNames(
+      snapshot,
+      listOf("standard_toppings", "standard_topping_names", "standard_toppings_selected"),
+    ).ifEmpty { item.standardToppingIds.map(::displayHistoricalId) }
+    if (standard.isNotEmpty()) add("Standard toppings: ${standard.joinToString(", ")}")
+
+    val removed = snapshotNames(
+      snapshot,
+      listOf("standard_toppings_removed", "removed_standard_toppings", "standard_topping_removed_names"),
+    ).ifEmpty { item.standardToppingRemovedIds.map(::displayHistoricalId) }
+    if (removed.isNotEmpty()) add("Removed defaults: ${removed.joinToString(", ")}")
+
+    val left = snapshotNames(
+      snapshot,
+      listOf("half_and_half_left", "half_and_half_left_topping_names", "half_and_half_left_toppings"),
+    ).ifEmpty { item.halfAndHalfLeftToppingIds.map(::displayHistoricalId) }
+    val right = snapshotNames(
+      snapshot,
+      listOf("half_and_half_right", "half_and_half_right_topping_names", "half_and_half_right_toppings"),
+    ).ifEmpty { item.halfAndHalfRightToppingIds.map(::displayHistoricalId) }
+    if (item.halfAndHalfConfigId != null || left.isNotEmpty() || right.isNotEmpty()) {
+      add(
+        "Half & half: left ${left.joinToString(", ").ifEmpty { "none" }} / " +
+          "right ${right.joinToString(", ").ifEmpty { "none" }}",
+      )
+    }
+
+    val extras = item.toppings.filter { it.isNotBlank() }
+      .ifEmpty { item.toppingIds.map(::displayHistoricalId) }
+    if (extras.isNotEmpty()) add("Extra toppings: ${extras.joinToString(", ")}")
+  }.filter { it.isNotBlank() }
+  return parts.joinToString(" • ").takeIf { it.isNotBlank() }
+}
 
 @Composable
 fun OrdersScreen(
@@ -110,8 +196,18 @@ fun OrdersScreen(
   razorpayCheckoutLauncher: RazorpayCheckoutLauncher = AndroidRazorpayCheckoutLauncher(),
   onRazorpayLaunchStarted: (String, String) -> Unit = { _, _ -> },
   onRazorpaySdkError: (Int, String?) -> Unit = { _, _ -> },
+  onReorderOrder: (String) -> Unit = { ReorderUiBridge.request(it) },
+  onDismissReorderDialog: () -> Unit = { ReorderUiBridge.dismiss() },
+  onConfirmReorder: () -> Unit = { ReorderUiBridge.confirm() },
   modifier: Modifier = Modifier,
 ) {
+  // The shell owns AppContainer; record the shared authenticated client so the ViewModel can call
+  // the read-only reorder endpoint without requiring navigation changes.
+  val application = LocalContext.current.applicationContext as? PizzoraApplication
+  LaunchedEffect(application) {
+    Phase8ApiLocator.current = application?.appContainer?.apiClient
+  }
+
   val selected = uiState.selectedOrder
   if (selected != null) {
     OrderDetailScreen(
@@ -124,6 +220,9 @@ fun OrdersScreen(
       onDismissPaymentSheet = onDismissPaymentSheet,
       onRetryPayment = onRetryPayment,
       onDismissCelebration = onDismissOrderPlacedCelebration,
+      onReorderOrder = onReorderOrder,
+      onDismissReorderDialog = onDismissReorderDialog,
+      onConfirmReorder = onConfirmReorder,
       customerName = customerName,
       customerEmail = customerEmail,
       customerPhone = customerPhone,
@@ -376,6 +475,15 @@ private fun OrderSummaryCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+          order.itemPreviewSummary?.takeIf { it.isNotBlank() }?.let { preview ->
+            Text(
+              text = preview,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 2,
+              modifier = Modifier.testTag("order_summary_preview_${order.id}"),
+            )
+          }
           Text(
             text = OrderDisplayFormatters.formatFulfillmentAndPayment(
               fulfillmentType = order.fulfillmentType,
@@ -407,6 +515,9 @@ private fun OrderDetailScreen(
   onDismissPaymentSheet: () -> Unit,
   onRetryPayment: () -> Unit,
   onDismissCelebration: () -> Unit,
+  onReorderOrder: (String) -> Unit,
+  onDismissReorderDialog: () -> Unit,
+  onConfirmReorder: () -> Unit,
   customerName: String?,
   customerEmail: String?,
   customerPhone: String?,
@@ -473,6 +584,17 @@ private fun OrderDetailScreen(
       isCancelling = uiState.isCancelling,
       onDismiss = { showCancelDialog = false },
       onConfirm = { reason -> onCancelOrder(reason) },
+    )
+  }
+
+  if (uiState.isReordering || uiState.reorderResponse != null || uiState.reorderError != null) {
+    ReorderReconciliationDialog(
+      response = uiState.reorderResponse,
+      error = uiState.reorderError,
+      isLoading = uiState.isReordering,
+      isAdding = uiState.isAddingReorderedItems,
+      onDismiss = onDismissReorderDialog,
+      onConfirm = onConfirmReorder,
     )
   }
 
@@ -654,6 +776,21 @@ private fun OrderDetailScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
+            if (order.status == OrderStatus.COMPLETED) {
+              Spacer(modifier = Modifier.height(4.dp))
+              Button(
+                onClick = { onReorderOrder(order.id) },
+                enabled = !uiState.isReordering && !uiState.isAddingReorderedItems,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .minimumInteractiveComponentSize()
+                  .testTag("reorder_order_button"),
+              ) {
+                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.size(6.dp))
+                Text("Reorder")
+              }
+            }
             if (RustDomainBridge.canCustomerCancel(order.status)) {
               Spacer(modifier = Modifier.height(4.dp))
               OutlinedButton(
@@ -714,7 +851,15 @@ private fun OrderDetailScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                   )
-                  if (item.toppings.isNotEmpty()) {
+                  val modifierSummary = formatExtendedModifierSummary(item)
+                  if (modifierSummary != null) {
+                    Text(
+                      text = modifierSummary,
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      modifier = Modifier.testTag("order_detail_item_modifiers_${item.id}"),
+                    )
+                  } else if (item.toppings.isNotEmpty()) {
                     Text(
                       text = "Toppings: ${item.toppings.joinToString(", ")}",
                       style = MaterialTheme.typography.bodySmall,
@@ -1219,6 +1364,144 @@ private fun CancelOrderDialog(
         modifier = Modifier.minimumInteractiveComponentSize().testTag("dismiss_cancel_dialog_button"),
       ) {
         Text(stringResource(R.string.action_close))
+      }
+    },
+  )
+}
+
+private fun formatReorderReason(reason: com.pizzora.contracts.ReorderUnavailableReason): String =
+  reason.name.replace('_', ' ').lowercase()
+
+@Composable
+private fun ReorderReconciliationDialog(
+  response: ReorderResponseDto?,
+  error: String?,
+  isLoading: Boolean,
+  isAdding: Boolean,
+  onDismiss: () -> Unit,
+  onConfirm: () -> Unit,
+) {
+  AlertDialog(
+    onDismissRequest = { if (!isLoading && !isAdding) onDismiss() },
+    title = {
+      Text(
+        text = "Reorder items",
+        modifier = Modifier.testTag("reorder_dialog_title"),
+      )
+    },
+    text = {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .imePadding()
+          .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        if (isLoading) {
+          CircularProgressIndicator(
+            modifier = Modifier.testTag("reorder_loading"),
+          )
+        }
+        if (!error.isNullOrBlank()) {
+          Text(
+            text = error,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.testTag("reorder_error_text"),
+          )
+        }
+        if (response != null) {
+          val available = response.items.filter { it.isAvailable }
+          Text("Available to add", style = MaterialTheme.typography.titleSmall)
+          if (available.isEmpty()) {
+            Text(
+              text = "No items from this order are currently available.",
+              style = MaterialTheme.typography.bodySmall,
+              modifier = Modifier.testTag("reorder_no_available_items"),
+            )
+          }
+          available.forEach { item: ReorderItemDto ->
+            Column(modifier = Modifier.fillMaxWidth()) {
+              Text(
+                text = "${item.quantity}x ${item.productName}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("reorder_available_item_${item.orderItemId}"),
+              )
+              item.issues.forEach { issue ->
+                Text(
+                  text = issue,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+            }
+          }
+          Text(
+            text = "Prices shown are current prices and may differ from your original order.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("reorder_price_caveat"),
+          )
+
+          Text("Unavailable modifiers", style = MaterialTheme.typography.titleSmall)
+          if (response.unavailable.isEmpty()) {
+            Text(
+              text = "None.",
+              style = MaterialTheme.typography.bodySmall,
+              modifier = Modifier.testTag("reorder_no_unavailable_modifiers"),
+            )
+          }
+          response.unavailable.forEach { unavailable: ReorderUnavailableDto ->
+            Text(
+              text = "${unavailable.productName}: ${unavailable.modifierName} — ${formatReorderReason(unavailable.reason)}",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.error,
+              modifier = Modifier.testTag("reorder_unavailable_${unavailable.orderItemId}_${unavailable.modifierId}"),
+            )
+          }
+          response.items.filterNot { it.isAvailable }.forEach { item ->
+            Text(
+              text = "${item.productName}: not available",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.error,
+              modifier = Modifier.testTag("reorder_unavailable_item_${item.orderItemId}"),
+            )
+          }
+
+          if (response.warnings.isNotEmpty()) {
+            Text("Warnings", style = MaterialTheme.typography.titleSmall)
+            response.warnings.forEachIndexed { index, warning ->
+              Text(
+                text = warning,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("reorder_warning_$index"),
+              )
+            }
+          }
+        }
+      }
+    },
+    confirmButton = {
+      Button(
+        onClick = onConfirm,
+        enabled = response != null && response.items.any { it.isAvailable } && !isLoading && !isAdding,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("reorder_confirm_button"),
+      ) {
+        Text(if (isAdding) "Adding..." else "Add available items to cart")
+      }
+    },
+    dismissButton = {
+      OutlinedButton(
+        onClick = onDismiss,
+        enabled = !isAdding,
+        modifier = Modifier
+          .minimumInteractiveComponentSize()
+          .testTag("reorder_cancel_button"),
+      ) {
+        Text("Cancel")
       }
     },
   )

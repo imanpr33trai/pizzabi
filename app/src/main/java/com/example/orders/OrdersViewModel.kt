@@ -2,14 +2,23 @@ package com.example.orders
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cart.CartSyncResult
+import com.example.cart.Phase8ApiLocator
+import com.example.cart.ReorderCartBridge
+import com.example.cart.ReorderCartSink
 import com.example.core.domain.DomainBridge
 import com.example.core.domain.DomainCausalTracker
 import com.example.core.domain.RustDomainBridge
+import com.example.core.network.PizzoraApiClient
+import com.example.core.network.PizzoraApiException
 import com.example.core.network.RealtimeEventStream
 import com.example.ui.components.OrderDisplayFormatters
 import com.pizzora.contracts.CausalDecision
+import com.pizzora.contracts.CartItemInputDto
 import com.pizzora.contracts.FailPaymentAttemptRequest
 import com.pizzora.contracts.OrderDetailDto
+import com.pizzora.contracts.ReorderItemDto
+import com.pizzora.contracts.ReorderResponseDto
 import com.pizzora.contracts.OrderPaymentStatusResponse
 import com.pizzora.contracts.OrderStatus
 import com.pizzora.contracts.OrderStatusHistoryDto
@@ -57,6 +66,96 @@ fun filterOrders(
   OrderListFilter.ALL -> orders
 }
 
+/**
+ * Phase 8 reorder reconstruction is a read-only call. Keeping it behind an interface lets
+ * unit tests exercise 200/403/404 reconciliation without a live HTTP client.
+ */
+interface ReorderSource {
+  suspend fun reorderOrder(orderId: String): Result<ReorderResponseDto>
+}
+
+/** Production source: uses the API client already wired into the application container. */
+class ApiReorderSource(
+  private val apiClientProvider: () -> PizzoraApiClient? = { Phase8ApiLocator.current },
+) : ReorderSource {
+  override suspend fun reorderOrder(orderId: String): Result<ReorderResponseDto> =
+    try {
+      val api = apiClientProvider()
+      if (api == null) {
+        Result.failure(IllegalStateException("Reorder is unavailable right now. Please try again."))
+      } else {
+        Result.success(api.reorderOrder(orderId))
+      }
+    } catch (t: Throwable) {
+      Result.failure(t)
+    }
+}
+
+/**
+ * The orders screen is hosted by navigation that is owned outside W7. This small bridge lets the
+ * screen's default callbacks reach the active orders ViewModel without changing navigation code;
+ * callers can always pass explicit callbacks (as tests do).
+ */
+object ReorderUiBridge {
+  interface Actions {
+    fun onReorderRequested(orderId: String)
+    fun onReorderDismissed()
+    fun onReorderConfirmed()
+  }
+
+  @Volatile
+  private var actions: Actions? = null
+
+  fun register(actions: Actions) {
+    this.actions = actions
+  }
+
+  fun unregister(actions: Actions) {
+    if (this.actions === actions) this.actions = null
+  }
+
+  fun request(orderId: String) = actions?.onReorderRequested(orderId)
+
+  fun dismiss() = actions?.onReorderDismissed()
+
+  fun confirm() = actions?.onReorderConfirmed()
+}
+
+/** Friendly, user-visible text for the reorder failure cases required by the Phase 8 contract. */
+fun friendlyReorderErrorMessage(error: Throwable): String = when {
+  error is PizzoraApiException && error.statusCode == 403 ->
+    "You don't have permission to reorder this order."
+  error is PizzoraApiException && error.statusCode == 404 ->
+    "This order is no longer available for reordering."
+  else -> error.message?.takeIf { it.isNotBlank() }
+    ?: "Unable to prepare reorder right now. Please try again."
+}
+
+/**
+ * Converts a reconstructed line into the existing cart input DTO. Phase 8 modifier IDs are
+ * preserved verbatim; removed default standard toppings are omitted (never replaced) because
+ * removals are represented by absence of the ID in [CartItemInputDto.standardToppingIds].
+ * Lines without a resolved variant/crust cannot be safely priced and are skipped by the caller.
+ */
+fun reorderItemToCartInput(item: ReorderItemDto): CartItemInputDto? {
+  val variantId = item.variantId?.takeIf { it.isNotBlank() } ?: return null
+  val crustId = item.crustId?.takeIf { it.isNotBlank() } ?: return null
+  val removed = item.standardToppingRemovedIds.toSet()
+  return CartItemInputDto(
+    productId = item.productId,
+    variantId = variantId,
+    crustId = crustId,
+    toppingIds = item.toppingIds.distinct(),
+    quantity = item.quantity.coerceAtLeast(1),
+    cheeseId = item.cheeseId,
+    sauceId = item.sauceId,
+    standardToppingIds = item.standardToppingIds.distinct().filterNot { it in removed },
+    halfAndHalfConfigId = item.halfAndHalfConfigId,
+    halfAndHalfLeftToppingIds = item.halfAndHalfLeftToppingIds.distinct(),
+    halfAndHalfRightToppingIds = item.halfAndHalfRightToppingIds.distinct(),
+  )
+}
+
 data class OrdersUiState(
   val orders: List<OrderSummaryDto> = emptyList(),
   val orderListFilter: OrderListFilter = OrderListFilter.ACTIVE,
@@ -79,6 +178,11 @@ data class OrdersUiState(
   val connectionState: RealtimeConnectionState = RealtimeConnectionState.DISCONNECTED,
   val lastHighWaterSeq: Long = 0L,
   val resyncCount: Int = 0,
+  // Phase 8 reorder reconciliation. The response is read-only until the user confirms.
+  val isReordering: Boolean = false,
+  val reorderResponse: ReorderResponseDto? = null,
+  val reorderError: String? = null,
+  val isAddingReorderedItems: Boolean = false,
 )
 
 class OrdersViewModel(
@@ -87,7 +191,9 @@ class OrdersViewModel(
   private val maxPollAttempts: Int = 20,
   private val realtimeEventStream: RealtimeEventStream? = null,
   private val domainBridge: DomainBridge = RustDomainBridge,
-) : ViewModel() {
+  private val reorderSource: ReorderSource = ApiReorderSource(),
+  private val reorderCartSink: ReorderCartSink = ReorderCartBridge,
+) : ViewModel(), ReorderUiBridge.Actions {
 
   private val _uiState = MutableStateFlow(OrdersUiState())
   val uiState: StateFlow<OrdersUiState> = _uiState.asStateFlow()
@@ -97,6 +203,7 @@ class OrdersViewModel(
   private var pollJob: Job? = null
 
   init {
+    ReorderUiBridge.register(this)
     realtimeEventStream?.let { stream ->
       viewModelScope.launch {
         stream.connectionState.collect { connState ->
@@ -597,6 +704,10 @@ class OrdersViewModel(
         isPaymentSheetOpen = false,
         paymentError = null,
         pendingRazorpayLaunch = null,
+        isReordering = false,
+        reorderResponse = null,
+        reorderError = null,
+        isAddingReorderedItems = false,
       )
     }
   }
@@ -647,6 +758,113 @@ class OrdersViewModel(
             )
           }
         }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 8: read-only reorder reconstruction + explicit reconciliation
+  // ---------------------------------------------------------------------------
+
+  override fun onReorderRequested(orderId: String) = requestReorder(orderId)
+
+  override fun onReorderDismissed() = dismissReorderDialog()
+
+  override fun onReorderConfirmed() = confirmReorder()
+
+  /** Calls the read-only reorder endpoint; never mutates the cart. */
+  fun requestReorder(orderId: String) {
+    if (_uiState.value.isReordering || _uiState.value.isAddingReorderedItems) return
+    viewModelScope.launch {
+      _uiState.update {
+        it.copy(
+          isReordering = true,
+          reorderResponse = null,
+          reorderError = null,
+          actionMessage = null,
+        )
+      }
+      reorderSource.reorderOrder(orderId)
+        .onSuccess { response ->
+          _uiState.update {
+            it.copy(isReordering = false, reorderResponse = response, reorderError = null)
+          }
+        }
+        .onFailure { error ->
+          _uiState.update {
+            it.copy(
+              isReordering = false,
+              reorderResponse = null,
+              reorderError = friendlyReorderErrorMessage(error),
+            )
+          }
+        }
+    }
+  }
+
+  fun dismissReorderDialog() {
+    _uiState.update { it.copy(reorderResponse = null, reorderError = null) }
+  }
+
+  /**
+   * Adds only the available lines to the cart through the shared cart ViewModel. Unavailable
+   * items/modifiers are reported in the confirmation banner; nothing is substituted or replaced
+   * automatically.
+   */
+  fun confirmReorder() {
+    val response = _uiState.value.reorderResponse ?: return
+    if (_uiState.value.isAddingReorderedItems) return
+
+    val available = response.items.filter { it.isAvailable }
+    val inputs = available.mapNotNull(::reorderItemToCartInput)
+    if (inputs.isEmpty()) {
+      _uiState.update {
+        it.copy(
+          actionMessage = "No reorder items could be added. None of the original items are available.",
+        )
+      }
+      dismissReorderDialog()
+      return
+    }
+
+    viewModelScope.launch {
+      _uiState.update { it.copy(isAddingReorderedItems = true, reorderError = null) }
+      val result: CartSyncResult = try {
+        reorderCartSink.addAvailableReorderItems(inputs)
+      } catch (t: Throwable) {
+        CartSyncResult(
+          isOffline = false,
+          unavailableCount = 0,
+          errorMessage = friendlyReorderErrorMessage(t),
+        )
+      }
+      if (result.errorMessage != null && !result.isOffline) {
+        _uiState.update {
+          it.copy(
+            isAddingReorderedItems = false,
+            reorderError = result.errorMessage,
+          )
+        }
+        return@launch
+      }
+
+      val skippedNames = buildList {
+        response.items.filterNot { it.isAvailable }.forEach { add(it.productName) }
+        response.unavailable.forEach { add(it.productName) }
+      }.distinct().filter { it.isNotBlank() }
+      val skippedNote = if (skippedNames.isEmpty()) {
+        ""
+      } else {
+        " Skipped (not available): ${skippedNames.joinToString(", ")}."
+      }
+      val offlineNote = if (result.isOffline) " Saved offline; the cart will validate when you're back online." else ""
+      _uiState.update { state ->
+        state.copy(
+          isAddingReorderedItems = false,
+          reorderResponse = null,
+          reorderError = null,
+          actionMessage = "Added ${inputs.size} available item(s) to your cart.$skippedNote$offlineNote",
+        )
+      }
     }
   }
 
@@ -856,6 +1074,7 @@ class OrdersViewModel(
   override fun onCleared() {
     pollJob?.cancel()
     realtimeEventStream?.stop()
+    ReorderUiBridge.unregister(this)
     super.onCleared()
   }
 }

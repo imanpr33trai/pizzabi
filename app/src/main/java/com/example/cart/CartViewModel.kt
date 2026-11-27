@@ -3,9 +3,13 @@ package com.example.cart
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.core.database.CartItemWithToppings
+import com.example.core.network.PizzoraApiClient
+import com.pizzora.contracts.CartItemInputDto
+import com.pizzora.contracts.CartItemViewDto
 import com.pizzora.contracts.CrustOptionDto
 import com.pizzora.contracts.ProductDto
 import com.pizzora.contracts.ProductVariantDto
+import com.pizzora.contracts.ReplaceCartRequest
 import com.pizzora.contracts.ToppingDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -38,9 +42,65 @@ data class CartUndoPrompt(
   val snapshot: RemovedCartItemSnapshot,
 )
 
+/**
+ * The API client is created by AppContainer (outside W7's write scope). The orders screen records
+ * the container's client here so reorder can use the same authenticated instance; tests inject
+ * their own client through [CartViewModel.reorderApiClientProvider] instead.
+ */
+object Phase8ApiLocator {
+  @Volatile
+  var current: PizzoraApiClient? = null
+}
+
+/** Cart-side entry point used by the reorder confirmation dialog. */
+interface ReorderCartSink {
+  suspend fun addAvailableReorderItems(items: List<CartItemInputDto>): CartSyncResult
+}
+
+/** Bridges the active cart ViewModel to the orders ViewModel without editing navigation wiring. */
+object ReorderCartBridge : ReorderCartSink {
+  @Volatile
+  private var sink: ReorderCartSink? = null
+
+  fun register(sink: ReorderCartSink) {
+    this.sink = sink
+  }
+
+  fun unregister(sink: ReorderCartSink) {
+    if (this.sink === sink) this.sink = null
+  }
+
+  override suspend fun addAvailableReorderItems(items: List<CartItemInputDto>): CartSyncResult =
+    sink?.addAvailableReorderItems(items)
+      ?: CartSyncResult(
+        isOffline = false,
+        unavailableCount = 0,
+        errorMessage = "Your cart isn't ready yet. Please try again.",
+      )
+}
+
+/** Preserves every Phase 8 modifier ID when folding an existing server cart line into a replace. */
+internal fun cartItemViewToInput(view: CartItemViewDto): CartItemInputDto = CartItemInputDto(
+  id = view.id,
+  productId = view.productId,
+  variantId = view.variantId,
+  crustId = view.crustId,
+  toppingIds = view.toppings.map { it.toppingId }.distinct(),
+  quantity = view.quantity,
+  clientUnitPricePaise = view.unitPricePaise,
+  cheeseId = view.cheese?.cheeseId,
+  sauceId = view.sauce?.sauceId,
+  // Removed defaults are represented by absence, never by a negative contribution.
+  standardToppingIds = view.standardToppings.filterNot { it.isRemoved }.map { it.standardToppingId }.distinct(),
+  halfAndHalfConfigId = view.halfAndHalf?.halfAndHalfConfigId,
+  halfAndHalfLeftToppingIds = view.halfAndHalf?.leftToppingIds.orEmpty().distinct(),
+  halfAndHalfRightToppingIds = view.halfAndHalf?.rightToppingIds.orEmpty().distinct(),
+)
+
 class CartViewModel(
   private val cartRepository: CartRepository,
-) : ViewModel() {
+  private val reorderApiClientProvider: () -> PizzoraApiClient? = { Phase8ApiLocator.current },
+) : ViewModel(), ReorderCartSink {
 
   private data class SyncStatusState(
     val isSyncing: Boolean = false,
@@ -59,6 +119,10 @@ class CartViewModel(
   private var isClearingCart: Boolean = false
   private val editingItemIdsInFlight = mutableSetOf<String>()
   private val removalMutex = Mutex()
+
+  init {
+    ReorderCartBridge.register(this)
+  }
 
   val uiState: StateFlow<CartUiState> = combine(
     cartRepository.observeCart(),
@@ -131,6 +195,58 @@ class CartViewModel(
         onResult(true, null)
         _events.tryEmit("${product.name} added to cart")
       }
+    }
+  }
+
+  /**
+   * Phase 8 reorder confirmation path. Keeps any existing cart lines (with their Phase 8 IDs),
+   * appends only the available reconstructed lines, then submits the existing server-side cart
+   * replace for validation and refreshes Room through the existing repository bootstrap path.
+   * No direct local DB writes and no client-side substitution are performed.
+   */
+  override suspend fun addAvailableReorderItems(items: List<CartItemInputDto>): CartSyncResult {
+    if (items.isEmpty()) {
+      return CartSyncResult(isOffline = false, unavailableCount = 0)
+    }
+    syncState.update { it.copy(isSyncing = true, statusMessage = null) }
+    val api = reorderApiClientProvider()
+    if (api == null) {
+      syncState.update {
+        it.copy(isSyncing = false, statusMessage = "Your cart is unavailable right now. Please try again.")
+      }
+      return CartSyncResult(
+        isOffline = false,
+        unavailableCount = 0,
+        errorMessage = "Your cart is unavailable right now. Please try again.",
+      )
+    }
+    return try {
+      val existingInputs = api.getCart().items.map(::cartItemViewToInput)
+      val serverCart = api.replaceCart(ReplaceCartRequest(existingInputs + items))
+      val localRefresh = try {
+        cartRepository.bootstrapFromServer()
+      } catch (t: Throwable) {
+        CartSyncResult(isOffline = true, unavailableCount = 0, errorMessage = t.message)
+      }
+      syncState.update {
+        it.copy(
+          isSyncing = false,
+          isOffline = localRefresh.isOffline,
+          statusMessage = localRefresh.errorMessage?.let { "Cart updated online; local refresh pending." },
+        )
+      }
+      CartSyncResult(
+        isOffline = localRefresh.isOffline,
+        unavailableCount = serverCart.unavailableCount,
+        errorMessage = localRefresh.errorMessage,
+      )
+    } catch (ce: CancellationException) {
+      throw ce
+    } catch (t: Throwable) {
+      syncState.update {
+        it.copy(isSyncing = false, isOffline = true, statusMessage = t.message ?: "Unable to update cart.")
+      }
+      CartSyncResult(isOffline = true, unavailableCount = 0, errorMessage = t.message ?: "Unable to update cart.")
     }
   }
 
@@ -331,5 +447,10 @@ class CartViewModel(
     isClearingCart = false
     editingItemIdsInFlight.clear()
     syncState.value = SyncStatusState()
+  }
+
+  override fun onCleared() {
+    ReorderCartBridge.unregister(this)
+    super.onCleared()
   }
 }

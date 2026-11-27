@@ -67,6 +67,7 @@ import com.pizzora.contracts.RecipeBindingDto
 import com.pizzora.contracts.RecipesOverviewResponse
 import com.pizzora.contracts.RefreshTokenRequest
 import com.pizzora.contracts.RefundDto
+import com.pizzora.contracts.ReorderResponseDto
 import com.pizzora.contracts.RegisterRequest
 import com.pizzora.contracts.ReplaceCartRequest
 import com.pizzora.contracts.ResendVerificationRequest
@@ -612,6 +613,13 @@ class PizzoraApiClient(
       contentType(ContentType.Application.Json)
       setBody(request)
     }
+    return decodeOrThrow(response)
+  }
+
+  // Phase 8: Read-only reorder reconstruction. The endpoint returns current availability
+  // and reconciliation data; it never mutates the cart.
+  suspend fun reorderOrder(orderId: String): ReorderResponseDto {
+    val response = httpClient.post("/api/v1/orders/$orderId/reorder")
     return decodeOrThrow(response)
   }
 

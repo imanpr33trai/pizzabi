@@ -90,9 +90,9 @@ repository; Kotlin changes must follow existing style and be reviewed in the sta
 | W2 Rust pricing + 33 vectors | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de343b2a7ffez42D4TrxHUvV6d`) | Initial audit REJECTED (3 MAJOR); all fixed; independent big-pickle re-audit PASS. 21 core tests PASS; 33/33 vectors match contract |
 | W3 DTO/API + reorder endpoint | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de3265e86ffe22X5qe8D2MaULu`, `opencode/big-pickle`) | Committed at `a332540`; API build + 7 tests PASS, shared contracts 40 tests PASS; coordinator follow-ups fixed UUID binding and checkout modifier persistence |
 | W4 UniFFI | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de31be575ffeJFJhKdoHPdiJ1I`, `opencode/big-pickle`) | Initial audit REJECTED; all findings repaired; independent re-audit PASS. 11 tests, all-features build, rustfmt, direct Kotlin bindgen evidence PASS |
-| W5 Kotlin backend five-service audit | **IN PROGRESS** | `general` subagent (`ses_de321c174ffemMqJrNxjY5Tmsg`, `opencode/big-pickle`) | Audit complete; implementing five services + reorder route + new tests |
+| W5 Kotlin backend five-service audit | **IN PROGRESS (final contract gaps)** | `general` subagent (`ses_de321c174ffemMqJrNxjY5Tmsg`, `opencode/big-pickle`) | Five services + reorder route + 82 backend tests PASS; coordinator added global menu arrays and explicit modifier breakdown to shared/Rust DTOs; backend follow-up populating them is running |
 | W6 Android builder | **IN PROGRESS** | `general` subagent (`ses_de31f0427ffeWCvzsyjxOW0YjM`, `opencode/big-pickle`) | DTO/FFI shapes frozen; builder modifier UI + Robolectric tests |
-| W7 Android orders/reorder | **IN PROGRESS** | `general` subagent (`ses_de31edc10ffea4fG4y0LE3xTLU`, `opencode/big-pickle`) | Preview, extended modifier rendering, reconciliation dialog; API client method added by coordinator |
+| W7 Android orders/reorder | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de31edc10ffea4fG4y0LE3xTLU`, `opencode/big-pickle`) | Preview, extended modifier rendering, reconciliation dialog, confirmed cart population; 7 new + 20 order tests PASS; await scoped commit |
 | W8 Regression/QA | IN PROGRESS | `test-engineer` (`ses_de30bc263ffei7DIuSl5ErNyZY`, `opencode/big-pickle`) + `android-qa` | DB evidence + emulator readiness captured; live reorder API suite 4/4 PASS; full Rust/Kotlin/Android regression pending |
 | W9 Independent review | NOT STARTED | `p8-reviewer` | After W8 |
 
@@ -113,6 +113,7 @@ repository; Kotlin changes must follow existing style and be reviewed in the sta
 | 2026-11-27 | Coordinator fix: API `can_reorder` now requires at least one available item | `rust/crates/pizzora-db/src/orders.rs`; API 7 tests + rustfmt PASS |
 | 2026-11-27 | Coordinator fix: reorder binds stored IDs as UUIDs; checkout persists all Phase 8 modifier IDs and snapshots | `rust/crates/pizzora-db/src/orders.rs`, `rust/crates/pizzora-api/src/services/checkout.rs`; rustfmt + API build + 7 tests PASS |
 | 2026-11-27 | Coordinator fix: live reorder 200/403/404/unavailable/historical suite 4/4 PASS; reorder wire shape aligned to §6.3 camelCase | `rust/crates/pizzora-api/tests/pg18_phase8_reorder.rs`, `qa-artifacts/phase8/api-contracts/w3_reorder_integration.log`, `w3_contract_casing.log` |
+| 2026-11-27 | Coordinator closed §6.1/§6.2 gaps: global modifier arrays on `PublicMenuResponse` and explicit modifier breakdown on `PriceBreakdownDto`; Rust API side verified | shared contract DTOs, `rust/crates/pizzora-api/src/services/{catalog,pricing}.rs`; API 7 tests + rustfmt PASS |
 
 ---
 
@@ -142,7 +143,7 @@ repository; Kotlin changes must follow existing style and be reviewed in the sta
 | B8-01 | Reviewed contract not present as a standalone file | Agents could implement against stale draft | Binding addendum created; all agents must read it |
 | B8-02 | Intermediate Phase 8 work not all committed | W3/W4/W5/W6/W7 still in progress | Stage scoped files after each workstream verifies; do not stage `.opencode/opencode.jsonc` |
 | B8-03 | Runtime backend API not listening | Android runtime QA cannot exercise server-backed flows | Emulator is READY; start the local API against `pizzora-pg18` during W8, no production deployment |
-| B8-04 | Gradle foojay plugin resolution / Maven Central HTTP 429 | Gradle tasks can fail before compilation in this environment | Environment-only init script `/tmp/opencode/pizzora-gradle-init.gradle` + `--dependency-verification=off`; no repository build files changed |
+| B8-04 | Gradle foojay plugin resolution / Maven Central HTTP 429 | Gradle tasks can fail before compilation in this environment | Environment-only init scripts (`pizzora-gradle-init.gradle`, W7 variant) + `--dependency-verification=off`; `:app:generateUniFfiKotlinBindings` now succeeds through the wrapper; no repository build files changed |
 
 No open BLOCKER or MAJOR design findings remain after the addendum. W1–W4 are committed. W5/W6/W7
 implementations and W8/W9 evidence are still in progress.
@@ -158,6 +159,7 @@ implementations and W8/W9 evidence are still in progress.
 | B — Rust core pricing | `2d4a682` | `origin/ui-ux-changes` | VERIFIED — independent re-audit PASS; 21 tests + 33 vectors |
 | C — API/DTO/reorder | `a332540` | `origin/ui-ux-changes` | VERIFIED — fmt, API 7 tests, shared contracts 40 tests PASS |
 | D — UniFFI | `c9f10ab` | `origin/ui-ux-changes` | VERIFIED — independent re-audit PASS; 11 tests, bindgen, rustfmt |
+| E — Reorder hardening/wire shape | `ea9bfd1` | `origin/ui-ux-changes` | VERIFIED — rustfmt, API 7 tests, shared contracts 40 tests, live reorder 4/4 PASS |
 
 ---
 
@@ -179,7 +181,8 @@ All 11 criteria from the reviewed addendum remain open until their evidence is r
 | UniFFI evidence | `qa-artifacts/phase8/uniffi/` | CREATED — W4 re-audit PASS (11 tests, direct bindgen, rustfmt) |
 | Kotlin backend evidence | `qa-artifacts/phase8/backend/` | PENDING (W5) |
 | Unit test XML | `qa-artifacts/phase8/unit-test-xml/` | PENDING |
-| Visual QA | `qa-artifacts/phase8/visual/` | READY — API 36 `emulator-5554` booted; final screens deferred until W6/W7 |
+| Visual QA | `qa-artifacts/phase8/visual/` | READY — API 36 `emulator-5554` booted; order tests captured; final screens deferred until W6 |
+| Android orders evidence | `qa-artifacts/phase8/visual/orders/` | CREATED — W7 7 new + 20 order tests PASS |
 | Independent review | `qa-artifacts/phase8/review/` | PENDING |
 
 ### 10.1 Acceptance-criteria command map
