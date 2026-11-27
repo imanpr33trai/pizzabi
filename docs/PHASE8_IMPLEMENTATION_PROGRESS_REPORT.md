@@ -85,7 +85,7 @@ repository; Kotlin changes must follow existing style and be reviewed in the sta
 | W1 SQLx V4+ schema + invariants | **IMPLEMENTED / VERIFIED** | Coordinator / `p8-backend` | 8 migrations (0004–0011), 51 tables, two profiles, rollback/reapply — Checkpoint A PASS |
 | W2 Rust pricing + 33 vectors | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de343b2a7ffez42D4TrxHUvV6d`) | Initial audit REJECTED (3 MAJOR); all fixed; independent big-pickle re-audit PASS. 21 core tests PASS; 33/33 vectors match contract |
 | W3 DTO/API + reorder endpoint | **IMPLEMENTED / VERIFIED** | `general` subagent (`ses_de3265e86ffe22X5qe8D2MaULu`, `opencode/big-pickle`) | Initial HTTP 429 retry preserved partial work; API build + 7 tests PASS; shared contracts 40 tests PASS; reorder route registered; await scoped commit |
-| W4 UniFFI | **IMPLEMENTED / RE-AUDIT OPEN** | `general` subagent (`ses_de31be575ffeJFJhKdoHPdiJ1I`, `opencode/big-pickle`) | Initial audit REJECTED; all findings repaired; 11 tests PASS; all-features build PASS; rustfmt PASS; direct bindgen evidence captured; re-audit running |
+| W4 UniFFI | **IMPLEMENTED / VERIFIED / REVIEW PASS** | `general` subagent (`ses_de31be575ffeJFJhKdoHPdiJ1I`, `opencode/big-pickle`) | Initial audit REJECTED; all findings repaired; independent re-audit PASS. 11 tests, all-features build, rustfmt, direct Kotlin bindgen evidence PASS |
 | W5 Kotlin backend five-service audit | **IN PROGRESS** | `general` subagent (`ses_de321c174ffemMqJrNxjY5Tmsg`, `opencode/big-pickle`) | Audit complete; implementing five services + reorder route + new tests |
 | W6 Android builder | **IN PROGRESS** | `general` subagent (`ses_de31f0427ffeWCvzsyjxOW0YjM`, `opencode/big-pickle`) | DTO/FFI shapes frozen; builder modifier UI + Robolectric tests |
 | W7 Android orders/reorder | **IN PROGRESS** | `general` subagent (`ses_de31edc10ffea4fG4y0LE3xTLU`, `opencode/big-pickle`) | Preview, extended modifier rendering, reconciliation dialog; API client method added by coordinator |
@@ -148,7 +148,8 @@ scoped commit; W3/W4/W5 are still in progress.
 | Baseline | `db41169` | `origin/ui-ux-changes` | VERIFIED |
 | A — Schema | `897b8f9` | `origin/ui-ux-changes` | VERIFIED — 51 tables, 2 profiles + rollback, 10 tests PASS |
 | B — Rust core pricing | `2d4a682` | `origin/ui-ux-changes` | VERIFIED — independent re-audit PASS; 21 tests + 33 vectors |
-| C — API/DTO/reorder | pending | pending | VERIFIED locally; commit in progress |
+| C — API/DTO/reorder | `a332540` | `origin/ui-ux-changes` | VERIFIED — fmt, API 7 tests, shared contracts 40 tests PASS |
+| D — UniFFI | pending | pending | VERIFIED locally; commit in progress |
 
 ---
 

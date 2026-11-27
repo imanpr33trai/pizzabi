@@ -1,0 +1,57 @@
+# W4 UniFFI repair verification
+# Generated: 2026-11-27T12:11:30Z
+# Workspace: /workspace/pizzabi/rust
+
+[2026-11-27T12:11:30Z] $ cargo fmt --all
+[2026-11-27T12:11:31Z] exit=0
+
+[2026-11-27T12:11:31Z] $ cargo fmt --all -- --check
+[2026-11-27T12:11:32Z] exit=0
+
+[2026-11-27T12:11:32Z] scope guard: restored 9 out-of-scope Rust file(s) to pre-format bytes (exclusive write scope honored).
+
+[2026-11-27T12:11:32Z] $ cargo test -p pizzora-uniffi
+    Blocking waiting for file lock on build directory
+   Compiling pizzora-core v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-core)
+   Compiling pizzora-uniffi v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-uniffi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 50.31s
+     Running unittests src/lib.rs (target/debug/deps/pizzora_uniffi-e4a3a12b9eea7288)
+
+running 11 tests
+test tests::error_mapping_phase8_variants ... ok
+test tests::catalog_check_modifier_availability_filters_product_and_active_modifiers ... ok
+test tests::cart_validate_with_modifiers_accepts_valid_catalog_cart ... ok
+test tests::malformed_uuids_return_errors_without_panicking ... ok
+test tests::cart_validate_with_modifiers_rejects_inactive_foreign_and_over_limit ... ok
+test tests::pricing_calculate_standard_toppings_extra_paise_parity ... ok
+test tests::pricing_validate_half_and_half_matches_core_breakdown ... ok
+test tests::pricing_validate_half_and_half_limits ... ok
+test tests::reorder_validate_items_reports_unavailable_without_substitution ... ok
+test tests::thin_uniffi_adapter_delegates_to_pizzora_core ... ok
+test tests::uniffi_golden_vectors_all_pass ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/uniffi_bindgen.rs (target/debug/deps/uniffi_bindgen-fec9906e9311084d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pizzora_uniffi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[2026-11-27T12:12:22Z] exit=0
+
+[2026-11-27T12:12:23Z] $ cargo build -p pizzora-uniffi --all-features
+   Compiling pizzora-uniffi v0.1.0 (/workspace/pizzabi/rust/crates/pizzora-uniffi)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.14s
+[2026-11-27T12:12:24Z] exit=0
+
+[2026-11-27T12:12:24Z] verification sequence complete.
+[2026-11-27T12:16:45Z] $ rustfmt --edition 2021 --check crates/pizzora-uniffi/src/lib.rs
+W4 lib.rs rustfmt check: PASS
+[2026-11-27T12:16:45Z] note: workspace-wide cargo fmt --all -- --check passed immediately after fmt; 9 out-of-scope Rust files were then restored to pre-format bytes to honor W4 exclusive write scope.
