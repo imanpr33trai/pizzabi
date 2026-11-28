@@ -40,6 +40,7 @@ workRuntimeKtx = "2.10.1"
 robolectric = "4.16.1"
 razorpayCheckout = "1.6.41"
 jna = "5.15.0"
+desugarJdkLibs = "2.1.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -109,6 +110,7 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 razorpay-checkout = { group = "com.razorpay", name = "checkout", version.ref = "razorpayCheckout" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

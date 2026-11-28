@@ -72,12 +72,16 @@ android {
     }
   }
   compileOptions {
+    isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
   }
   buildFeatures {
     compose = true
     buildConfig = true
+  }
+  lint {
+    lintConfig = file("lint.xml")
   }
   val pizzoraRequireRust = providers.gradleProperty("pizzoraRequireRust").orNull
     ?.toBooleanStrictOrNull() ?: false
@@ -313,6 +317,7 @@ configurations.configureEach {
 }
 
 dependencies {
+  coreLibraryDesugaring(libs.desugar.jdk.libs)
   implementation(project(":shared:contracts"))
 
   implementation(platform(libs.androidx.compose.bom))

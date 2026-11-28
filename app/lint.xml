@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- UniFFI-generated Kotlin bindings use java.lang.ref.Cleaner (API 33);
+         the runtime implementation selects a compatible strategy, but lint
+         cannot prove it statically. Suppress NewApi only for generated files. -->
+    <issue id="NewApi">
+        <ignore path="**/build/generated/uniffi/**" />
+    </issue>
+</lint>
